@@ -1,0 +1,15 @@
+[package]
+name = "lumina-text"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-schema = { path = "../lumina-schema" }
+fontdue = { workspace = true }
+mitex = { workspace = true }
+glam = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }

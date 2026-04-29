@@ -1,0 +1,14 @@
+[package]
+name = "lumina-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-schema = { path = "../lumina-schema" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+glam = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+log = { workspace = true }

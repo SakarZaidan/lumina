@@ -1,0 +1,20 @@
+[package]
+name = "lumina-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lumina-core = { path = "../lumina-core" }
+lumina-renderer = { path = "../lumina-renderer" }
+lumina-schema = { path = "../lumina-schema" }
+wasm-bindgen = "0.2"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "Window", "Document"] }
+console_error_panic_hook = "0.1"
+serde_json = { workspace = true }

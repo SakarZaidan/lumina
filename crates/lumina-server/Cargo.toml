@@ -1,0 +1,21 @@
+[package]
+name = "lumina-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-core = { path = "../lumina-core" }
+lumina-renderer = { path = "../lumina-renderer" }
+lumina-schema = { path = "../lumina-schema" }
+lumina-export = { path = "../lumina-export" }
+axum = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tower-http = { version = "0.5", features = ["cors"] }
+anyhow = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+tempfile = "3.10"

@@ -1,0 +1,19 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Output Artifacts
+/output_frames
+/output_frames_v2
+*.mp4
+*.png
+
+# Node
+/sdks/javascript/node_modules
+/sdks/javascript/dist
+package-lock.json
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store

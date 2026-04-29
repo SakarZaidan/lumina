@@ -1,0 +1,16 @@
+[package]
+name = "lumina-export"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-core = { path = "../lumina-core" }
+lumina-renderer = { path = "../lumina-renderer" }
+lumina-schema = { path = "../lumina-schema" }
+image = { workspace = true }
+rayon = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }

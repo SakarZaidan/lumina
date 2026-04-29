@@ -1,0 +1,17 @@
+[package]
+name = "lumina-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-core = { path = "../../crates/lumina-core" }
+lumina-renderer = { path = "../../crates/lumina-renderer" }
+lumina-schema = { path = "../../crates/lumina-schema" }
+lumina-export = { path = "../../crates/lumina-export" }
+clap = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }

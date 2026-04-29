@@ -1,0 +1,18 @@
+[package]
+name = "lumina-renderer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lumina-core = { path = "../lumina-core" }
+lumina-schema = { path = "../lumina-schema" }
+lumina-text = { path = "../lumina-text" }
+vello = { workspace = true }
+tiny-skia = { workspace = true }
+wgpu = { workspace = true }
+glam = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }
