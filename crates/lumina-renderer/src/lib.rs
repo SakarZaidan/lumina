@@ -12,6 +12,7 @@ pub trait Renderer {
         states: &HashMap<String, Value>,
         width: u32,
         height: u32,
+        background: &str,
     ) -> Result<Vec<u8>, RendererError>;
 
     fn load_font(&mut self, id: &str, data: &[u8]) -> Result<(), RendererError>;
@@ -24,3 +25,6 @@ pub enum RendererError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
+
+#[cfg(test)]
+mod renderer_tests;

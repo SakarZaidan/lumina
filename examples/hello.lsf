@@ -1,0 +1,64 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Hello Lumina",
+    "author": "lumina-demo",
+    "created_at": "2026-04-30T00:00:00Z"
+  },
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 60,
+    "duration": 3.0,
+    "background": "#0F0F1A"
+  },
+  "assets": {},
+  "objects": {
+    "title": {
+      "type": "Text",
+      "properties": {
+        "content": "Lumina",
+        "x": 540,
+        "y": 360,
+        "font_size": 96,
+        "color": "#FFFFFF",
+        "z_index": 2,
+        "opacity": 0.0
+      }
+    },
+    "subtitle": {
+      "type": "Text",
+      "properties": {
+        "content": "AI-native animation engine",
+        "x": 400,
+        "y": 440,
+        "font_size": 36,
+        "color": "#8888CC",
+        "z_index": 2,
+        "opacity": 0.0
+      }
+    },
+    "underline": {
+      "type": "Line",
+      "properties": {
+        "x1": 400,
+        "y1": 470,
+        "x2": 880,
+        "y2": 470,
+        "stroke": "#5555AA",
+        "stroke_width": 2,
+        "z_index": 1,
+        "opacity": 0.0
+      }
+    }
+  },
+  "timeline": [
+    { "time": 0.0, "object": "title",    "state": { "opacity": 0.0 }, "easing": "linear" },
+    { "time": 1.0, "object": "title",    "state": { "opacity": 1.0 }, "easing": "ease_out_cubic" },
+    { "time": 1.2, "object": "underline","state": { "opacity": 0.0 }, "easing": "linear" },
+    { "time": 1.8, "object": "underline","state": { "opacity": 1.0 }, "easing": "ease_out_sine" },
+    { "time": 1.5, "object": "subtitle", "state": { "opacity": 0.0 }, "easing": "linear" },
+    { "time": 2.5, "object": "subtitle", "state": { "opacity": 1.0 }, "easing": "ease_out_sine" }
+  ],
+  "events": []
+}

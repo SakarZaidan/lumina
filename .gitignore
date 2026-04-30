@@ -1,19 +1,61 @@
-# Rust
-/target
+# ── Rust build artifacts ──────────────────────────────────────────────────────
+/target/
 **/*.rs.bk
+Cargo.lock.bak
 
-# Output Artifacts
-/output_frames
-/output_frames_v2
-*.mp4
-*.png
+# ── Generated output (not demo media) ────────────────────────────────────────
+# Temporary render outputs — not the committed demo media in /media/
+/output_frames/
+/output_frames_*/
 
-# Node
-/sdks/javascript/node_modules
-/sdks/javascript/dist
-package-lock.json
+# ── Node / JavaScript SDK ─────────────────────────────────────────────────────
+sdks/javascript/node_modules/
+sdks/javascript/dist/
+sdks/javascript/.next/
+sdks/javascript/package-lock.json
+sdks/javascript/yarn.lock
+sdks/javascript/pnpm-lock.yaml
 
-# IDEs
+# ── WASM build artifacts ──────────────────────────────────────────────────────
+crates/lumina-wasm/pkg/
+
+# ── Python bindings (future lumina-py) ───────────────────────────────────────
+*.egg-info/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.iml
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+
+# ── Profiling / benchmarks ────────────────────────────────────────────────────
+flamegraph.svg
+perf.data
+perf.data.old
+criterion/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+lumina-server.log
+
+# ── NOTE: media/ is intentionally tracked ────────────────────────────────────
+# media/*.mp4 and media/*.gif are committed demo artifacts.
+# Do NOT add media/ to this file.

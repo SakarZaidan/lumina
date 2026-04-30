@@ -6,7 +6,6 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use image::{ImageBuffer, Rgba};
-use rayon::prelude::*;
 
 pub struct Exporter<R: Renderer> {
     renderer: R,
@@ -29,24 +28,24 @@ impl<R: Renderer> Exporter<R> {
         for frame_idx in 0..total_frames {
             let time = frame_idx as f32 / scene.canvas.fps as f32;
             let states = timeline.get_state_at(time);
-            
+
             let frame_data = self.renderer.render_frame(
                 &scene_graph.objects,
                 &states,
                 scene.canvas.width,
                 scene.canvas.height,
+                &scene.canvas.background,
             ).map_err(|e| anyhow::anyhow!(e))?;
 
             let img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(
                 scene.canvas.width,
                 scene.canvas.height,
-                frame_data
-            ).ok_or_else(|| anyhow::anyhow!("Failed to create image buffer"))?;
+                frame_data,
+            ).ok_or_else(|| anyhow::anyhow!("Failed to create image buffer from frame data"))?;
 
             let filename = format!("frame_{:04}.png", frame_idx);
-            let filepath = output_dir.join(filename);
-            img.save(filepath)?;
-            
+            img.save(output_dir.join(filename))?;
+
             log::info!("Exported frame {}/{}", frame_idx + 1, total_frames);
         }
 
@@ -74,23 +73,24 @@ impl<R: Renderer> Exporter<R> {
             ])
             .stdin(Stdio::piped())
             .spawn()
-            .context("Failed to spawn ffmpeg. Is it installed?")?;
+            .context("Failed to spawn ffmpeg — is it installed and on PATH?")?;
 
-        let mut stdin = child.stdin.take().expect("Failed to open stdin");
+        let mut stdin = child.stdin.take().context("Failed to open ffmpeg stdin")?;
 
         for frame_idx in 0..total_frames {
             let time = frame_idx as f32 / scene.canvas.fps as f32;
             let states = timeline.get_state_at(time);
-            
+
             let frame_data = self.renderer.render_frame(
                 &scene_graph.objects,
                 &states,
                 scene.canvas.width,
                 scene.canvas.height,
+                &scene.canvas.background,
             ).map_err(|e| anyhow::anyhow!(e))?;
 
             stdin.write_all(&frame_data)?;
-            
+
             if frame_idx % 10 == 0 {
                 log::info!("Rendered frame {}/{}", frame_idx, total_frames);
             }
@@ -99,10 +99,13 @@ impl<R: Renderer> Exporter<R> {
         drop(stdin);
         let status = child.wait()?;
         if !status.success() {
-            anyhow::bail!("FFmpeg exited with error: {}", status);
+            anyhow::bail!("FFmpeg exited with non-zero status: {}", status);
         }
 
         log::info!("MP4 export complete: {:?}", output_path);
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod export_tests;

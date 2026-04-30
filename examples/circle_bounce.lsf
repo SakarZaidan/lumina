@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Bounce Easing Demo",
+    "author": "lumina-demo",
+    "created_at": "2026-04-30T00:00:00Z"
+  },
+  "canvas": {
+    "width": 800,
+    "height": 600,
+    "fps": 60,
+    "duration": 4.0,
+    "background": "#111122"
+  },
+  "assets": {},
+  "objects": {
+    "ball": {
+      "type": "Circle",
+      "properties": {
+        "cx": 400,
+        "cy": 80,
+        "radius": 40,
+        "fill": "#E74C3C",
+        "stroke": "#FF6B6B",
+        "stroke_width": 3,
+        "z_index": 2,
+        "opacity": 1.0
+      }
+    },
+    "shadow": {
+      "type": "Circle",
+      "properties": {
+        "cx": 400,
+        "cy": 570,
+        "radius": 40,
+        "fill": "#220000",
+        "z_index": 1,
+        "opacity": 0.4
+      }
+    },
+    "floor": {
+      "type": "Line",
+      "properties": {
+        "x1": 50,
+        "y1": 560,
+        "x2": 750,
+        "y2": 560,
+        "stroke": "#444466",
+        "stroke_width": 3,
+        "z_index": 1,
+        "opacity": 1.0
+      }
+    },
+    "label_bounce": {
+      "type": "Text",
+      "properties": {
+        "content": "ease_out_bounce",
+        "x": 50,
+        "y": 40,
+        "font_size": 24,
+        "color": "#8888BB",
+        "z_index": 3,
+        "opacity": 1.0
+      }
+    }
+  },
+  "timeline": [
+    { "time": 0.0, "object": "ball",   "state": { "cy": 80 },  "easing": "linear" },
+    { "time": 1.5, "object": "ball",   "state": { "cy": 520 }, "easing": "ease_in_quad" },
+    { "time": 3.5, "object": "ball",   "state": { "cy": 80 },  "easing": "ease_out_bounce" },
+
+    { "time": 0.0, "object": "shadow", "state": { "radius": 8,  "opacity": 0.1 }, "easing": "linear" },
+    { "time": 1.5, "object": "shadow", "state": { "radius": 40, "opacity": 0.4 }, "easing": "ease_in_quad" },
+    { "time": 3.5, "object": "shadow", "state": { "radius": 8,  "opacity": 0.1 }, "easing": "ease_out_bounce" }
+  ],
+  "events": []
+}

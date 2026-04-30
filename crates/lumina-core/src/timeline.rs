@@ -23,9 +23,12 @@ impl Timeline {
     pub fn from_scene(scene: &Scene) -> Self {
         let mut tracks: HashMap<String, HashMap<String, Vec<Keyframe>>> = HashMap::new();
 
-        // 1. Initialize with initial property values from objects
+        // Initialize with initial property values from objects
         for (id, obj) in &scene.objects {
-            let initial_state = serde_json::to_value(obj).unwrap();
+            let initial_state = match serde_json::to_value(obj) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
             if let Value::Object(props) = &initial_state["properties"] {
                 for (prop_name, prop_value) in props {
                     let track = tracks.entry(id.clone()).or_default().entry(prop_name.clone()).or_default();
@@ -38,7 +41,7 @@ impl Timeline {
             }
         }
 
-        // 2. Add keyframes from timeline
+        // Add keyframes from timeline entries
         for entry in &scene.timeline {
             if let Value::Object(state) = &entry.state {
                 for (prop_name, prop_value) in state {
@@ -52,10 +55,10 @@ impl Timeline {
             }
         }
 
-        // 3. Sort keyframes by time
+        // Sort keyframes by time — use total_cmp to avoid panicking on NaN
         for object_tracks in tracks.values_mut() {
             for track in object_tracks.values_mut() {
-                track.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+                track.sort_by(|a, b| a.time.total_cmp(&b.time));
             }
         }
 
@@ -77,7 +80,7 @@ impl Timeline {
     pub fn get_state_at(&self, time: f32) -> HashMap<String, Value> {
         let mut state: HashMap<String, HashMap<String, Value>> = HashMap::new();
 
-        // 1. Evaluate tracks
+        // Evaluate keyframe tracks
         for (obj_id, object_tracks) in &self.tracks {
             let obj_state = state.entry(obj_id.clone()).or_default();
             for (prop_name, track) in object_tracks {
@@ -85,7 +88,7 @@ impl Timeline {
             }
         }
 
-        // 2. Apply overrides
+        // Apply interactive overrides (take precedence over keyframes)
         for (obj_id, obj_overrides) in &self.overrides {
             let obj_state = state.entry(obj_id.clone()).or_default();
             for (prop_name, value) in obj_overrides {
@@ -103,17 +106,19 @@ impl Timeline {
             return Value::Null;
         }
 
-        // Find the two keyframes surrounding the current time
-        let mut lower = &track[0];
-        let mut upper = &track[0];
-
-        if time <= lower.time {
-            return lower.value.clone();
+        // Clamp to first keyframe if before start
+        if time <= track[0].time {
+            return track[0].value.clone();
         }
 
+        // Clamp to last keyframe if after end
         if time >= track[track.len() - 1].time {
             return track[track.len() - 1].value.clone();
         }
+
+        // Find surrounding keyframes
+        let mut lower = &track[0];
+        let mut upper = &track[0];
 
         for i in 0..track.len() - 1 {
             if time >= track[i].time && time < track[i + 1].time {
@@ -128,6 +133,7 @@ impl Timeline {
         }
 
         let t = (time - lower.time) / (upper.time - lower.time);
+        // Easing is set on the destination keyframe (CSS convention)
         interpolate_value(&lower.value, &upper.value, t, &upper.easing)
     }
 }

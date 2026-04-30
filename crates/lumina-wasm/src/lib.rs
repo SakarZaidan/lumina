@@ -25,38 +25,29 @@ impl LuminaEngine {
         let renderer = SkiaRenderer::new();
         let event_bus = EventBus::new(&scene);
 
-        Ok(LuminaEngine {
-            scene,
-            timeline,
-            scene_graph,
-            renderer,
-            event_bus,
-        })
+        Ok(LuminaEngine { scene, timeline, scene_graph, renderer, event_bus })
     }
 
     pub fn render_frame(&mut self, time: f32) -> Result<Vec<u8>, JsValue> {
         let states = self.timeline.get_state_at(time);
-        let frame_data = self.renderer.render_frame(
+        self.renderer.render_frame(
             &self.scene_graph.objects,
             &states,
             self.scene.canvas.width,
             self.scene.canvas.height,
-        ).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        Ok(frame_data)
+            &self.scene.canvas.background,
+        ).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     pub fn process_event(&mut self, event: JsValue) -> Result<JsValue, JsValue> {
         let event: Event = from_value(event)?;
         let actions = self.event_bus.process_event(&event, &mut self.timeline);
-        Ok(to_value(&actions)?)
+        to_value(&actions).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     pub fn hit_test(&self, x: f32, y: f32, time: f32) -> Option<String> {
         let states = self.timeline.get_state_at(time);
-        
-        // Simple hit testing for MVP
-        // Sort objects by z-index descending
+
         let mut sorted_ids: Vec<_> = self.scene_graph.objects.keys().collect();
         sorted_ids.sort_by(|a, b| {
             let z_a = self.get_z_index(a);
@@ -75,46 +66,41 @@ impl LuminaEngine {
     }
 
     fn get_z_index(&self, id: &str) -> i32 {
-        if let Some(obj) = self.scene_graph.get_object(id) {
-            match obj {
-                Object::Circle(p) => p.z_index,
-                Object::Rectangle(p) => p.z_index,
-                Object::Polygon(p) => p.z_index,
-                Object::Path(p) => p.z_index,
-                Object::Line(p) => p.z_index,
-                Object::Arrow(p) => p.z_index,
-                Object::Text(p) => p.z_index,
-                Object::LaTeX(p) => p.z_index,
-                Object::Group(p) => p.z_index,
-            }
-        } else {
-            0
-        }
+        self.scene_graph.get_object(id).map(|obj| match obj {
+            Object::Circle(p) => p.z_index,
+            Object::Rectangle(p) => p.z_index,
+            Object::Polygon(p) => p.z_index,
+            Object::Path(p) => p.z_index,
+            Object::Line(p) => p.z_index,
+            Object::Arrow(p) => p.z_index,
+            Object::Text(p) => p.z_index,
+            Object::LaTeX(p) => p.z_index,
+            Object::Group(p) => p.z_index,
+            Object::Image(p) => p.z_index,
+            Object::SVG(p) => p.z_index,
+            Object::NumberLine(p) => p.z_index,
+            Object::Axes(p) => p.z_index,
+            Object::Plot(p) => p.z_index,
+            Object::BezierCurve(p) => p.z_index,
+        }).unwrap_or(0)
     }
 
     fn is_point_in_object(&self, id: &str, px: f32, py: f32, state: &serde_json::Value) -> bool {
-        // Simplified hit test for MVP
-        if let Some(obj) = self.scene_graph.get_object(id) {
-            match obj {
-                Object::Circle(_) => {
-                    let cx = state["cx"].as_f64().unwrap_or(0.0) as f32;
-                    let cy = state["cy"].as_f64().unwrap_or(0.0) as f32;
-                    let r = state["radius"].as_f64().unwrap_or(0.0) as f32;
-                    let dx = px - cx;
-                    let dy = py - cy;
-                    (dx * dx + dy * dy) <= (r * r)
-                }
-                Object::Rectangle(_) => {
-                    let ox = state["x"].as_f64().unwrap_or(0.0) as f32;
-                    let oy = state["y"].as_f64().unwrap_or(0.0) as f32;
-                    let w = state["width"].as_f64().unwrap_or(0.0) as f32;
-                    let h = state["height"].as_f64().unwrap_or(0.0) as f32;
-                    px >= ox && px <= ox + w && py >= oy && py <= oy + h
-                }
-                _ => false // Other types not yet implemented for hit test
+        match self.scene_graph.get_object(id) {
+            Some(Object::Circle(_)) => {
+                let cx = state["cx"].as_f64().unwrap_or(0.0) as f32;
+                let cy = state["cy"].as_f64().unwrap_or(0.0) as f32;
+                let r = state["radius"].as_f64().unwrap_or(0.0) as f32;
+                (px - cx) * (px - cx) + (py - cy) * (py - cy) <= r * r
             }
-        } else {
-            false
+            Some(Object::Rectangle(_)) => {
+                let ox = state["x"].as_f64().unwrap_or(0.0) as f32;
+                let oy = state["y"].as_f64().unwrap_or(0.0) as f32;
+                let w = state["width"].as_f64().unwrap_or(0.0) as f32;
+                let h = state["height"].as_f64().unwrap_or(0.0) as f32;
+                px >= ox && px <= ox + w && py >= oy && py <= oy + h
+            }
+            _ => false,
         }
     }
 
@@ -122,15 +108,7 @@ impl LuminaEngine {
         self.renderer.load_font(id, data).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    pub fn duration(&self) -> f32 {
-        self.scene.canvas.duration
-    }
-
-    pub fn width(&self) -> u32 {
-        self.scene.canvas.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.scene.canvas.height
-    }
+    pub fn duration(&self) -> f32 { self.scene.canvas.duration }
+    pub fn width(&self) -> u32 { self.scene.canvas.width }
+    pub fn height(&self) -> u32 { self.scene.canvas.height }
 }

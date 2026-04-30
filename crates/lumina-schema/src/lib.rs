@@ -65,6 +65,12 @@ pub enum Object {
     Text(TextProps),
     LaTeX(LaTeXProps),
     Group(GroupProps),
+    Image(ImageProps),
+    SVG(SVGProps),
+    NumberLine(NumberLineProps),
+    Axes(AxesProps),
+    Plot(PlotProps),
+    BezierCurve(BezierCurveProps),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -259,9 +265,109 @@ pub struct CameraState {
     pub zoom: f32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ImageProps {
+    pub asset_id: String,
+    pub x: f32,
+    pub y: f32,
+    #[serde(default)]
+    pub width: Option<f32>,
+    #[serde(default)]
+    pub height: Option<f32>,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SVGProps {
+    pub asset_id: String,
+    pub x: f32,
+    pub y: f32,
+    #[serde(default)]
+    pub width: Option<f32>,
+    #[serde(default)]
+    pub height: Option<f32>,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct NumberLineProps {
+    pub start: f32,
+    pub end: f32,
+    pub step: f32,
+    pub x: f32,
+    pub y: f32,
+    #[serde(default)]
+    pub length: Option<f32>,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_stroke")]
+    pub color: String,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AxesProps {
+    pub x_range: [f32; 2],
+    pub y_range: [f32; 2],
+    pub x: f32,
+    pub y: f32,
+    #[serde(default)]
+    pub x_label: Option<String>,
+    #[serde(default)]
+    pub y_label: Option<String>,
+    #[serde(default)]
+    pub grid: bool,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_stroke")]
+    pub color: String,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PlotProps {
+    pub function_str: String,
+    pub axes_id: String,
+    #[serde(default = "default_stroke")]
+    pub color: String,
+    #[serde(default = "default_stroke_width")]
+    pub stroke_width: f32,
+    #[serde(default = "default_sample_count")]
+    pub sample_count: u32,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct BezierCurveProps {
+    pub p0: [f32; 2],
+    pub p1: [f32; 2],
+    pub p2: [f32; 2],
+    pub p3: [f32; 2],
+    #[serde(default = "default_stroke")]
+    pub stroke: String,
+    #[serde(default = "default_stroke_width")]
+    pub stroke_width: f32,
+    #[serde(default)]
+    pub z_index: i32,
+    #[serde(default = "default_opacity")]
+    pub opacity: f32,
+}
+
 fn default_fill() -> String { "#FFFFFF".to_string() }
 fn default_stroke() -> String { "#FFFFFF".to_string() }
 fn default_stroke_width() -> f32 { 1.0 }
 fn default_opacity() -> f32 { 1.0 }
 fn default_scale() -> f32 { 1.0 }
 fn default_easing() -> String { "linear".to_string() }
+fn default_sample_count() -> u32 { 200 }
