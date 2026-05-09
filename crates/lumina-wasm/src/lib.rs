@@ -30,12 +30,15 @@ impl LuminaEngine {
 
     pub fn render_frame(&mut self, time: f32) -> Result<Vec<u8>, JsValue> {
         let states = self.timeline.get_state_at(time);
+        let camera_state = self.timeline.get_camera_at(time, &self.scene);
+        let camera = self.scene.camera.as_ref().map(|_| &camera_state);
         self.renderer.render_frame(
             &self.scene_graph.objects,
             &states,
             self.scene.canvas.width,
             self.scene.canvas.height,
             &self.scene.canvas.background,
+            camera,
         ).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 

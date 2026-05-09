@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{Renderer, skia_backend::SkiaRenderer};
-    use lumina_schema::{CircleProps, Object, RectangleProps};
+    use lumina_schema::{CircleProps, LineProps, Object, RectangleProps};
     use serde_json::{json, Value};
     use std::collections::HashMap;
 
@@ -16,7 +16,7 @@ mod tests {
         w: u32, h: u32,
         bg: &str,
     ) -> Vec<u8> {
-        renderer.render_frame(&objects, &states, w, h, bg).expect("render_frame failed")
+        renderer.render_frame(&objects, &states, w, h, bg, None).expect("render_frame failed")
     }
 
     fn pixel_at(data: &[u8], x: u32, y: u32, width: u32) -> (u8, u8, u8, u8) {
@@ -175,6 +175,53 @@ mod tests {
     }
 
     #[test]
+    fn test_draw_fraction_zero_hides_line() {
+        // A line with draw_fraction=0 should render nothing (background stays black)
+        let mut objects = HashMap::new();
+        objects.insert("l".into(), Object::Line(LineProps {
+            x1: 0.0, y1: 50.0, x2: 100.0, y2: 50.0,
+            z_index: 1, stroke: "#FFFFFF".into(), stroke_width: 4.0,
+            dash: None, draw_fraction: Some(0.0), opacity: 1.0,
+        }));
+        let mut states = HashMap::new();
+        states.insert("l".into(), json!({
+            "x1": 0.0, "y1": 50.0, "x2": 100.0, "y2": 50.0,
+            "stroke": "#FFFFFF", "stroke_width": 4.0, "opacity": 1.0,
+            "draw_fraction": 0.0
+        }));
+
+        let mut r = make_renderer();
+        let data = render(&mut r, objects, states, 100, 100, "#000000");
+
+        // Center of line at (50, 50) should remain black
+        let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
+        assert_eq!((red, green, blue), (0, 0, 0), "Line with draw_fraction=0 should be invisible");
+    }
+
+    #[test]
+    fn test_draw_fraction_one_draws_full_line() {
+        let mut objects = HashMap::new();
+        objects.insert("l".into(), Object::Line(LineProps {
+            x1: 10.0, y1: 50.0, x2: 90.0, y2: 50.0,
+            z_index: 1, stroke: "#FFFFFF".into(), stroke_width: 4.0,
+            dash: None, draw_fraction: Some(1.0), opacity: 1.0,
+        }));
+        let mut states = HashMap::new();
+        states.insert("l".into(), json!({
+            "x1": 10.0, "y1": 50.0, "x2": 90.0, "y2": 50.0,
+            "stroke": "#FFFFFF", "stroke_width": 4.0, "opacity": 1.0,
+            "draw_fraction": 1.0
+        }));
+
+        let mut r = make_renderer();
+        let data = render(&mut r, objects, states, 100, 100, "#000000");
+
+        // Center of line at (50, 50) should be white
+        let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
+        assert!(red > 200 && green > 200 && blue > 200, "Line with draw_fraction=1 should be visible");
+    }
+
+    #[test]
     fn test_missing_object_state_returns_error() {
         let mut objects = HashMap::new();
         objects.insert("c".into(), Object::Circle(CircleProps {
@@ -185,7 +232,7 @@ mod tests {
         let states = HashMap::new();
 
         let mut r = make_renderer();
-        let result = r.render_frame(&objects, &states, 100, 100, "#000000");
+        let result = r.render_frame(&objects, &states, 100, 100, "#000000", None);
         assert!(result.is_err(), "render_frame should return Err when object has no state");
     }
 }

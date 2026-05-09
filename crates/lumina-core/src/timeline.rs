@@ -101,6 +101,44 @@ impl Timeline {
             .collect()
     }
 
+    pub fn get_camera_at(&self, time: f32, scene: &Scene) -> lumina_schema::CameraState {
+        use lumina_schema::CameraState;
+        use crate::easing::get_easing_fn;
+
+        let default = CameraState { x: 0.0, y: 0.0, zoom: 1.0 };
+        let camera = match &scene.camera {
+            Some(c) => c,
+            None => return default,
+        };
+        if camera.timeline.is_empty() {
+            return default;
+        }
+
+        let kfs = &camera.timeline;
+        if time <= kfs[0].time {
+            return kfs[0].state.clone();
+        }
+        let last = &kfs[kfs.len() - 1];
+        if time >= last.time {
+            return last.state.clone();
+        }
+
+        for i in 0..kfs.len() - 1 {
+            let k0 = &kfs[i];
+            let k1 = &kfs[i + 1];
+            if time >= k0.time && time < k1.time {
+                let t_raw = (time - k0.time) / (k1.time - k0.time);
+                let t = get_easing_fn(&k1.easing)(t_raw);
+                return CameraState {
+                    x: k0.state.x + (k1.state.x - k0.state.x) * t,
+                    y: k0.state.y + (k1.state.y - k0.state.y) * t,
+                    zoom: k0.state.zoom + (k1.state.zoom - k0.state.zoom) * t,
+                };
+            }
+        }
+        last.state.clone()
+    }
+
     fn evaluate_track(&self, track: &[Keyframe], time: f32) -> Value {
         if track.is_empty() {
             return Value::Null;

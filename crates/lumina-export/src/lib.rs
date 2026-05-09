@@ -28,6 +28,8 @@ impl<R: Renderer> Exporter<R> {
         for frame_idx in 0..total_frames {
             let time = frame_idx as f32 / scene.canvas.fps as f32;
             let states = timeline.get_state_at(time);
+            let camera_state = timeline.get_camera_at(time, scene);
+            let camera = scene.camera.as_ref().map(|_| &camera_state);
 
             let frame_data = self.renderer.render_frame(
                 &scene_graph.objects,
@@ -35,6 +37,7 @@ impl<R: Renderer> Exporter<R> {
                 scene.canvas.width,
                 scene.canvas.height,
                 &scene.canvas.background,
+                camera,
             ).map_err(|e| anyhow::anyhow!(e))?;
 
             let img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(
@@ -80,6 +83,8 @@ impl<R: Renderer> Exporter<R> {
         for frame_idx in 0..total_frames {
             let time = frame_idx as f32 / scene.canvas.fps as f32;
             let states = timeline.get_state_at(time);
+            let camera_state = timeline.get_camera_at(time, scene);
+            let camera = scene.camera.as_ref().map(|_| &camera_state);
 
             let frame_data = self.renderer.render_frame(
                 &scene_graph.objects,
@@ -87,6 +92,7 @@ impl<R: Renderer> Exporter<R> {
                 scene.canvas.width,
                 scene.canvas.height,
                 &scene.canvas.background,
+                camera,
             ).map_err(|e| anyhow::anyhow!(e))?;
 
             stdin.write_all(&frame_data)?;

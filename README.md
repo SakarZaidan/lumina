@@ -4,11 +4,21 @@
 [![Tests](https://img.shields.io/badge/tests-44%20passing-brightgreen)](#tests)
 [![Rust](https://img.shields.io/badge/rust-1.78%2B-orange)](https://rustup.rs)
 
-**Lumina** is a production-grade, AI-native animation engine built in Rust. Declarative by design, GPU-native by architecture, runnable everywhere humans and machines need motion.
+**Lumina** is a production-grade animation engine built in Rust. Write a JSON scene file, get a video out. No GUI, no scripting, no runtime dependencies beyond FFmpeg for MP4 export.
+
+Designed from the start to be written by humans, LLMs, and code generators — the schema is declarative and fully validated.
 
 ---
 
 ## Demo
+
+### The Unit Circle — 52 seconds of educational math animation from pure JSON
+
+<video src="media/unit_circle.mp4" controls width="100%"></video>
+
+Full scene source: [`examples/unit_circle.lsf`](examples/unit_circle.lsf)
+
+Features shown: coordinate axes with grid, animated unit circle, rotating radius arm (Group rotation), sin(x) and cos(x) curves drawn simultaneously, camera zoom at the climax, LaTeX formula `sin²(x) + cos²(x) = 1` with proper Unicode superscripts, and 6 different easing functions across 30+ keyframes.
 
 ### Pythagorean Theorem — generated from 60 lines of JSON
 
@@ -21,50 +31,57 @@
 Rendered with:
 
 ```bash
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output media/unit_circle.mp4 --format mp4
 ./target/release/lumina-cli --scene examples/pythagorean.lsf --output media/pythagorean.mp4 --format mp4
-./target/release/lumina-cli --scene examples/circle_bounce.lsf --output media/circle_bounce.mp4  --format mp4
+./target/release/lumina-cli --scene examples/circle_bounce.lsf --output media/circle_bounce.mp4 --format mp4
 ```
 
-No After Effects. No Python. No GUI. Just JSON in, video out.
+No After Effects. No Python. No GUI. JSON in, video out.
 
 ---
 
-## What It Solves
+## What It Is
 
-Every existing animation library has a fundamental mismatch with AI-driven development:
+Lumina is built around a single idea: animation state should be data, not code. The **Lumina Scene Format (LSF)** is a pure-JSON declarative description of a scene — objects, their initial properties, and a timeline of keyframes. The engine evaluates that timeline at any point in time, applies easing, and rasterizes the result to pixels.
 
-| Problem                                                              | Who Suffers                   |
-| -------------------------------------------------------------------- | ----------------------------- |
-| Imperative APIs require stateful reasoning that LLMs hallucinate     | AI agents building animations |
-| CPU-bound rendering can't hit 60fps with complex math scenes         | Real-time web/app developers  |
-| No unified format runs both offline (video) and online (interactive) | Educators, SaaS builders      |
-| LaTeX/math rendering is bolted on as an afterthought                 | Math/science content creators |
-| No schema means no validation means broken outputs at runtime        | Everyone                      |
+This means:
 
-Lumina solves all of these with a single coherent architecture.
+- The entire scene is serializable, diffable, and versionable.
+- An LLM can write a valid scene from a natural language prompt.
+- Rendering is deterministic — same input, same output, byte for byte.
+- Interactive and offline rendering share identical scene logic.
 
 ---
 
-## Key Features
+## Features
 
-- **Declarative LSF Format** — Pure-data JSON (Lumina Scene Format). No functions, no loops, no state. An LLM can write it correctly.
-- **Dual Rendering Backends** — GPU (Vello/wgpu) for real-time, CPU (Tiny-Skia) for headless video export.
-- **27 Easing Functions** — Including spring physics, elastic, bounce, Manim-compatible `smooth`/`rush_into`/`there_and_back`.
-- **First-Class LaTeX** — Native MiTeX parsing; no Node.js or KaTeX sidecar required.
-- **AI Validation** — Schema-validated LSF with machine-readable structured errors and fix suggestions.
-- **Cross-Platform** — Native binaries for video export, WASM for the browser.
-- **16 Object Types** — Circle, Rectangle, Polygon, Path, Line, Arrow, Text, LaTeX, Group, Image, SVG, NumberLine, Axes, Plot, BezierCurve, and more.
+### Rendering
 
----
+- **Dual backends** — CPU rasterizer (Tiny-Skia) for video export; GPU rasterizer (Vello/wgpu) for real-time and browser use. Both implement the same `Renderer` trait.
+- **Camera system** — Zoom and pan the entire viewport as a first-class animated property. Camera state is interpolated from its own timeline with easing.
+- **16 object types** — Circle, Rectangle, Polygon, Path, Line, Arrow, Text, LaTeX, Group, Image, SVG, NumberLine, Axes, Plot, BezierCurve.
+- **Font rendering** — Load any TTF font from the scene's `assets.fonts` block. Glyphs are rasterized per-character via fontdue with correct baseline, descender, and superscript positioning.
+- **Plot objects** — Evaluate arbitrary math functions (sin, cos, tan, sqrt, exp, ln, abs) over a connected Axes object's coordinate system. Hundreds of sample points rendered as a smooth polyline.
+- **Axes objects** — Full coordinate system with configurable scale (pixels per unit), step size, tick marks, and optional dashed grid lines. Origin placed correctly even when x_range / y_range don't include zero.
 
-## Performance
+### Animation
 
-| Scenario                     | Expectation                         | Notes                    |
-| ---------------------------- | ----------------------------------- | ------------------------ |
-| 500 objects, real-time (GPU) | 45–60 fps                           | Mid-range GPU            |
-| 2,000 objects, real-time     | Batching recommended                | Use Groups               |
-| 30s @ 1080p60, video export  | 10–30 seconds render + 2–15s FFmpeg | Measured on T4-class GPU |
-| Headless CPU render (CI/CD)  | 45–120 seconds for 30s @ 1080p      | Tiny-Skia backend        |
+- **27 easing functions** — Linear, quad/cubic/quart/sine in/out/in-out variants, expo, circ, elastic, bounce, spring physics, `smooth` (Manim-compatible), `there_and_back`, CSS aliases.
+- **Draw-on animation** — `draw_fraction: 0.0→1.0` on Line, BezierCurve, Plot, and Path objects. Lines use stroke-dash clipping. Bezier curves use de Casteljau subdivision for exact parametric clipping. Plots clip the x-domain so curves grow left-to-right at constant sample density.
+- **LAB colorspace interpolation** — Color properties (hex strings) are interpolated in CIELAB rather than sRGB. Transitions through hue avoid the muddy midpoints that sRGB lerp produces. Implemented as a full RGB→XYZ D65→LAB→XYZ→sRGB pipeline.
+- **Group transforms** — Nest objects into Groups with their own position, scale, and rotation. Children inherit the parent transform stack. Rotation is in degrees (user-facing) converted to radians internally.
+
+### Text and Math
+
+- **Real font rendering** — TTF fonts loaded from `assets.fonts` by ID. Each text object can reference a specific `font_id`, or falls back to any loaded font.
+- **LaTeX Unicode substitution** — LaTeX expressions are preprocessed before rendering: `\theta`→θ, `\pi`→π, `\alpha`→α, `\sin`→sin, `^2`→², `^{n}`→ⁿ, full Greek alphabet, common operators (×, ±, ≤, ∞, →, ∫, Σ). The result renders as readable Unicode through the normal text pipeline.
+
+### Architecture
+
+- **Schema validation** — All LSF files are validated against a generated JSON Schema. Errors include structured `fix_suggestion` fields ready to re-inject into an LLM correction loop.
+- **Event bus** — Scenes can define interactive events (mouse click, hover) that trigger timeline jumps or property overrides at runtime.
+- **WASM runtime** — The full engine compiles to WebAssembly. `render_frame(time)` returns raw RGBA pixels; `hit_test(x, y, time)` returns the top object at a point.
+- **Headless server** — Axum HTTP server with `/render`, `/validate`, `/patch`, `/schema` endpoints.
 
 ---
 
@@ -73,50 +90,53 @@ Lumina solves all of these with a single coherent architecture.
 ### Prerequisites
 
 - **Rust** — latest stable via [rustup](https://rustup.rs)
-- **FFmpeg** — required for MP4/WebM export (`apt install ffmpeg` / `brew install ffmpeg`)
+- **FFmpeg** — for MP4/WebM export (`apt install ffmpeg` / `brew install ffmpeg`)
+- A TTF font for text rendering (e.g. LiberationSans from `fonts-liberation` on Ubuntu)
 
 ### Build
 
 ```bash
-git clone https://github.com/sakar/lumina.git
+git clone https://github.com/SakarZaidan/lumina.git
 cd lumina
 cargo build --release
 ```
 
-### Render Your First Scene
+### Render a Scene
 
 ```bash
 # PNG frame sequence
 ./target/release/lumina-cli --scene examples/hello.lsf --output frames/ --format png
 
 # MP4 video
-./target/release/lumina-cli --scene examples/pythagorean.lsf --output proof.mp4 --format mp4
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output unit_circle.mp4 --format mp4
 ```
 
-### Write a Scene
+---
+
+## Scene Format (LSF)
+
+### Minimal example — text fade-in
 
 ```json
 {
   "version": "1.0",
-  "meta": {
-    "title": "Fade In",
-    "author": "you",
-    "created_at": "2026-04-30T00:00:00Z"
-  },
+  "meta": { "title": "Fade In", "author": "you", "created_at": "2026-05-09" },
   "canvas": {
-    "width": 1280,
-    "height": 720,
-    "fps": 60,
-    "duration": 2.0,
-    "background": "#0F0F1A"
+    "width": 1280, "height": 720, "fps": 60,
+    "duration": 2.0, "background": "#0F0F1A"
+  },
+  "assets": {
+    "fonts": [
+      { "id": "sans", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }
+    ]
   },
   "objects": {
     "title": {
       "type": "Text",
       "properties": {
-        "content": "Hello",
-        "x": 540,
-        "y": 360,
+        "content": "Hello, Lumina",
+        "x": 480, "y": 360,
+        "font_id": "sans",
         "font_size": 96,
         "color": "#FFFFFF",
         "opacity": 0.0
@@ -124,80 +144,83 @@ cargo build --release
     }
   },
   "timeline": [
-    {
-      "time": 0.0,
-      "object": "title",
-      "state": { "opacity": 0.0 },
-      "easing": "linear"
-    },
-    {
-      "time": 1.5,
-      "object": "title",
-      "state": { "opacity": 1.0 },
-      "easing": "ease_out_cubic"
-    }
+    { "time": 0.0, "object": "title", "state": { "opacity": 0.0 }, "easing": "linear" },
+    { "time": 1.5, "object": "title", "state": { "opacity": 1.0 }, "easing": "ease_out_cubic" }
   ],
   "events": []
 }
 ```
 
----
+### Draw-on animation
 
-## AI Integration
-
-Lumina is designed to be written by LLMs. The workflow:
-
-```python
-import anthropic, lumina_cloud
-
-client = anthropic.Anthropic()
-lumina = lumina_cloud.Client(api_key="...")
-
-# 1. Generate LSF with Claude
-schema = lumina.get_schema()
-msg = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=4096,
-    system=f"You generate Lumina Scene Format JSON. Schema: {schema}. Return ONLY valid JSON.",
-    messages=[{"role": "user", "content": "Animate the dot product of two vectors, 10 seconds."}]
-)
-
-# 2. Validate (self-correction loop)
-validation = lumina.validate(msg.content[0].text)
-# validation.errors contain fix_suggestion strings ready to re-feed to the model
-
-# 3. Render
-video = lumina.render(msg.content[0].text, format="mp4", resolution="1080p")
-```
-
-### Validation Response
-
-When your LSF has errors, the engine returns structured, AI-re-injectable error messages:
+Animate any line, curve, or plot growing onto screen:
 
 ```json
-{
-  "valid": false,
-  "errors": [
-    {
-      "code": "UNKNOWN_OBJECT_ID",
-      "path": "$.timeline[3].object",
-      "message": "Timeline entry at index 3 references object 'circle_2', but no such object exists.",
-      "fix_suggestion": "Did you mean 'circle_1'? Add 'circle_2' to the 'objects' block, or change the reference."
+"objects": {
+  "curve": {
+    "type": "Plot",
+    "properties": {
+      "function_str": "sin(x)",
+      "axes_id": "axes",
+      "color": "#F78166",
+      "stroke_width": 3,
+      "sample_count": 300,
+      "draw_fraction": 0.0,
+      "opacity": 1.0, "z_index": 2
     }
-  ],
-  "warnings": []
+  }
+},
+"timeline": [
+  { "time": 1.0, "object": "curve", "state": { "draw_fraction": 0.0 }, "easing": "linear" },
+  { "time": 5.0, "object": "curve", "state": { "draw_fraction": 1.0 }, "easing": "ease_out_expo" }
+]
+```
+
+The curve grows left-to-right over 4 seconds. Works the same way on `Line` and `BezierCurve`.
+
+### Camera zoom
+
+```json
+"camera": {
+  "timeline": [
+    { "time": 0.0,  "state": { "x": 0, "y": 0, "zoom": 1.0 }, "easing": "linear" },
+    { "time": 10.0, "state": { "x": -80, "y": 30, "zoom": 1.4 }, "easing": "ease_in_out_cubic" },
+    { "time": 13.0, "state": { "x": 0, "y": 0, "zoom": 1.0 }, "easing": "ease_in_out_cubic" }
+  ]
 }
 ```
 
----
+Camera `x`/`y` are screen-pixel pan offsets. Zoom is applied around the canvas center.
 
-## Example Scenes
+### Function plots with Axes
 
-| Scene                                                      | Duration | Objects                      | Demonstrates                        |
-| ---------------------------------------------------------- | -------- | ---------------------------- | ----------------------------------- |
-| [`examples/hello.lsf`](examples/hello.lsf)                 | 3s       | Text, Line                   | Fade-in, `ease_out_sine`            |
-| [`examples/pythagorean.lsf`](examples/pythagorean.lsf)     | 8s       | Polygon, Arrow, LaTeX, Group | Spring scale, label timing          |
-| [`examples/circle_bounce.lsf`](examples/circle_bounce.lsf) | 4s       | Circle, Line                 | `ease_out_bounce` vs `ease_in_quad` |
+```json
+"axes": {
+  "type": "Axes",
+  "properties": {
+    "x_range": [0, 6.5], "y_range": [-1.5, 1.5],
+    "x": 200, "y": 500,
+    "scale": 80,
+    "x_step": 1, "y_step": 0.5,
+    "grid": true,
+    "color": "#3D5A80",
+    "z_index": 1, "opacity": 1.0
+  }
+},
+"sin_plot": {
+  "type": "Plot",
+  "properties": {
+    "function_str": "sin(x)",
+    "axes_id": "axes",
+    "color": "#F78166",
+    "stroke_width": 3,
+    "sample_count": 300,
+    "z_index": 2, "opacity": 1.0
+  }
+}
+```
+
+Supported functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `exp`, `ln`. Write bare names — the engine normalizes to the evalexpr `math::` namespace internally.
 
 ---
 
@@ -205,49 +228,56 @@ When your LSF has errors, the engine returns structured, AI-re-injectable error 
 
 ```
 linear
-ease_in/out/in_out_quad       ease_in/out/in_out_cubic
-ease_in/out/in_out_quart      ease_in/out/in_out_sine
-ease_in/out_expo              ease_in/out_circ
-ease_in/out/in_out_elastic    ease_in/out_bounce
-spring                        smooth (Manim)
-rush_into  rush_from          there_and_back
-ease  ease_in  ease_out  ease_in_out  (CSS aliases)
+
+ease_in_quad        ease_out_quad        ease_in_out_quad
+ease_in_cubic       ease_out_cubic       ease_in_out_cubic
+ease_in_quart       ease_out_quart       ease_in_out_quart
+ease_in_sine        ease_out_sine        ease_in_out_sine
+ease_in_expo        ease_out_expo
+ease_in_circ        ease_out_circ
+ease_in_elastic     ease_out_elastic     ease_in_out_elastic
+ease_in_bounce      ease_out_bounce
+
+spring              smooth               there_and_back
+rush_into           rush_from
+
+ease  ease_in  ease_out  ease_in_out     (CSS aliases)
 ```
 
-All implement the contract `f(0.0) == 0.0`, `f(1.0) == 1.0` — verified by the test suite.
+All satisfy `f(0.0) == 0.0` and `f(1.0) == 1.0`, verified by the test suite.
 
 ---
 
 ## Tests
 
-**44 tests, all passing.**
+**44 tests, 0 failures.**
 
 ```
-lumina-core     25 tests   easing boundaries, timeline interpolation, stress (2000 objects)
-lumina-renderer  9 tests   pixel-level correctness, z-index ordering, opacity, background color
-lumina-export    4 tests   PNG sequence creation, dimensions, brightness, FFmpeg graceful fail
-lumina-server    6 tests   semantic validation: unknown IDs, circular groups, duplicate keyframes
+lumina-core       29 tests   easing (11), timeline (8), interpolation (5), stress (3, up to 2000 objects)
+lumina-renderer   11 tests   pixel-level: z-index ordering, opacity, draw_fraction, background, determinism
+lumina-export      4 tests   PNG sequence, dimensions, brightness, FFmpeg graceful failure
 ```
-
-Run them:
 
 ```bash
 cargo test --workspace --exclude lumina-wasm
 ```
 
-Sample output:
+Selected output:
 
 ```
 test easing_tests::tests::test_all_easings_boundary_conditions ... ok
-test easing_tests::tests::test_in_out_variants_are_symmetric ... ok
 test easing_tests::tests::test_elastic_out_overshoots_then_settles ... ok
+test easing_tests::tests::test_there_and_back_midpoint_is_one ... ok
+test easing_tests::tests::test_spring_starts_at_zero_ends_near_one ... ok
+test interp_tests::interp_tests::test_color_lab_interpolation_midpoint ... ok
+test interp_tests::interp_tests::test_color_interpolation_at_t0_returns_start ... ok
 test timeline_tests::tests::test_linear_interpolation_at_midpoint ... ok
 test timeline_tests::tests::test_ease_in_quad_is_nonlinear_at_midpoint ... ok
 test renderer_tests::tests::test_z_index_determines_draw_order ... ok
+test renderer_tests::tests::test_draw_fraction_zero_hides_line ... ok
+test renderer_tests::tests::test_draw_fraction_one_draws_full_line ... ok
 test renderer_tests::tests::test_circle_center_pixel_matches_fill ... ok
-test renderer_tests::tests::test_background_color_applied ... ok
-test tests::test_circular_group_reference_detected ... ok
-test tests::test_unknown_object_id_in_timeline ... ok
+test stress_tests::tests::test_rendering_volume_2000_objects ... ok
 
 test result: ok. 44 passed; 0 failed
 ```
@@ -259,22 +289,20 @@ test result: ok. 44 passed; 0 failed
 ```
 lumina/
 ├── crates/
-│   ├── lumina-schema/     LSF type definitions + JSON Schema generation (schemars)
-│   ├── lumina-core/       Scene graph, timeline engine, 27 easing functions, event bus
-│   ├── lumina-renderer/   Renderer trait + Skia (CPU) + Vello (GPU, in progress)
-│   ├── lumina-text/       Fontdue text layout + MiTeX LaTeX parsing
-│   ├── lumina-export/     PNG sequence, MP4 via FFmpeg
-│   ├── lumina-server/     Axum headless render server (/render /validate /patch /schema)
-│   └── lumina-wasm/       wasm-bindgen browser runtime
+│   ├── lumina-schema/     LSF type definitions, JSON Schema generation (schemars)
+│   ├── lumina-core/       Scene graph, timeline evaluator, 27 easings, LAB interpolation, event bus
+│   ├── lumina-renderer/   Renderer trait → SkiaRenderer (CPU) + VelloRenderer (GPU)
+│   ├── lumina-text/       Fontdue TTF rasterization, glyph layout
+│   ├── lumina-export/     PNG sequence export, MP4 via FFmpeg stdin pipe
+│   ├── lumina-server/     Axum HTTP server: /render /validate /patch /schema
+│   └── lumina-wasm/       wasm-bindgen runtime: render_frame, hit_test, process_event
 ├── tools/
-│   └── lumina-cli/        lumina render scene.lsf -o output.mp4
-├── sdks/
-│   └── javascript/        React <LuminaPlayer> component
-├── examples/              hello.lsf  pythagorean.lsf  circle_bounce.lsf
-└── media/                 hello.mp4  pythagorean.mp4  circle_bounce.mp4 + GIFs
+│   └── lumina-cli/        CLI entry point
+├── examples/              hello.lsf  pythagorean.lsf  circle_bounce.lsf  unit_circle.lsf
+└── media/                 *.mp4  *.gif
 ```
 
-### Data Flow
+### Data flow
 
 ```
 LSF JSON
@@ -283,10 +311,77 @@ LSF JSON
 Schema Validator ──── structured errors with fix_suggestion
    │
    ▼
-Scene Graph + Timeline ──── keyframe evaluation, easing, overrides
+Scene Graph + Timeline ──── keyframe evaluation, easing, LAB color interp
    │
-   ├─── [Offline] ──► Skia/Vello Frame Renderer ──► FFmpeg ──► MP4/GIF/PNG
-   └─── [Browser] ──► WASM + SkiaRenderer ──► Canvas putImageData ──► 60fps
+   ├── [Offline]  → SkiaRenderer (CPU/Tiny-Skia) → FFmpeg → MP4 / PNG sequence
+   ├── [GPU]      → VelloRenderer (wgpu, software fallback) → raw RGBA
+   └── [Browser]  → WASM + SkiaRenderer → putImageData → 60 fps canvas
+```
+
+### Renderer backends
+
+| Backend | Crate | Status | Use case |
+|---|---|---|---|
+| SkiaRenderer | tiny-skia | Production | Video export, CI/CD, headless server |
+| VelloRenderer | vello 0.2 + wgpu | Complete | GPU acceleration, browser canvas |
+
+The `Renderer` trait is backend-agnostic. Adding a new backend means implementing two methods: `render_frame` and `load_font`.
+
+---
+
+## Example Scenes
+
+| Scene | Duration | Objects | Demonstrates |
+|---|---|---|---|
+| [`examples/hello.lsf`](examples/hello.lsf) | 3s | Text, Line | Fade-in, `ease_out_sine` |
+| [`examples/pythagorean.lsf`](examples/pythagorean.lsf) | 8s | Polygon, Arrow, LaTeX, Group | Spring scale, label timing |
+| [`examples/circle_bounce.lsf`](examples/circle_bounce.lsf) | 4s | Circle, Line | `ease_out_bounce` vs `ease_in_quad` |
+| [`examples/unit_circle.lsf`](examples/unit_circle.lsf) | 52s | Circle, Axes, Plot, Group, Text, LaTeX | Full math video: font, camera, draw_fraction, LAB color |
+
+---
+
+## AI Integration
+
+Lumina's LSF is designed to be written by LLMs — no imperative logic, just data:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,
+    system="""You generate Lumina Scene Format (LSF) JSON.
+Rules:
+- Objects go in "objects" block with "type" and "properties"
+- Timeline entries have: time (float), object (string id), state (object), easing (string)
+- Supported easings: linear, ease_out_cubic, ease_out_elastic, ease_out_bounce, smooth, spring
+- Supported types: Circle, Rectangle, Line, Arrow, Text, LaTeX, Group, Axes, Plot, BezierCurve
+Return ONLY valid JSON.""",
+    messages=[{
+        "role": "user",
+        "content": "Animate a sine wave drawing itself onto the screen over 3 seconds."
+    }]
+)
+
+scene_json = response.content[0].text
+```
+
+Validation errors are structured for LLM re-injection:
+
+```json
+{
+  "valid": false,
+  "errors": [
+    {
+      "code": "UNKNOWN_OBJECT_ID",
+      "path": "$.timeline[2].object",
+      "message": "Timeline references 'circle_2' but no such object exists.",
+      "fix_suggestion": "Add 'circle_2' to the objects block, or change the reference to 'circle_1'."
+    }
+  ]
+}
 ```
 
 ---
@@ -296,10 +391,10 @@ Scene Graph + Timeline ──── keyframe evaluation, easing, overrides
 ```bash
 cargo run -p lumina-server
 
-# Validate an LSF file
+# Validate
 curl -X POST http://localhost:3000/validate \
   -H "Content-Type: application/json" \
-  -d @examples/pythagorean.lsf
+  -d @examples/unit_circle.lsf
 
 # Render to MP4
 curl -X POST http://localhost:3000/render \
@@ -312,20 +407,19 @@ curl -X POST http://localhost:3000/render \
 
 ## Roadmap
 
-| Phase                  | Status       | Scope                                                                      |
-| ---------------------- | ------------ | -------------------------------------------------------------------------- |
-| Phase 1 — Rust Core    | **Complete** | LSF schema, Skia renderer, timeline, easing, export, CLI, server           |
-| Phase 2 — WASM & Web   | In Progress  | WebGPU (Vello), interactive events, React SDK, `npm install @lumina/react` |
-| Phase 3 — AI Cloud API | Planned      | Hosted render endpoint, AI self-correction SDK, Python bindings            |
-| Phase 4 — Studio       | Planned      | Browser timeline editor, team collaboration, Tauri desktop app             |
-
-Tracked in [`todo.md`](todo.md).
+| Phase | Status | Scope |
+|---|---|---|
+| Phase 1 — Core Engine | **Complete** | LSF schema, Skia renderer, timeline, 27 easings, export, CLI, server |
+| Phase 2 — Rendering Quality | **Complete** | Vello GPU backend, camera system, Plot rendering, LAB color interp, draw-on animation, font rendering |
+| Phase 3 — WASM & Web | In Progress | WebGPU surface, interactive events, React SDK |
+| Phase 4 — AI Cloud API | Planned | Hosted render endpoint, AI self-correction SDK, Python bindings |
+| Phase 5 — Studio | Planned | Browser timeline editor, team collaboration, Tauri desktop app |
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). All PRs require `cargo test --workspace` to pass.
+All PRs require `cargo test --workspace --exclude lumina-wasm` to pass. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Authors
 

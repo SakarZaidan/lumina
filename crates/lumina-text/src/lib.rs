@@ -1,4 +1,4 @@
-use lumina_schema::{LaTeXProps, TextProps};
+use lumina_schema::TextProps;
 use fontdue::{Font, FontSettings};
 use std::collections::HashMap;
 

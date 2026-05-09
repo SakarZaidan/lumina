@@ -134,6 +134,8 @@ pub struct PathProps {
     pub stroke: Option<String>,
     #[serde(default)]
     pub stroke_width: f32,
+    #[serde(default)]
+    pub draw_fraction: Option<f32>,
     #[serde(default = "default_opacity")]
     pub opacity: f32,
 }
@@ -150,6 +152,10 @@ pub struct LineProps {
     pub stroke: String,
     #[serde(default = "default_stroke_width")]
     pub stroke_width: f32,
+    #[serde(default)]
+    pub dash: Option<Vec<f32>>,
+    #[serde(default)]
+    pub draw_fraction: Option<f32>,
     #[serde(default = "default_opacity")]
     pub opacity: f32,
 }
@@ -318,6 +324,12 @@ pub struct AxesProps {
     pub y_range: [f32; 2],
     pub x: f32,
     pub y: f32,
+    #[serde(default = "default_axes_scale")]
+    pub scale: f32,
+    #[serde(default = "default_axis_step")]
+    pub x_step: f32,
+    #[serde(default = "default_axis_step")]
+    pub y_step: f32,
     #[serde(default)]
     pub x_label: Option<String>,
     #[serde(default)]
@@ -344,6 +356,8 @@ pub struct PlotProps {
     pub sample_count: u32,
     #[serde(default)]
     pub z_index: i32,
+    #[serde(default)]
+    pub draw_fraction: Option<f32>,
     #[serde(default = "default_opacity")]
     pub opacity: f32,
 }
@@ -360,6 +374,8 @@ pub struct BezierCurveProps {
     pub stroke_width: f32,
     #[serde(default)]
     pub z_index: i32,
+    #[serde(default)]
+    pub draw_fraction: Option<f32>,
     #[serde(default = "default_opacity")]
     pub opacity: f32,
 }
@@ -369,5 +385,7 @@ fn default_stroke() -> String { "#FFFFFF".to_string() }
 fn default_stroke_width() -> f32 { 1.0 }
 fn default_opacity() -> f32 { 1.0 }
 fn default_scale() -> f32 { 1.0 }
+fn default_axes_scale() -> f32 { 40.0 }
+fn default_axis_step() -> f32 { 1.0 }
 fn default_easing() -> String { "linear".to_string() }
 fn default_sample_count() -> u32 { 200 }

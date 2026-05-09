@@ -1,7 +1,7 @@
 pub mod skia_backend;
 pub mod vello_backend;
 
-use lumina_schema::Object;
+use lumina_schema::{CameraState, Object};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -13,6 +13,7 @@ pub trait Renderer {
         width: u32,
         height: u32,
         background: &str,
+        camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError>;
 
     fn load_font(&mut self, id: &str, data: &[u8]) -> Result<(), RendererError>;

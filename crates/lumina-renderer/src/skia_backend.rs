@@ -1,9 +1,28 @@
 use crate::{Renderer, RendererError};
-use lumina_schema::{Object, TextProps};
+use lumina_schema::{CameraState, Object, TextProps};
 use lumina_text::TextEngine;
 use serde_json::Value;
 use std::collections::HashMap;
 use tiny_skia::*;
+
+struct AxesContext {
+    origin_screen_x: f32,
+    origin_screen_y: f32,
+    scale: f32,
+    x_min: f32,
+    x_max: f32,
+    y_min: f32,
+    y_max: f32,
+}
+
+impl AxesContext {
+    fn to_screen(&self, mx: f32, my: f32) -> (f32, f32) {
+        (
+            self.origin_screen_x + mx * self.scale,
+            self.origin_screen_y - my * self.scale,
+        )
+    }
+}
 
 pub struct SkiaRenderer {
     text_engine: TextEngine,
@@ -56,6 +75,28 @@ impl SkiaRenderer {
         roots.into_iter().map(|(id, _)| id).collect()
     }
 
+    fn resolve_axes_context(&self, axes_id: &str, states: &HashMap<String, Value>) -> Option<AxesContext> {
+        let s = states.get(axes_id)?;
+        let x = s["x"].as_f64()? as f32;
+        let y = s["y"].as_f64()? as f32;
+        let x_range = s["x_range"].as_array()?;
+        let y_range = s["y_range"].as_array()?;
+        let x_min = x_range.get(0)?.as_f64()? as f32;
+        let x_max = x_range.get(1)?.as_f64()? as f32;
+        let y_min = y_range.get(0)?.as_f64()? as f32;
+        let y_max = y_range.get(1)?.as_f64()? as f32;
+        let scale = s["scale"].as_f64().unwrap_or(40.0) as f32;
+        Some(AxesContext {
+            origin_screen_x: x + (0.0 - x_min) * scale,
+            origin_screen_y: y - (0.0 - y_min) * scale,
+            scale,
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+        })
+    }
+
     fn draw_node(
         &self,
         pixmap: &mut Pixmap,
@@ -98,7 +139,7 @@ impl SkiaRenderer {
                 }
             }
             _ => {
-                self.draw_leaf_object(pixmap, obj, state, parent_transform)?;
+                self.draw_leaf_object(pixmap, obj, state, parent_transform, objects, states)?;
             }
         }
         Ok(())
@@ -110,6 +151,8 @@ impl SkiaRenderer {
         obj: &Object,
         state: &Value,
         transform: Transform,
+        objects: &HashMap<String, Object>,
+        states: &HashMap<String, Value>,
     ) -> Result<(), RendererError> {
         match obj {
             Object::Circle(_) => {
@@ -242,6 +285,7 @@ impl SkiaRenderer {
                 let stroke_width = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let stroke_color = parse_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
+                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
 
                 let mut pb = PathBuilder::new();
                 pb.move_to(x1, y1);
@@ -252,6 +296,13 @@ impl SkiaRenderer {
                     paint.anti_alias = true;
                     let mut stroke = Stroke::default();
                     stroke.width = stroke_width;
+                    if let Some(frac) = draw_fraction {
+                        let frac = frac.clamp(0.0, 1.0);
+                        let dx = x2 - x1;
+                        let dy = y2 - y1;
+                        let length = (dx * dx + dy * dy).sqrt().max(0.001);
+                        stroke.dash = StrokeDash::new(vec![length * frac, length * 2.0], 0.0);
+                    }
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
@@ -358,9 +409,10 @@ impl SkiaRenderer {
                                 ).unwrap_or(Color::WHITE).premultiply().to_color_u8();
                             }
 
-                            // Correct baseline: y is the baseline, glyph drawn above it
-                            // fontdue ymin is negative for glyphs below baseline (descenders)
-                            let glyph_top = props.y - metrics.height as f32 + metrics.ymin as f32;
+                            // fontdue ymin: signed distance of glyph bottom from baseline
+                            // positive = above baseline (superscripts), negative = below (descenders)
+                            // top of glyph in screen coords = baseline - height - ymin
+                            let glyph_top = props.y - metrics.height as f32 - metrics.ymin as f32;
                             let glyph_transform = transform.pre_translate(
                                 x_cursor + metrics.xmin as f32,
                                 glyph_top,
@@ -380,31 +432,35 @@ impl SkiaRenderer {
                 }
             }
             Object::LaTeX(_) => {
-                // MiTeX integration is pending — render expression as plain text fallback
                 let expression = state["expression"].as_str().unwrap_or("");
                 let x = state["x"].as_f64().unwrap_or(0.0) as f32;
                 let y = state["y"].as_f64().unwrap_or(0.0) as f32;
                 let font_size = state["font_size"].as_f64().unwrap_or(24.0) as f32;
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let color_str = state["color"].as_str().unwrap_or("#FFFFFF");
+                let font_id = state["font_id"].as_str().map(|s| s.to_string());
+
+                // Convert common LaTeX/math notation to Unicode for text rendering
+                let rendered = latex_to_unicode(expression);
 
                 let fallback_state = serde_json::json!({
-                    "content": expression,
+                    "content": rendered,
                     "x": x,
                     "y": y,
                     "font_size": font_size,
                     "opacity": opacity,
                     "color": color_str,
+                    "font_id": font_id,
                 });
                 let text_obj = Object::Text(lumina_schema::TextProps {
-                    content: expression.to_string(),
+                    content: rendered.clone(),
                     x, y, font_size,
                     opacity,
                     color: color_str.to_string(),
-                    font_id: None,
+                    font_id,
                     z_index: 0,
                 });
-                self.draw_leaf_object(pixmap, &text_obj, &fallback_state, transform)?;
+                self.draw_leaf_object(pixmap, &text_obj, &fallback_state, transform, objects, states)?;
             }
             Object::BezierCurve(_) => {
                 let p0 = state["p0"].as_array().ok_or_else(|| {
@@ -433,10 +489,25 @@ impl SkiaRenderer {
                 let stroke_width = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let stroke_color = parse_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
+                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
 
                 let mut pb = PathBuilder::new();
-                pb.move_to(x0, y0);
-                pb.cubic_to(x1, y1, x2, y2, x3, y3);
+                if let Some(frac) = draw_fraction {
+                    // De Casteljau subdivision: clip cubic at parameter t=frac
+                    let t = frac.clamp(0.0, 1.0);
+                    let lerp = |a: f32, b: f32| a + (b - a) * t;
+                    let ax = lerp(x0, x1); let ay = lerp(y0, y1);
+                    let bx = lerp(x1, x2); let by = lerp(y1, y2);
+                    let cx_ = lerp(x2, x3); let cy_ = lerp(y2, y3);
+                    let dx = lerp(ax, bx); let dy = lerp(ay, by);
+                    let ex = lerp(bx, cx_); let ey = lerp(by, cy_);
+                    let fx = lerp(dx, ex); let fy = lerp(dy, ey);
+                    pb.move_to(x0, y0);
+                    pb.cubic_to(ax, ay, dx, dy, fx, fy);
+                } else {
+                    pb.move_to(x0, y0);
+                    pb.cubic_to(x1, y1, x2, y2, x3, y3);
+                }
                 if let Some(path) = pb.finish() {
                     let mut paint = Paint::default();
                     paint.set_color(stroke_color);
@@ -489,14 +560,23 @@ impl SkiaRenderer {
             Object::Axes(_) => {
                 let x = state["x"].as_f64().unwrap_or(0.0) as f32;
                 let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let x_range = state["x_range"].as_array();
-                let y_range = state["y_range"].as_array();
+                let x_range_arr = state["x_range"].as_array();
+                let y_range_arr = state["y_range"].as_array();
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+                let scale = state["scale"].as_f64().unwrap_or(40.0) as f32;
+                let x_step = state["x_step"].as_f64().unwrap_or(1.0) as f32;
+                let y_step = state["y_step"].as_f64().unwrap_or(1.0) as f32;
+                let draw_grid = state["grid"].as_bool().unwrap_or(false);
 
-                let x_max = x_range.and_then(|r| r.get(1)).and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
-                let y_max = y_range.and_then(|r| r.get(1)).and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
-                let scale = 40.0_f32;
+                let x_min = x_range_arr.and_then(|r| r.get(0)).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let x_max = x_range_arr.and_then(|r| r.get(1)).and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
+                let y_min = y_range_arr.and_then(|r| r.get(0)).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                let y_max = y_range_arr.and_then(|r| r.get(1)).and_then(|v| v.as_f64()).unwrap_or(10.0) as f32;
+
+                // Screen position of math origin (0, 0)
+                let ox = x + (0.0 - x_min) * scale;
+                let oy = y - (0.0 - y_min) * scale;
 
                 let mut paint = Paint::default();
                 paint.set_color(color);
@@ -504,23 +584,146 @@ impl SkiaRenderer {
                 let mut stroke = Stroke::default();
                 stroke.width = 2.0;
 
-                // X axis
+                // X axis (full range)
                 let mut pb = PathBuilder::new();
-                pb.move_to(x, y);
-                pb.line_to(x + x_max * scale, y);
+                pb.move_to(ox + x_min * scale, oy);
+                pb.line_to(ox + x_max * scale, oy);
                 if let Some(path) = pb.finish() {
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
-                // Y axis
+                // Y axis (full range)
                 let mut pb = PathBuilder::new();
-                pb.move_to(x, y);
-                pb.line_to(x, y - y_max * scale);
+                pb.move_to(ox, oy - y_min * scale);
+                pb.line_to(ox, oy - y_max * scale);
                 if let Some(path) = pb.finish() {
+                    pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+                }
+
+                // Grid + ticks
+                let grid_color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity * 0.2);
+                let mut grid_paint = Paint::default();
+                grid_paint.set_color(grid_color);
+                grid_paint.anti_alias = true;
+                let mut grid_stroke = Stroke::default();
+                grid_stroke.width = 1.0;
+                let tick_h = 5.0_f32;
+
+                // X ticks and vertical grid lines
+                let x_count = ((x_max - x_min) / x_step).ceil() as i32;
+                for i in 0..=x_count {
+                    let tx = x_min + i as f32 * x_step;
+                    if tx > x_max + 1e-4 { break; }
+                    let px = ox + tx * scale;
+                    let mut pb = PathBuilder::new();
+                    pb.move_to(px, oy - tick_h);
+                    pb.line_to(px, oy + tick_h);
+                    if let Some(path) = pb.finish() {
+                        pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+                    }
+                    if draw_grid && (tx - 0.0).abs() > 1e-4 {
+                        let mut pb = PathBuilder::new();
+                        pb.move_to(px, oy - y_min * scale);
+                        pb.line_to(px, oy - y_max * scale);
+                        if let Some(path) = pb.finish() {
+                            pixmap.stroke_path(&path, &grid_paint, &grid_stroke, transform, None);
+                        }
+                    }
+                }
+
+                // Y ticks and horizontal grid lines
+                let y_count = ((y_max - y_min) / y_step).ceil() as i32;
+                for i in 0..=y_count {
+                    let ty = y_min + i as f32 * y_step;
+                    if ty > y_max + 1e-4 { break; }
+                    let py = oy - ty * scale;
+                    let mut pb = PathBuilder::new();
+                    pb.move_to(ox - tick_h, py);
+                    pb.line_to(ox + tick_h, py);
+                    if let Some(path) = pb.finish() {
+                        pixmap.stroke_path(&path, &paint, &stroke, transform, None);
+                    }
+                    if draw_grid && (ty - 0.0).abs() > 1e-4 {
+                        let mut pb = PathBuilder::new();
+                        pb.move_to(ox + x_min * scale, py);
+                        pb.line_to(ox + x_max * scale, py);
+                        if let Some(path) = pb.finish() {
+                            pixmap.stroke_path(&path, &grid_paint, &grid_stroke, transform, None);
+                        }
+                    }
+                }
+            }
+            Object::Plot(props) => {
+                let axes_id = state["axes_id"].as_str().unwrap_or(&props.axes_id);
+                let function_str = state["function_str"].as_str().unwrap_or(&props.function_str);
+                let stroke_width = state["stroke_width"].as_f64().unwrap_or(2.0) as f32;
+                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
+                let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+                let total_samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
+                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
+                let samples = if let Some(frac) = draw_fraction {
+                    ((total_samples as f32 * frac.clamp(0.0, 1.0)) as usize).max(1)
+                } else {
+                    total_samples
+                };
+
+                let Some(ctx) = self.resolve_axes_context(axes_id, states) else {
+                    return Ok(());
+                };
+
+                // Normalize bare math function names to evalexpr's math:: namespace
+                // Only if not already namespaced (avoids double-prefixing)
+                let normalized;
+                let function_str: &str = if function_str.contains("math::") {
+                    function_str
+                } else {
+                    normalized = function_str
+                        .replace("sin(", "math::sin(")
+                        .replace("cos(", "math::cos(")
+                        .replace("tan(", "math::tan(")
+                        .replace("sqrt(", "math::sqrt(")
+                        .replace("abs(", "math::abs(")
+                        .replace("exp(", "math::exp(")
+                        .replace("ln(", "math::ln(");
+                    &normalized
+                };
+
+                // When draw_fraction is set, clamp x_max to show only that portion of the domain
+                let x_end = if let Some(frac) = draw_fraction {
+                    ctx.x_min + (ctx.x_max - ctx.x_min) * frac.clamp(0.0, 1.0)
+                } else {
+                    ctx.x_max
+                };
+
+                let mut pb = PathBuilder::new();
+                let mut started = false;
+                for i in 0..=samples {
+                    let mx = ctx.x_min + (i as f32 / samples as f32) * (x_end - ctx.x_min);
+                    let eval_ctx = evalexpr::context_map! { "x" => mx as f64 };
+                    let my = match eval_ctx.and_then(|c| evalexpr::eval_number_with_context(function_str, &c)) {
+                        Ok(v) => v as f32,
+                        Err(_) => { started = false; continue; }
+                    };
+                    let y_margin = (ctx.y_max - ctx.y_min).abs();
+                    if !my.is_finite() || my < ctx.y_min - y_margin || my > ctx.y_max + y_margin {
+                        started = false;
+                        continue;
+                    }
+                    let (sx, sy) = ctx.to_screen(mx, my);
+                    if !started { pb.move_to(sx, sy); started = true; } else { pb.line_to(sx, sy); }
+                }
+                if let Some(path) = pb.finish() {
+                    let mut paint = Paint::default();
+                    paint.set_color(color);
+                    paint.anti_alias = true;
+                    let mut stroke = Stroke::default();
+                    stroke.width = stroke_width;
+                    stroke.line_cap = LineCap::Round;
+                    stroke.line_join = LineJoin::Round;
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
             // Image and SVG rendering require asset loading — not yet wired up
-            Object::Image(_) | Object::SVG(_) | Object::Plot(_) => {}
+            Object::Image(_) | Object::SVG(_) => {}
             Object::Group(_) => {} // handled in draw_node
         }
         Ok(())
@@ -541,6 +744,7 @@ impl Renderer for SkiaRenderer {
         width: u32,
         height: u32,
         background: &str,
+        camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError> {
         let mut pixmap = Pixmap::new(width, height).ok_or_else(|| {
             RendererError::Failed(format!("Failed to create {}x{} pixmap", width, height))
@@ -548,9 +752,19 @@ impl Renderer for SkiaRenderer {
 
         pixmap.fill(parse_color(background, 1.0));
 
+        let root_transform = if let Some(cam) = camera {
+            let cx = width as f32 / 2.0;
+            let cy = height as f32 / 2.0;
+            Transform::from_translate(cx + cam.x, cy + cam.y)
+                .pre_concat(Transform::from_scale(cam.zoom, cam.zoom))
+                .pre_concat(Transform::from_translate(-cx, -cy))
+        } else {
+            Transform::identity()
+        };
+
         let roots = self.get_root_objects_sorted(objects);
         for id in roots {
-            self.draw_node(&mut pixmap, &id, objects, states, Transform::identity())?;
+            self.draw_node(&mut pixmap, &id, objects, states, root_transform)?;
         }
 
         Ok(pixmap.data().to_vec())
@@ -559,6 +773,76 @@ impl Renderer for SkiaRenderer {
     fn load_font(&mut self, id: &str, data: &[u8]) -> Result<(), RendererError> {
         self.text_engine.load_font(id.to_string(), data).map_err(RendererError::Failed)
     }
+}
+
+// Convert common LaTeX/math notation to Unicode for plain-text rendering.
+fn latex_to_unicode(expr: &str) -> String {
+    let mut s = expr.to_string();
+
+    // Greek letters
+    s = s.replace(r"\alpha", "α").replace(r"\beta", "β").replace(r"\gamma", "γ")
+         .replace(r"\delta", "δ").replace(r"\epsilon", "ε").replace(r"\zeta", "ζ")
+         .replace(r"\eta", "η").replace(r"\theta", "θ").replace(r"\iota", "ι")
+         .replace(r"\kappa", "κ").replace(r"\lambda", "λ").replace(r"\mu", "μ")
+         .replace(r"\nu", "ν").replace(r"\xi", "ξ").replace(r"\pi", "π")
+         .replace(r"\rho", "ρ").replace(r"\sigma", "σ").replace(r"\tau", "τ")
+         .replace(r"\phi", "φ").replace(r"\chi", "χ").replace(r"\psi", "ψ")
+         .replace(r"\omega", "ω");
+
+    // Operators and symbols
+    s = s.replace(r"\times", "×").replace(r"\div", "÷").replace(r"\pm", "±")
+         .replace(r"\leq", "≤").replace(r"\geq", "≥").replace(r"\neq", "≠")
+         .replace(r"\approx", "≈").replace(r"\infty", "∞").replace(r"\sum", "Σ")
+         .replace(r"\prod", "Π").replace(r"\int", "∫").replace(r"\sqrt", "√")
+         .replace(r"\cdot", "·").replace(r"\circ", "∘").replace(r"\in", "∈")
+         .replace(r"\cup", "∪").replace(r"\cap", "∩").replace(r"\subset", "⊂")
+         .replace(r"\rightarrow", "→").replace(r"\leftarrow", "←").replace(r"\Rightarrow", "⇒");
+
+    // Trig function names (LaTeX style)
+    s = s.replace(r"\sin", "sin").replace(r"\cos", "cos").replace(r"\tan", "tan")
+         .replace(r"\log", "log").replace(r"\ln", "ln").replace(r"\lim", "lim");
+
+    // Superscripts: ^{...} and bare ^N
+    s = replace_superscripts(&s);
+
+    // Remove remaining LaTeX braces/commands
+    s = s.replace('{', "").replace('}', "");
+
+    s
+}
+
+fn replace_superscripts(s: &str) -> String {
+    let sup_map = |c: char| -> Option<char> {
+        match c {
+            '0' => Some('⁰'), '1' => Some('¹'), '2' => Some('²'), '3' => Some('³'),
+            '4' => Some('⁴'), '5' => Some('⁵'), '6' => Some('⁶'), '7' => Some('⁷'),
+            '8' => Some('⁸'), '9' => Some('⁹'), '+' => Some('⁺'), '-' => Some('⁻'),
+            'n' => Some('ⁿ'), 'i' => Some('ⁱ'), _ => None,
+        }
+    };
+
+    let mut out = String::with_capacity(s.len());
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '^' {
+            i += 1;
+            if i < chars.len() && chars[i] == '{' {
+                i += 1;
+                while i < chars.len() && chars[i] != '}' {
+                    if let Some(c) = sup_map(chars[i]) { out.push(c); } else { out.push(chars[i]); }
+                    i += 1;
+                }
+                if i < chars.len() { i += 1; } // skip '}'
+            } else if i < chars.len() {
+                if let Some(c) = sup_map(chars[i]) { out.push(c); i += 1; } else { out.push('^'); }
+            }
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 // Parse SVG path data string into a tiny-skia Path.
