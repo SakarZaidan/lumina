@@ -10,9 +10,13 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "Zlib",
     "CC0-1.0",
     "0BSD",
+    # Permissive licenses pulled in transitively by wgpu / vello / image / resvg.
+    "NCSA",
+    "MPL-2.0", # weak, file-level copyleft — fine for an MIT app to depend on
 ]
 exceptions = [
     # vello's font shaping dep uses the OFL-1.1 font license — data only, not code
@@ -26,7 +30,12 @@ wildcards = "allow"
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = []
+ignore = [
+    # Unmaintained transitive deps of wgpu/vello with no upgrade available.
+    # Not vulnerabilities — informational "unmaintained" advisories only.
+    "RUSTSEC-2024-0436", # paste (via wgpu → vello)
+    "RUSTSEC-2025-0057", # fxhash (via wgpu-core)
+]
 
 [sources]
 unknown-registry = "deny"
