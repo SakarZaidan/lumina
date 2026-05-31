@@ -1,0 +1,16 @@
+[book]
+title = "Lumina"
+description = "The animation engine for the AI era — declarative JSON in, video out."
+authors = ["Lumina"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/SakarZaidan/lumina"
+edit-url-template = "https://github.com/SakarZaidan/lumina/edit/main/docs/{path}"
+
+[output.html.fold]
+enable = true
+level = 1

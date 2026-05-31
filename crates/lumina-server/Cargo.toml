@@ -5,6 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "lumina-server"
+path = "src/main.rs"
+
+[lib]
+name = "lumina_server"
+path = "src/lib.rs"
+
 [dependencies]
 lumina-core = { path = "../lumina-core" }
 lumina-renderer = { path = "../lumina-renderer" }
@@ -14,6 +22,8 @@ axum = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+schemars = { workspace = true }
+json-patch = "1"
 tower-http = { version = "0.5", features = ["cors"] }
 anyhow = { workspace = true }
 log = { workspace = true }

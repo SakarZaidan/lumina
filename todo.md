@@ -1,33 +1,36 @@
 # Future Improvements (todo.md)
 
-This document outlines the roadmap and technical enhancements planned for the Lumina engine.
+This document tracks the Lumina engine roadmap. Items are kept in sync with the
+README roadmap and CHANGELOG.
 
-## 1. Renderer Enhancements
+## Done (shipped in 0.2.0)
 
-- [ ] **Vello CLI Integration**: Finish the implementation of the Vello (GPU) backend in the CLI tool.
-- [ ] **Path Morphing**: Implement smooth vertex-matching interpolation for SVG paths of differing lengths.
-- [ ] **LAB Color Interpolation**: Move from RGB to LAB colorspace for perceptually uniform color transitions.
+- [x] **Vello CLI Integration** — GPU backend selectable via `--backend vello`.
+- [x] **Path Morphing** — vertex-matching interpolation for paths of differing lengths.
+- [x] **LAB Color Interpolation** — perceptually uniform color transitions.
+- [x] **Spring Physics** — RK4 spring solver (`easing: "spring"`).
+- [x] **Complete Easing Library** — 27 easings + parameterised `cubic_bezier`.
+- [x] **Bezier Easings** — CSS-spec `cubic_bezier(x1,y1,x2,y2)`.
+- [x] **Interactive Events** — event bus + full `hit_test` across all object types.
+- [x] **Live Preview** — `lumina-cli --watch` re-renders on file change.
+- [x] **LaTeX Parts Animation** — `draw_fraction` write-on for LaTeX.
+- [x] **MathML Support** — `MathML` object type via the Unicode text pipeline.
+- [x] **Font Fallbacks** — per-character fallback through loaded fonts.
+- [x] **Image / SVG / GIF compositing** — raster, SVG (resvg) and animated GIF
+      assets composited into frames with position/scale/rotation/opacity.
+- [x] **Visual effects** — gradients (linear/radial), drop shadows/glow,
+      rounded rectangles, text alignment + letter-spacing.
+- [x] **Particles** — deterministic, time-reproducible particle emitter.
+- [x] **`/objects` endpoint** — object-type registry for agent introspection.
 
-## 2. Animation & Easing
+## In progress / next
 
-- [ ] **Spring Physics**: Add a dedicated spring solver for physical-feeling animations.
-- [ ] **Complete Easing Library**: Implement all 30+ functions defined in the blueprint (Elastic, Bounce, etc.).
-- [ ] **Bezier Easings**: Support custom cubic-bezier easing curves.
-
-## 3. Formats & Interactivity
-
-- [ ] **WASM Runtime**: Complete the browser-based player with WebGPU support.
-- [ ] **Interactive Events**: Fully implement the event bus for click, hover, and drag interactions in the WASM player.
-- [ ] **Lottie Export**: Build a converter to export LSF scenes to Lottie JSON for legacy compatibility.
-
-## 4. AI & Tooling
-
-- [ ] **Self-Correction Loop**: Integrate the schema validator into a CLI-based AI feedback tool.
-- [ ] **Live Preview**: Create a lightweight watcher that re-renders the scene on file change.
-- [ ] **Asset Pipeline**: Add automatic optimization for imported SVGs and raster images.
-
-## 5. Math & Text
-
-- [ ] **LaTeX Parts Animation**: Allow individual symbols in a LaTeX expression to be animated independently (Write-on effect).
-- [ ] **MathML Support**: Direct rendering of MathML structures.
-- [ ] **Font Fallbacks**: Better handling of missing glyphs using system-wide fallback chains.
+- [ ] **WASM WebGPU**: Port the Vello backend to WebGPU in the browser player.
+- [ ] **Lottie Export**: Convert LSF scenes to Lottie JSON for legacy players.
+- [ ] **Self-Correction Loop**: CLI-based validate→fix→retry helper around the
+      schema validator's `fix_suggestion` output.
+- [ ] **Asset Pipeline**: Automatic optimization for imported SVGs and images.
+- [ ] **GPU text/image**: Bring text, image and particle rendering to the Vello
+      backend (currently CPU/Skia only).
+- [ ] **MiTeX layout**: Use `mitex` for true math layout instead of the current
+      Unicode substitution fallback.

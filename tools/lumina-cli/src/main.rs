@@ -1,13 +1,20 @@
 use clap::Parser;
 use lumina_export::Exporter;
-use lumina_renderer::{Renderer, skia_backend::SkiaRenderer};
+use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
 use lumina_schema::Scene;
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about = "Lumina animation engine CLI — JSON in, video out.",
+    long_about = None
+)]
 struct Args {
-    /// Path to the LSF scene file
+    /// Path to the LSF scene file (.lsf or .json)
     #[arg(short, long)]
     scene: PathBuf,
 
@@ -15,52 +22,261 @@ struct Args {
     #[arg(short, long, default_value = "output")]
     output: PathBuf,
 
-    /// Output format (png or mp4)
+    /// Output format: png (frame sequence), mp4, webm, or gif
     #[arg(short, long, default_value = "png")]
     format: String,
 
-    /// Render backend (vello or skia)
+    /// Renderer backend: skia (CPU, default) or vello (GPU)
     #[arg(short, long, default_value = "skia")]
     backend: String,
+
+    /// Watch mode: re-render on every file change (outputs a single PNG preview)
+    #[arg(short, long)]
+    watch: bool,
+
+    /// Print per-frame timing at the end of a render
+    #[arg(long)]
+    verbose: bool,
+}
+
+fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("Cannot read {:?}: {}", path, e))?;
+    serde_json::from_str(&text).map_err(|e| {
+        // Surface line/col in parse errors for better DX
+        anyhow::anyhow!("Scene parse error in {:?}: {}", path, e)
+    })
+}
+
+fn render_once(args: &Args, scene: &Scene) -> anyhow::Result<Vec<Duration>> {
+    let timings = match args.backend.as_str() {
+        "skia" => {
+            let mut renderer = SkiaRenderer::new();
+            load_fonts(&mut renderer, scene)?;
+            load_images(&mut renderer, scene)?;
+            let mut exporter = Exporter::new(renderer);
+            do_export(&mut exporter, scene, args)?
+        }
+        "vello" => {
+            let mut renderer = VelloRenderer::new()?;
+            load_fonts(&mut renderer, scene)?;
+            load_images(&mut renderer, scene)?;
+            let mut exporter = Exporter::new(renderer);
+            do_export(&mut exporter, scene, args)?
+        }
+        other => anyhow::bail!("Unknown backend '{}'. Valid: skia, vello", other),
+    };
+    Ok(timings)
+}
+
+fn load_fonts<R: Renderer>(renderer: &mut R, scene: &Scene) -> anyhow::Result<()> {
+    for font_asset in &scene.assets.fonts {
+        log::info!(
+            "Loading font '{}' from {:?}",
+            font_asset.id,
+            font_asset.path
+        );
+        let data = std::fs::read(&font_asset.path)
+            .map_err(|e| anyhow::anyhow!("Cannot read font {:?}: {}", font_asset.path, e))?;
+        renderer
+            .load_font(&font_asset.id, &data)
+            .map_err(|e| anyhow::anyhow!("Font load error: {:?}", e))?;
+    }
+    Ok(())
+}
+
+fn load_images<R: Renderer>(renderer: &mut R, scene: &Scene) -> anyhow::Result<()> {
+    for image_asset in &scene.assets.images {
+        log::info!(
+            "Loading image '{}' from {:?}",
+            image_asset.id,
+            image_asset.path
+        );
+        let data = std::fs::read(&image_asset.path)
+            .map_err(|e| anyhow::anyhow!("Cannot read image {:?}: {}", image_asset.path, e))?;
+        renderer
+            .load_image(&image_asset.id, &data)
+            .map_err(|e| anyhow::anyhow!("Image load error: {:?}", e))?;
+    }
+    Ok(())
+}
+
+fn do_export<R: Renderer>(
+    exporter: &mut Exporter<R>,
+    scene: &Scene,
+    args: &Args,
+) -> anyhow::Result<Vec<Duration>> {
+    let mut timings = Vec::new();
+    match args.format.as_str() {
+        "mp4" => {
+            log::info!("Exporting MP4 to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_mp4(scene, &args.output)?;
+            timings.push(t0.elapsed());
+        }
+        "webm" => {
+            log::info!("Exporting WebM to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_webm(scene, &args.output)?;
+            timings.push(t0.elapsed());
+        }
+        "gif" => {
+            log::info!("Exporting GIF to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_gif(scene, &args.output)?;
+            timings.push(t0.elapsed());
+        }
+        "png" => {
+            log::info!("Exporting PNG sequence to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_png_sequence(scene, &args.output)?;
+            timings.push(t0.elapsed());
+        }
+        other => anyhow::bail!("Unknown format '{}'. Valid: png, mp4, webm, gif", other),
+    }
+    Ok(timings)
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
     let args = Args::parse();
 
-    log::info!("Loading scene from {:?}", args.scene);
-    let scene_str = std::fs::read_to_string(&args.scene)?;
-    let scene: Scene = serde_json::from_str(&scene_str)?;
-
-    log::info!("Initializing {:?} renderer", args.backend);
-    match args.backend.as_str() {
-        "skia" => {
-            let mut renderer = SkiaRenderer::new();
-            
-            // Load fonts
-            for font_asset in &scene.assets.fonts {
-                log::info!("Loading font: {} from {:?}", font_asset.id, font_asset.path);
-                let font_data = std::fs::read(&font_asset.path)?;
-                renderer.load_font(&font_asset.id, &font_data).map_err(|e| anyhow::anyhow!("{:?}", e))?;
-            }
-
-            let mut exporter = Exporter::new(renderer);
-            if args.format == "mp4" {
-                log::info!("Exporting MP4 to {:?}", args.output);
-                exporter.export_mp4(&scene, &args.output)?;
-            } else {
-                log::info!("Exporting PNG sequence to {:?}", args.output);
-                exporter.export_png_sequence(&scene, &args.output)?;
-            }
+    if args.watch {
+        run_watch(&args)
+    } else {
+        let scene = load_scene(&args.scene)?;
+        log::info!(
+            "Rendering '{}' with {} backend…",
+            scene.meta.title,
+            args.backend
+        );
+        let timings = render_once(&args, &scene)?;
+        if args.verbose {
+            println!("[lumina] render complete in {:.2?}", timings[0]);
         }
+        log::info!("Done.");
+        Ok(())
+    }
+}
+
+/// Watch mode: render on start, then re-render whenever the scene file changes.
+/// The output is always a single PNG frame (the mid-point of the scene) so
+/// previews are near-instant even for long animations.
+fn run_watch(args: &Args) -> anyhow::Result<()> {
+    use notify::{RecursiveMode, Watcher};
+
+    let preview_out = args.output.with_extension("png");
+    println!(
+        "[watch] Watching {:?} — preview → {:?}",
+        args.scene, preview_out
+    );
+
+    let do_preview = |path: &PathBuf| {
+        let t0 = Instant::now();
+        let scene = match load_scene(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[watch] parse error: {}", e);
+                return;
+            }
+        };
+        // Render mid-point frame to a single PNG
+        let mid = scene.canvas.duration / 2.0;
+        match render_preview(&scene, &preview_out, mid, &args.backend) {
+            Ok(_) => println!(
+                "[watch] preview updated in {:.0?}  {:?}",
+                t0.elapsed(),
+                preview_out
+            ),
+            Err(e) => eprintln!("[watch] render error: {}", e),
+        }
+    };
+
+    // Initial render
+    do_preview(&args.scene);
+
+    let (tx, rx) = mpsc::channel();
+    let mut watcher = notify::recommended_watcher(move |res| {
+        if let Ok(event) = res {
+            let _ = tx.send(event);
+        }
+    })?;
+    watcher.watch(&args.scene, RecursiveMode::NonRecursive)?;
+
+    println!(
+        "[watch] ready — edit {:?} to trigger a re-render. Ctrl-C to quit.",
+        args.scene
+    );
+    for _event in rx {
+        do_preview(&args.scene);
+    }
+    Ok(())
+}
+
+fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> anyhow::Result<()> {
+    use image::{ImageBuffer, Rgba};
+    use lumina_core::{SceneGraph, Timeline};
+
+    let scene_graph = SceneGraph::from_scene(scene);
+    let timeline = Timeline::from_scene(scene);
+    let states = timeline.get_state_at(time);
+    let cam_state = timeline.get_camera_at(time, scene);
+    let camera = scene.camera.as_ref().map(|_| &cam_state);
+
+    let frame = match backend {
         "vello" => {
-            anyhow::bail!("Vello backend not yet implemented in CLI");
+            let mut r = VelloRenderer::new()?;
+            for fa in &scene.assets.fonts {
+                if let Ok(data) = std::fs::read(&fa.path) {
+                    let _ = lumina_renderer::Renderer::load_font(&mut r, &fa.id, &data);
+                }
+            }
+            for ia in &scene.assets.images {
+                if let Ok(data) = std::fs::read(&ia.path) {
+                    let _ = lumina_renderer::Renderer::load_image(&mut r, &ia.id, &data);
+                }
+            }
+            lumina_renderer::Renderer::set_time(&mut r, time);
+            lumina_renderer::Renderer::render_frame(
+                &mut r,
+                &scene_graph.objects,
+                &states,
+                scene.canvas.width,
+                scene.canvas.height,
+                &scene.canvas.background,
+                camera,
+            )
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?
         }
         _ => {
-            anyhow::bail!("Unknown backend: {}", args.backend);
+            let mut r = SkiaRenderer::new();
+            for fa in &scene.assets.fonts {
+                if let Ok(data) = std::fs::read(&fa.path) {
+                    let _ = lumina_renderer::Renderer::load_font(&mut r, &fa.id, &data);
+                }
+            }
+            for ia in &scene.assets.images {
+                if let Ok(data) = std::fs::read(&ia.path) {
+                    let _ = lumina_renderer::Renderer::load_image(&mut r, &ia.id, &data);
+                }
+            }
+            lumina_renderer::Renderer::set_time(&mut r, time);
+            lumina_renderer::Renderer::render_frame(
+                &mut r,
+                &scene_graph.objects,
+                &states,
+                scene.canvas.width,
+                scene.canvas.height,
+                &scene.canvas.background,
+                camera,
+            )
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?
         }
-    }
+    };
 
-    log::info!("Done!");
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(scene.canvas.width, scene.canvas.height, frame)
+            .ok_or_else(|| anyhow::anyhow!("Failed to build image from frame data"))?;
+    img.save(output)?;
     Ok(())
 }

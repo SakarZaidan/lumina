@@ -1,0 +1,25 @@
+# Schema Reference
+
+The authoritative LSF schema is generated directly from the Rust types, so it is
+always in sync with the engine. There are two ways to obtain it:
+
+## From the running server
+
+```bash
+cargo run -p lumina-server &
+curl localhost:3000/schema | jq           # full JSON Schema (draft 2020-12 via schemars)
+curl localhost:3000/objects | jq          # compact per-type required/optional registry
+```
+
+## Generate a static copy
+
+```bash
+docs/scripts/gen-schema.sh        # writes docs/src/generated/schema.json
+```
+
+The script boots the server, fetches `/schema`, and saves it. Embed or link that
+file from your tooling for offline pre-validation and IDE autocompletion.
+
+> Tip: feed the schema (or the smaller `/objects` registry) into an LLM's system
+> prompt so generated scenes use correct property names on the first try. See
+> the [AI Integration Cookbook](./ai-integration.md).

@@ -1,0 +1,263 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Feedforward Neural Network — Activation Flow",
+    "author": "Lumina",
+    "created_at": "2026-05-20"
+  },
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "duration": 11.0,
+    "background": "#08080F"
+  },
+  "assets": {
+    "fonts": [
+      { "id": "sans", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }
+    ]
+  },
+  "objects": {
+    "title": {
+      "type": "Text",
+      "properties": {
+        "content": "Feedforward Neural Network",
+        "x": 60, "y": 50, "font_id": "sans", "font_size": 30,
+        "color": "#E8EAED", "opacity": 0, "z_index": 10
+      }
+    },
+    "lbl_input": {
+      "type": "Text",
+      "properties": {
+        "content": "Input Layer (3)",
+        "x": 130, "y": 558, "font_id": "sans", "font_size": 18,
+        "color": "#4CC9F0", "opacity": 0, "z_index": 9
+      }
+    },
+    "lbl_hidden": {
+      "type": "Text",
+      "properties": {
+        "content": "Hidden Layer (4)",
+        "x": 558, "y": 602, "font_id": "sans", "font_size": 18,
+        "color": "#7B2FBE", "opacity": 0, "z_index": 9
+      }
+    },
+    "lbl_output": {
+      "type": "Text",
+      "properties": {
+        "content": "Output Layer (2)",
+        "x": 978, "y": 490, "font_id": "sans", "font_size": 18,
+        "color": "#F72585", "opacity": 0, "z_index": 9
+      }
+    },
+    "caption": {
+      "type": "Text",
+      "properties": {
+        "content": "Signal propagates left to right: input fires, hidden activates, output responds.",
+        "x": 60, "y": 692, "font_id": "sans", "font_size": 14,
+        "color": "#666688", "opacity": 0, "z_index": 9
+      }
+    },
+
+    "group_input": {
+      "type": "Group",
+      "properties": {
+        "x": 220, "y": 360, "scale": 0, "rotation": 0, "opacity": 1,
+        "z_index": 2,
+        "children": ["n_i1", "n_i2", "n_i3"]
+      }
+    },
+    "n_i1": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": -130, "radius": 24,
+        "fill": "#4CC9F0", "stroke": "#87CEEB", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_i2": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": 0, "radius": 24,
+        "fill": "#4CC9F0", "stroke": "#87CEEB", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_i3": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": 130, "radius": 24,
+        "fill": "#4CC9F0", "stroke": "#87CEEB", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+
+    "group_hidden": {
+      "type": "Group",
+      "properties": {
+        "x": 640, "y": 360, "scale": 0, "rotation": 0, "opacity": 1,
+        "z_index": 2,
+        "children": ["n_h1", "n_h2", "n_h3", "n_h4"]
+      }
+    },
+    "n_h1": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": -180, "radius": 24,
+        "fill": "#7B2FBE", "stroke": "#AF7FEE", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_h2": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": -60, "radius": 24,
+        "fill": "#7B2FBE", "stroke": "#AF7FEE", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_h3": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": 60, "radius": 24,
+        "fill": "#7B2FBE", "stroke": "#AF7FEE", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_h4": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": 180, "radius": 24,
+        "fill": "#7B2FBE", "stroke": "#AF7FEE", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+
+    "group_output": {
+      "type": "Group",
+      "properties": {
+        "x": 1060, "y": 360, "scale": 0, "rotation": 0, "opacity": 1,
+        "z_index": 2,
+        "children": ["n_o1", "n_o2"]
+      }
+    },
+    "n_o1": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": -60, "radius": 28,
+        "fill": "#F72585", "stroke": "#FF80C0", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+    "n_o2": {
+      "type": "Circle",
+      "properties": {
+        "cx": 0, "cy": 60, "radius": 28,
+        "fill": "#F72585", "stroke": "#FF80C0", "stroke_width": 2,
+        "opacity": 1, "z_index": 1
+      }
+    },
+
+    "conn_i1h1": { "type": "Line", "properties": { "x1": 220, "y1": 230, "x2": 640, "y2": 180, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i1h2": { "type": "Line", "properties": { "x1": 220, "y1": 230, "x2": 640, "y2": 300, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i1h3": { "type": "Line", "properties": { "x1": 220, "y1": 230, "x2": 640, "y2": 420, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i1h4": { "type": "Line", "properties": { "x1": 220, "y1": 230, "x2": 640, "y2": 540, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+
+    "conn_i2h1": { "type": "Line", "properties": { "x1": 220, "y1": 360, "x2": 640, "y2": 180, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i2h2": { "type": "Line", "properties": { "x1": 220, "y1": 360, "x2": 640, "y2": 300, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i2h3": { "type": "Line", "properties": { "x1": 220, "y1": 360, "x2": 640, "y2": 420, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i2h4": { "type": "Line", "properties": { "x1": 220, "y1": 360, "x2": 640, "y2": 540, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+
+    "conn_i3h1": { "type": "Line", "properties": { "x1": 220, "y1": 490, "x2": 640, "y2": 180, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i3h2": { "type": "Line", "properties": { "x1": 220, "y1": 490, "x2": 640, "y2": 300, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i3h3": { "type": "Line", "properties": { "x1": 220, "y1": 490, "x2": 640, "y2": 420, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_i3h4": { "type": "Line", "properties": { "x1": 220, "y1": 490, "x2": 640, "y2": 540, "stroke": "#2A4060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+
+    "conn_h1o1": { "type": "Line", "properties": { "x1": 640, "y1": 180, "x2": 1060, "y2": 300, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h1o2": { "type": "Line", "properties": { "x1": 640, "y1": 180, "x2": 1060, "y2": 420, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h2o1": { "type": "Line", "properties": { "x1": 640, "y1": 300, "x2": 1060, "y2": 300, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h2o2": { "type": "Line", "properties": { "x1": 640, "y1": 300, "x2": 1060, "y2": 420, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h3o1": { "type": "Line", "properties": { "x1": 640, "y1": 420, "x2": 1060, "y2": 300, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h3o2": { "type": "Line", "properties": { "x1": 640, "y1": 420, "x2": 1060, "y2": 420, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h4o1": { "type": "Line", "properties": { "x1": 640, "y1": 540, "x2": 1060, "y2": 300, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } },
+    "conn_h4o2": { "type": "Line", "properties": { "x1": 640, "y1": 540, "x2": 1060, "y2": 420, "stroke": "#3D2060", "stroke_width": 1.5, "draw_fraction": 0, "opacity": 1, "z_index": 1 } }
+  },
+  "timeline": [
+    { "time": 0.0, "object": "title",      "state": { "opacity": 0 },   "easing": "linear" },
+    { "time": 0.8, "object": "title",      "state": { "opacity": 1 },   "easing": "ease_out_sine" },
+
+    { "time": 0.6, "object": "lbl_input",  "state": { "opacity": 0 },   "easing": "linear" },
+    { "time": 1.4, "object": "lbl_input",  "state": { "opacity": 1 },   "easing": "ease_out_sine" },
+    { "time": 0.6, "object": "lbl_hidden", "state": { "opacity": 0 },   "easing": "linear" },
+    { "time": 1.4, "object": "lbl_hidden", "state": { "opacity": 1 },   "easing": "ease_out_sine" },
+    { "time": 0.6, "object": "lbl_output", "state": { "opacity": 0 },   "easing": "linear" },
+    { "time": 1.4, "object": "lbl_output", "state": { "opacity": 1 },   "easing": "ease_out_sine" },
+
+    { "time": 1.2, "object": "group_input",  "state": { "scale": 0 },   "easing": "linear" },
+    { "time": 2.0, "object": "group_input",  "state": { "scale": 1 },   "easing": "ease_out_elastic" },
+
+    { "time": 2.4, "object": "conn_i1h1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i1h1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i1h2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i1h2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i1h3", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i1h3", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i1h4", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i1h4", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i2h1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i2h1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i2h2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i2h2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i2h3", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i2h3", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i2h4", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i2h4", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i3h1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i3h1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i3h2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i3h2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i3h3", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i3h3", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 2.4, "object": "conn_i3h4", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "conn_i3h4", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+
+    { "time": 3.0, "object": "group_hidden", "state": { "scale": 0 },   "easing": "linear" },
+    { "time": 3.9, "object": "group_hidden", "state": { "scale": 1 },   "easing": "ease_out_elastic" },
+
+    { "time": 4.2, "object": "conn_h1o1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h1o1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h1o2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h1o2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h2o1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h2o1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h2o2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h2o2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h3o1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h3o1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h3o2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h3o2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h4o1", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h4o1", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+    { "time": 4.2, "object": "conn_h4o2", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 5.6, "object": "conn_h4o2", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+
+    { "time": 4.8, "object": "group_output", "state": { "scale": 0 },   "easing": "linear" },
+    { "time": 5.7, "object": "group_output", "state": { "scale": 1 },   "easing": "ease_out_elastic" },
+
+    { "time": 6.8, "object": "group_input",  "state": { "opacity": 1.0 }, "easing": "linear" },
+    { "time": 7.1, "object": "group_input",  "state": { "opacity": 0.3 }, "easing": "ease_in_out_sine" },
+    { "time": 7.5, "object": "group_input",  "state": { "opacity": 1.0 }, "easing": "ease_out_sine" },
+
+    { "time": 7.5, "object": "group_hidden", "state": { "opacity": 1.0 }, "easing": "linear" },
+    { "time": 7.8, "object": "group_hidden", "state": { "opacity": 0.3 }, "easing": "ease_in_out_sine" },
+    { "time": 8.2, "object": "group_hidden", "state": { "opacity": 1.0 }, "easing": "ease_out_sine" },
+
+    { "time": 8.2, "object": "group_output", "state": { "opacity": 1.0 }, "easing": "linear" },
+    { "time": 8.5, "object": "group_output", "state": { "opacity": 0.3 }, "easing": "ease_in_out_sine" },
+    { "time": 9.0, "object": "group_output", "state": { "opacity": 1.0 }, "easing": "ease_out_sine" },
+
+    { "time": 9.2,  "object": "caption", "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 10.2, "object": "caption", "state": { "opacity": 1 }, "easing": "ease_out_sine" }
+  ],
+  "events": []
+}

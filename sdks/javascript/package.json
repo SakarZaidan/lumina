@@ -1,21 +1,42 @@
 {
   "name": "@lumina/sdk",
-  "version": "0.1.0",
-  "description": "Lumina Animation Engine JavaScript/TypeScript SDK",
+  "version": "0.2.0",
+  "description": "Lumina Animation Engine — React and vanilla-JS player SDK",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lumina-animation/lumina"
+  },
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "wasm"],
   "scripts": {
-    "build": "tsc"
+    "build": "tsup src/index.ts --format cjs,esm --dts --out-dir dist",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup src/index.ts --format esm --watch"
   },
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
+    "tsup": "^8.0.0",
     "typescript": "^5.0.0"
   }
 }

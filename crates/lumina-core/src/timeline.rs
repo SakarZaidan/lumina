@@ -6,9 +6,9 @@ use std::collections::HashMap;
 pub struct Timeline {
     pub duration: f32,
     pub fps: u32,
-    // object_id -> property_name -> keyframes (sorted by time)
+    /// object_id → property_name → keyframes (sorted by time)
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
-    // object_id -> property_name -> value (for interactive overrides)
+    /// object_id → property_name → value (interactive overrides take precedence)
     pub overrides: HashMap<String, HashMap<String, Value>>,
 }
 
@@ -17,6 +17,8 @@ pub struct Keyframe {
     pub time: f32,
     pub value: Value,
     pub easing: String,
+    /// Parameters for parameterized easings such as `cubic_bezier`.
+    pub easing_params: Option<Value>,
 }
 
 impl Timeline {
@@ -31,11 +33,16 @@ impl Timeline {
             };
             if let Value::Object(props) = &initial_state["properties"] {
                 for (prop_name, prop_value) in props {
-                    let track = tracks.entry(id.clone()).or_default().entry(prop_name.clone()).or_default();
+                    let track = tracks
+                        .entry(id.clone())
+                        .or_default()
+                        .entry(prop_name.clone())
+                        .or_default();
                     track.push(Keyframe {
                         time: 0.0,
                         value: prop_value.clone(),
                         easing: "linear".to_string(),
+                        easing_params: None,
                     });
                 }
             }
@@ -45,11 +52,16 @@ impl Timeline {
         for entry in &scene.timeline {
             if let Value::Object(state) = &entry.state {
                 for (prop_name, prop_value) in state {
-                    let track = tracks.entry(entry.object.clone()).or_default().entry(prop_name.clone()).or_default();
+                    let track = tracks
+                        .entry(entry.object.clone())
+                        .or_default()
+                        .entry(prop_name.clone())
+                        .or_default();
                     track.push(Keyframe {
                         time: entry.time,
                         value: prop_value.clone(),
                         easing: entry.easing.clone(),
+                        easing_params: entry.easing_params.clone(),
                     });
                 }
             }
@@ -96,16 +108,21 @@ impl Timeline {
             }
         }
 
-        state.into_iter()
+        state
+            .into_iter()
             .map(|(k, v)| (k, Value::Object(v.into_iter().collect())))
             .collect()
     }
 
     pub fn get_camera_at(&self, time: f32, scene: &Scene) -> lumina_schema::CameraState {
-        use lumina_schema::CameraState;
         use crate::easing::get_easing_fn;
+        use lumina_schema::CameraState;
 
-        let default = CameraState { x: 0.0, y: 0.0, zoom: 1.0 };
+        let default = CameraState {
+            x: 0.0,
+            y: 0.0,
+            zoom: 1.0,
+        };
         let camera = match &scene.camera {
             Some(c) => c,
             None => return default,
@@ -171,7 +188,13 @@ impl Timeline {
         }
 
         let t = (time - lower.time) / (upper.time - lower.time);
-        // Easing is set on the destination keyframe (CSS convention)
-        interpolate_value(&lower.value, &upper.value, t, &upper.easing)
+        // Easing is set on the destination keyframe (CSS convention).
+        interpolate_value(
+            &lower.value,
+            &upper.value,
+            t,
+            &upper.easing,
+            upper.easing_params.as_ref(),
+        )
     }
 }

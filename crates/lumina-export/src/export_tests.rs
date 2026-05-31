@@ -8,15 +8,35 @@ mod tests {
 
     fn two_frame_scene() -> Scene {
         let mut objects = HashMap::new();
-        objects.insert("c".into(), Object::Circle(CircleProps {
-            cx: 50.0, cy: 50.0, radius: 20.0,
-            z_index: 1, fill: "#FFFFFF".into(), stroke: None, stroke_width: 0.0, opacity: 0.0,
-        }));
+        objects.insert(
+            "c".into(),
+            Object::Circle(CircleProps {
+                cx: 50.0,
+                cy: 50.0,
+                radius: 20.0,
+                z_index: 1,
+                fill: "#FFFFFF".into(),
+                stroke: None,
+                stroke_width: 0.0,
+                shadow: None,
+                opacity: 0.0,
+            }),
+        );
         Scene {
             version: "1.0".into(),
-            meta: Meta { title: "Export Test".into(), author: "test".into(), created_at: "now".into() },
+            meta: Meta {
+                title: "Export Test".into(),
+                author: "test".into(),
+                created_at: "now".into(),
+            },
             // fps=1, duration=2.0 → exactly 2 frames (frame_0000 and frame_0001)
-            canvas: Canvas { width: 64, height: 64, fps: 1, duration: 2.0, background: "#000000".into() },
+            canvas: Canvas {
+                width: 64,
+                height: 64,
+                fps: 1,
+                duration: 2.0,
+                background: "#000000".into(),
+            },
             assets: Default::default(),
             objects,
             timeline: vec![TimelineEntry {
@@ -38,7 +58,9 @@ mod tests {
         let dir = std::env::temp_dir().join("lumina_test_png_sequence");
         let _ = std::fs::remove_dir_all(&dir);
 
-        exporter.export_png_sequence(&scene, &dir).expect("PNG export failed");
+        exporter
+            .export_png_sequence(&scene, &dir)
+            .expect("PNG export failed");
 
         let frame0 = dir.join("frame_0000.png");
         let frame1 = dir.join("frame_0001.png");
@@ -56,7 +78,9 @@ mod tests {
         let dir = std::env::temp_dir().join("lumina_test_png_dims");
         let _ = std::fs::remove_dir_all(&dir);
 
-        exporter.export_png_sequence(&scene, &dir).expect("PNG export failed");
+        exporter
+            .export_png_sequence(&scene, &dir)
+            .expect("PNG export failed");
 
         let frame_path = dir.join("frame_0000.png");
         let img = image::open(&frame_path).expect("Should be able to open PNG");
@@ -73,7 +97,9 @@ mod tests {
         let dir = std::env::temp_dir().join("lumina_test_png_brightness");
         let _ = std::fs::remove_dir_all(&dir);
 
-        exporter.export_png_sequence(&scene, &dir).expect("PNG export failed");
+        exporter
+            .export_png_sequence(&scene, &dir)
+            .expect("PNG export failed");
 
         let frame0 = image::open(dir.join("frame_0000.png")).unwrap();
         let frame1 = image::open(dir.join("frame_0001.png")).unwrap();
@@ -92,6 +118,63 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    fn ffmpeg_available() -> bool {
+        std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn test_webm_export_produces_valid_file() {
+        if !ffmpeg_available() {
+            return; // skip when ffmpeg is absent
+        }
+        let scene = two_frame_scene();
+        let mut exporter = Exporter::new(SkiaRenderer::new());
+        let out = std::env::temp_dir().join("lumina_test_output.webm");
+        let _ = std::fs::remove_file(&out);
+
+        exporter
+            .export_webm(&scene, &out)
+            .expect("WebM export failed");
+        let bytes = std::fs::read(&out).expect("read webm");
+        assert!(!bytes.is_empty(), "WebM file should be non-empty");
+        // EBML magic header for Matroska/WebM.
+        assert_eq!(
+            &bytes[0..4],
+            &[0x1A, 0x45, 0xDF, 0xA3],
+            "WebM should start with the EBML magic header"
+        );
+        let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn test_gif_export_produces_valid_file() {
+        if !ffmpeg_available() {
+            return;
+        }
+        let scene = two_frame_scene();
+        let mut exporter = Exporter::new(SkiaRenderer::new());
+        let out = std::env::temp_dir().join("lumina_test_output.gif");
+        let _ = std::fs::remove_file(&out);
+
+        exporter
+            .export_gif(&scene, &out)
+            .expect("GIF export failed");
+        let bytes = std::fs::read(&out).expect("read gif");
+        assert!(!bytes.is_empty(), "GIF file should be non-empty");
+        assert_eq!(
+            &bytes[0..4],
+            b"GIF8",
+            "GIF should start with the GIF8 magic"
+        );
+        let _ = std::fs::remove_file(&out);
+    }
+
     #[test]
     fn test_mp4_export_fails_gracefully_without_ffmpeg() {
         // This test verifies the error is descriptive, not a panic
@@ -101,8 +184,8 @@ mod tests {
         let out = std::env::temp_dir().join("lumina_test_output.mp4");
 
         let result = exporter.export_mp4(&scene, &out);
-        if result.is_err() {
-            let msg = result.unwrap_err().to_string();
+        if let Err(e) = result {
+            let msg = e.to_string();
             assert!(
                 msg.contains("ffmpeg") || msg.contains("FFmpeg") || msg.contains("spawn"),
                 "Error message should mention ffmpeg, got: {msg}"

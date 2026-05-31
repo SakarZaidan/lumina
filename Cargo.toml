@@ -7,12 +7,13 @@ members = [
     "crates/lumina-export",
     "crates/lumina-server",
     "crates/lumina-wasm",
+    "crates/lumina-bench",
     "tools/lumina-cli",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Lumina Team"]
 license = "MIT"
@@ -39,3 +40,4 @@ clap = { version = "4.5", features = ["derive"] }
 axum = "0.7"
 rayon = "1.10"
 evalexpr = "11"
+notify = "6"
