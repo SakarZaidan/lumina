@@ -9,7 +9,7 @@ pub struct SceneGraph {
 impl SceneGraph {
     pub fn from_scene(scene: &Scene) -> Self {
         let objects = scene.objects.clone();
-        
+
         // Find root objects (those not contained in any group)
         let mut child_ids = std::collections::HashSet::new();
         for obj in objects.values() {
@@ -50,5 +50,4 @@ impl SceneGraph {
     pub fn get_object(&self, id: &str) -> Option<&Object> {
         self.objects.get(id)
     }
-
 }

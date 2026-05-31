@@ -1,0 +1,25 @@
+# Standalone workspace so the Python extension is built only via maturin and
+# never pulled into the main `cargo test --workspace` gate (which has no Python
+# interpreter linked).
+[workspace]
+
+[package]
+name = "lumina-py"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+description = "Python bindings for the Lumina animation engine"
+
+[lib]
+name = "lumina"
+crate-type = ["cdylib"]
+
+[dependencies]
+lumina-schema = { path = "../../crates/lumina-schema" }
+lumina-renderer = { path = "../../crates/lumina-renderer" }
+lumina-export = { path = "../../crates/lumina-export" }
+lumina-server = { path = "../../crates/lumina-server" }
+pyo3 = { version = "0.22", features = ["extension-module"] }
+pythonize = "0.22"
+schemars = "0.8"
+serde_json = "1.0"

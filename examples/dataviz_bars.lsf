@@ -1,0 +1,157 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Animated Bar Chart",
+    "author": "Lumina",
+    "created_at": "2026-05-20"
+  },
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "duration": 6.0,
+    "background": "#0F0F1A"
+  },
+  "assets": {
+    "fonts": [
+      { "id": "sans", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }
+    ]
+  },
+  "objects": {
+    "title": {
+      "type": "Text",
+      "properties": {
+        "content": "Quarterly Revenue (2026)",
+        "x": 80, "y": 70, "font_id": "sans", "font_size": 36,
+        "color": "#E8EAED", "opacity": 0, "z_index": 10
+      }
+    },
+    "baseline": {
+      "type": "Line",
+      "properties": {
+        "x1": 80, "y1": 620, "x2": 1200, "y2": 620,
+        "stroke": "#3D5A80", "stroke_width": 2,
+        "draw_fraction": 0, "opacity": 1, "z_index": 1
+      }
+    },
+    "bar_q1": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 130, "y": 620, "width": 180, "height": 0,
+        "fill": "#4CC9F0", "opacity": 1, "z_index": 2
+      }
+    },
+    "bar_q2": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 370, "y": 620, "width": 180, "height": 0,
+        "fill": "#7B2FBE", "opacity": 1, "z_index": 2
+      }
+    },
+    "bar_q3": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 610, "y": 620, "width": 180, "height": 0,
+        "fill": "#F72585", "opacity": 1, "z_index": 2
+      }
+    },
+    "bar_q4": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 850, "y": 620, "width": 180, "height": 0,
+        "fill": "#4CC9F0", "opacity": 1, "z_index": 2
+      }
+    },
+    "label_q1": {
+      "type": "Text",
+      "properties": {
+        "content": "Q1", "x": 195, "y": 655, "font_id": "sans",
+        "font_size": 22, "color": "#AAAAAA", "opacity": 0, "z_index": 5
+      }
+    },
+    "label_q2": {
+      "type": "Text",
+      "properties": {
+        "content": "Q2", "x": 435, "y": 655, "font_id": "sans",
+        "font_size": 22, "color": "#AAAAAA", "opacity": 0, "z_index": 5
+      }
+    },
+    "label_q3": {
+      "type": "Text",
+      "properties": {
+        "content": "Q3", "x": 675, "y": 655, "font_id": "sans",
+        "font_size": 22, "color": "#AAAAAA", "opacity": 0, "z_index": 5
+      }
+    },
+    "label_q4": {
+      "type": "Text",
+      "properties": {
+        "content": "Q4", "x": 915, "y": 655, "font_id": "sans",
+        "font_size": 22, "color": "#AAAAAA", "opacity": 0, "z_index": 5
+      }
+    },
+    "val_q1": {
+      "type": "Text",
+      "properties": {
+        "content": "$2.4M", "x": 132, "y": 260, "font_id": "sans",
+        "font_size": 20, "color": "#4CC9F0", "opacity": 0, "z_index": 5
+      }
+    },
+    "val_q2": {
+      "type": "Text",
+      "properties": {
+        "content": "$3.1M", "x": 372, "y": 180, "font_id": "sans",
+        "font_size": 20, "color": "#7B2FBE", "opacity": 0, "z_index": 5
+      }
+    },
+    "val_q3": {
+      "type": "Text",
+      "properties": {
+        "content": "$2.8M", "x": 612, "y": 215, "font_id": "sans",
+        "font_size": 20, "color": "#F72585", "opacity": 0, "z_index": 5
+      }
+    },
+    "val_q4": {
+      "type": "Text",
+      "properties": {
+        "content": "$3.7M", "x": 852, "y": 130, "font_id": "sans",
+        "font_size": 20, "color": "#4CC9F0", "opacity": 0, "z_index": 5
+      }
+    }
+  },
+  "timeline": [
+    { "time": 0.0, "object": "title",    "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 0.6, "object": "title",    "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+    { "time": 0.4, "object": "baseline", "state": { "draw_fraction": 0 }, "easing": "linear" },
+    { "time": 1.2, "object": "baseline", "state": { "draw_fraction": 1 }, "easing": "ease_out_cubic" },
+
+    { "time": 1.2, "object": "bar_q1", "state": { "y": 620, "height": 0 }, "easing": "linear" },
+    { "time": 2.2, "object": "bar_q1", "state": { "y": 260, "height": 360 }, "easing": "ease_out_bounce" },
+    { "time": 2.2, "object": "label_q1", "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 2.6, "object": "label_q1", "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+    { "time": 2.2, "object": "val_q1",   "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 2.6, "object": "val_q1",   "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+
+    { "time": 2.0, "object": "bar_q2", "state": { "y": 620, "height": 0 }, "easing": "linear" },
+    { "time": 3.0, "object": "bar_q2", "state": { "y": 180, "height": 440 }, "easing": "ease_out_bounce" },
+    { "time": 3.0, "object": "label_q2", "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 3.4, "object": "label_q2", "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+    { "time": 3.0, "object": "val_q2",   "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 3.4, "object": "val_q2",   "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+
+    { "time": 2.8, "object": "bar_q3", "state": { "y": 620, "height": 0 }, "easing": "linear" },
+    { "time": 3.8, "object": "bar_q3", "state": { "y": 215, "height": 405 }, "easing": "ease_out_bounce" },
+    { "time": 3.8, "object": "label_q3", "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 4.2, "object": "label_q3", "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+    { "time": 3.8, "object": "val_q3",   "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 4.2, "object": "val_q3",   "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+
+    { "time": 3.6, "object": "bar_q4", "state": { "y": 620, "height": 0 }, "easing": "linear" },
+    { "time": 4.8, "object": "bar_q4", "state": { "y": 130, "height": 490 }, "easing": "ease_out_bounce" },
+    { "time": 4.8, "object": "label_q4", "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 5.2, "object": "label_q4", "state": { "opacity": 1 }, "easing": "ease_out_sine" },
+    { "time": 4.8, "object": "val_q4",   "state": { "opacity": 0 }, "easing": "linear" },
+    { "time": 5.2, "object": "val_q4",   "state": { "opacity": 1 }, "easing": "ease_out_sine" }
+  ],
+  "events": []
+}

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "lumina-engine"
+version = "0.2.0"
+description = "Python bindings for Lumina — a declarative, GPU-capable animation engine (JSON in, video out)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Lumina" }]
+keywords = ["animation", "rendering", "video", "math", "manim", "latex"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/SakarZaidan/lumina"
+Repository = "https://github.com/SakarZaidan/lumina"
+
+[tool.maturin]
+# The cdylib's [lib] name is `lumina`, so `import lumina` works after install.
+module-name = "lumina"

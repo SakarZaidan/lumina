@@ -1,0 +1,969 @@
+{
+  "version": "1.0",
+  "meta": {
+    "title": "Lumina v0.3.0 \u2014 Grand Showcase",
+    "author": "lumina",
+    "created_at": "2026-06-01T00:00:00Z"
+  },
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "duration": 45.0,
+    "background": "#0D1117"
+  },
+  "assets": {
+    "fonts": [
+      {
+        "id": "sans",
+        "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+      },
+      {
+        "id": "bold",
+        "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+      }
+    ],
+    "images": [
+      {
+        "id": "node",
+        "path": "/home/horux/projects/lumina/examples/assets/lumina_node.svg"
+      }
+    ]
+  },
+  "objects": {
+    "bg": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1280.0,
+        "height": 720.0,
+        "z_index": 0,
+        "fill": "#0D1117",
+        "opacity": 1.0
+      }
+    },
+    "frame": {
+      "type": "Rectangle",
+      "properties": {
+        "x": 33.33333333333333,
+        "y": 33.33333333333333,
+        "width": 1213.3333333333333,
+        "height": 653.3333333333333,
+        "rx": 18.666666666666664,
+        "ry": 18.666666666666664,
+        "z_index": 1,
+        "fill": "#0F1626",
+        "stroke": "#21304A",
+        "stroke_width": 2.0,
+        "opacity": 0.0
+      }
+    },
+    "logo": {
+      "type": "SVG",
+      "properties": {
+        "asset_id": "node",
+        "x": 573.3333333333333,
+        "y": 166.66666666666666,
+        "width": 133.33333333333331,
+        "height": 133.33333333333331,
+        "z_index": 6,
+        "opacity": 0.0
+      }
+    },
+    "title": {
+      "type": "Text",
+      "properties": {
+        "content": "LUMINA  v0.3.0",
+        "x": 640.0,
+        "y": 363.3333333333333,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 64.0,
+        "color": "#F0F6FC",
+        "z_index": 7,
+        "opacity": 0.0
+      }
+    },
+    "tagline": {
+      "type": "Text",
+      "properties": {
+        "content": "GPU parity  \u00b7  spline easing  \u00b7  interactive events",
+        "x": 640.0,
+        "y": 416.66666666666663,
+        "align": "center",
+        "letter_spacing": 2.0,
+        "font_id": "sans",
+        "font_size": 24.0,
+        "color": "#8B98A9",
+        "z_index": 7,
+        "opacity": 0.0
+      }
+    },
+    "spark": {
+      "type": "Particles",
+      "properties": {
+        "count": 160,
+        "emitter_x": 640.0,
+        "emitter_y": 333.3333333333333,
+        "lifetime": 2.2,
+        "speed": 100.0,
+        "spread": 360,
+        "size": 2.6666666666666665,
+        "color": "#E3B341",
+        "z_index": 5,
+        "opacity": 0.0
+      }
+    },
+    "act2": {
+      "type": "Text",
+      "properties": {
+        "content": "Text, math, images & particles \u2014 now on the GPU",
+        "x": 640.0,
+        "y": 100.0,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 29.333333333333332,
+        "color": "#58A6FF",
+        "z_index": 7,
+        "opacity": 0.0
+      }
+    },
+    "f_emc": {
+      "type": "LaTeX",
+      "properties": {
+        "expression": "E = mc^2",
+        "x": 640.0,
+        "y": 240.0,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 40.0,
+        "color": "#3FB950",
+        "z_index": 6,
+        "draw_fraction": 1.0,
+        "opacity": 0.0
+      }
+    },
+    "f_basel": {
+      "type": "LaTeX",
+      "properties": {
+        "expression": "\\frac{\\pi^2}{6} = \\sum \\frac{1}{n^2}",
+        "x": 640.0,
+        "y": 360.0,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 40.0,
+        "color": "#F0F6FC",
+        "z_index": 6,
+        "draw_fraction": 1.0,
+        "opacity": 0.0
+      }
+    },
+    "f_deriv": {
+      "type": "LaTeX",
+      "properties": {
+        "expression": "\\frac{d}{dx} e^x = e^x",
+        "x": 640.0,
+        "y": 480.0,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 40.0,
+        "color": "#F778BA",
+        "z_index": 6,
+        "draw_fraction": 1.0,
+        "opacity": 0.0
+      }
+    },
+    "burstL": {
+      "type": "Particles",
+      "properties": {
+        "count": 120,
+        "emitter_x": 240.0,
+        "emitter_y": 360.0,
+        "lifetime": 2.0,
+        "speed": 60.0,
+        "spread": 360,
+        "size": 2.333333333333333,
+        "color": "#58A6FF",
+        "z_index": 4,
+        "opacity": 0.0
+      }
+    },
+    "burstR": {
+      "type": "Particles",
+      "properties": {
+        "count": 120,
+        "emitter_x": 1040.0,
+        "emitter_y": 360.0,
+        "lifetime": 2.0,
+        "speed": 60.0,
+        "spread": 360,
+        "size": 2.333333333333333,
+        "color": "#F778BA",
+        "z_index": 4,
+        "opacity": 0.0
+      }
+    },
+    "axes": {
+      "type": "Axes",
+      "properties": {
+        "x": 346.66666666666663,
+        "y": 506.66666666666663,
+        "x_range": [
+          0,
+          12
+        ],
+        "y_range": [
+          -1.4,
+          1.4
+        ],
+        "scale": 52.0,
+        "x_step": 2,
+        "y_step": 1,
+        "grid": true,
+        "color": "#3B4A63",
+        "z_index": 3,
+        "opacity": 0.0
+      }
+    },
+    "plot": {
+      "type": "Plot",
+      "properties": {
+        "function_str": "math::sin(x) * math::cos(x*0.6)",
+        "axes_id": "axes",
+        "color": "#E3B341",
+        "stroke_width": 2.6666666666666665,
+        "sample_count": 240,
+        "draw_fraction": 0.0,
+        "z_index": 4,
+        "opacity": 0.0
+      }
+    },
+    "plot_lbl": {
+      "type": "LaTeX",
+      "properties": {
+        "expression": "y = \\sin x \\cdot \\cos(0.6x)",
+        "x": 640.0,
+        "y": 120.0,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 32.0,
+        "color": "#E3B341",
+        "z_index": 6,
+        "opacity": 0.0
+      }
+    },
+    "act4": {
+      "type": "Text",
+      "properties": {
+        "content": "Declarative  \u00b7  Interactive  \u00b7  Fast",
+        "x": 640.0,
+        "y": 313.3333333333333,
+        "align": "center",
+        "font_id": "bold",
+        "font_size": 48.0,
+        "color": "#F0F6FC",
+        "z_index": 7,
+        "opacity": 0.0
+      }
+    },
+    "act4b": {
+      "type": "Text",
+      "properties": {
+        "content": "JSON in \u2014 MP4 / WebM / GIF / WASM out",
+        "x": 640.0,
+        "y": 373.3333333333333,
+        "align": "center",
+        "letter_spacing": 1.3333333333333333,
+        "font_id": "sans",
+        "font_size": 24.0,
+        "color": "#8B98A9",
+        "z_index": 7,
+        "opacity": 0.0
+      }
+    },
+    "vec": {
+      "type": "Arrow",
+      "properties": {
+        "from": [
+          506.66666666666663,
+          506.66666666666663
+        ],
+        "to": [
+          773.3333333333333,
+          426.66666666666663
+        ],
+        "color": "#58A6FF",
+        "stroke_width": 4.0,
+        "z_index": 6,
+        "opacity": 0.0
+      }
+    },
+    "vec_lbl": {
+      "type": "LaTeX",
+      "properties": {
+        "expression": "\\vec{v}",
+        "x": 786.6666666666666,
+        "y": 420.0,
+        "font_id": "bold",
+        "font_size": 29.333333333333332,
+        "color": "#58A6FF",
+        "z_index": 6,
+        "opacity": 0.0
+      }
+    },
+    "finale": {
+      "type": "Particles",
+      "properties": {
+        "count": 220,
+        "emitter_x": 640.0,
+        "emitter_y": 653.3333333333333,
+        "lifetime": 2.6,
+        "speed": 100.0,
+        "spread": 150,
+        "size": 2.6666666666666665,
+        "color": "#E3B341",
+        "z_index": 5,
+        "opacity": 0.0
+      }
+    }
+  },
+  "timeline": [
+    {
+      "time": 0.0,
+      "object": "frame",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 0.4,
+      "object": "logo",
+      "state": {
+        "opacity": 0.0,
+        "y": 200.0,
+        "rotation": -30
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 1.0,
+      "object": "title",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 1.5,
+      "object": "frame",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 2.0,
+      "object": "tagline",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 2.0,
+      "object": "spark",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 2.6,
+      "object": "logo",
+      "state": {
+        "opacity": 1.0,
+        "y": 166.66666666666666,
+        "rotation": 0
+      },
+      "easing": "spline",
+      "easing_params": {
+        "keypoints": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.25,
+            0.55
+          ],
+          [
+            0.6,
+            0.92
+          ],
+          [
+            1.0,
+            1.0
+          ]
+        ]
+      }
+    },
+    {
+      "time": 2.6,
+      "object": "spark",
+      "state": {
+        "opacity": 0.9
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 3.2,
+      "object": "title",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 4.0,
+      "object": "tagline",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 6.0,
+      "object": "spark",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 7.2,
+      "object": "title",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 7.2,
+      "object": "tagline",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 7.2,
+      "object": "logo",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 8.2,
+      "object": "title",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 8.2,
+      "object": "tagline",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 8.2,
+      "object": "logo",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 8.5,
+      "object": "act2",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 10.0,
+      "object": "act2",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 10.0,
+      "object": "f_emc",
+      "state": {
+        "opacity": 0.0,
+        "draw_fraction": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 11.0,
+      "object": "burstL",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 11.0,
+      "object": "burstR",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 11.4,
+      "object": "f_basel",
+      "state": {
+        "opacity": 0.0,
+        "draw_fraction": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 11.6,
+      "object": "f_emc",
+      "state": {
+        "opacity": 1.0,
+        "draw_fraction": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 12.5,
+      "object": "burstL",
+      "state": {
+        "opacity": 0.85
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 12.5,
+      "object": "burstR",
+      "state": {
+        "opacity": 0.85
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 12.8,
+      "object": "f_deriv",
+      "state": {
+        "opacity": 0.0,
+        "draw_fraction": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 13.0,
+      "object": "f_basel",
+      "state": {
+        "opacity": 1.0,
+        "draw_fraction": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 14.4,
+      "object": "f_deriv",
+      "state": {
+        "opacity": 1.0,
+        "draw_fraction": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 18.5,
+      "object": "act2",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 18.5,
+      "object": "f_emc",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 18.5,
+      "object": "f_basel",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 18.5,
+      "object": "f_deriv",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 18.5,
+      "object": "burstL",
+      "state": {
+        "opacity": 0.85
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 18.5,
+      "object": "burstR",
+      "state": {
+        "opacity": 0.85
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 19.5,
+      "object": "act2",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 19.5,
+      "object": "f_emc",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 19.5,
+      "object": "f_basel",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 19.5,
+      "object": "f_deriv",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 19.5,
+      "object": "burstL",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 19.5,
+      "object": "burstR",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 20.5,
+      "object": "axes",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 22.0,
+      "object": "axes",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 22.0,
+      "object": "plot",
+      "state": {
+        "opacity": 1.0,
+        "draw_fraction": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 23.0,
+      "object": "plot_lbl",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 24.5,
+      "object": "plot_lbl",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 28.0,
+      "object": "plot",
+      "state": {
+        "draw_fraction": 1.0
+      },
+      "easing": "spline",
+      "easing_params": {
+        "keypoints": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.35,
+            0.18
+          ],
+          [
+            0.7,
+            0.85
+          ],
+          [
+            1.0,
+            1.0
+          ]
+        ]
+      }
+    },
+    {
+      "time": 32.0,
+      "object": "axes",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 32.0,
+      "object": "plot",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 32.0,
+      "object": "plot_lbl",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 33.5,
+      "object": "axes",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 33.5,
+      "object": "plot",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 33.5,
+      "object": "plot_lbl",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    },
+    {
+      "time": 34.0,
+      "object": "act4",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 35.0,
+      "object": "act4b",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 36.0,
+      "object": "act4",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 36.0,
+      "object": "vec",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 36.5,
+      "object": "vec_lbl",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 37.0,
+      "object": "act4b",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 37.5,
+      "object": "vec",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 38.0,
+      "object": "vec_lbl",
+      "state": {
+        "opacity": 1.0
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 38.0,
+      "object": "finale",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 39.5,
+      "object": "finale",
+      "state": {
+        "opacity": 0.9
+      },
+      "easing": "ease_out_cubic"
+    },
+    {
+      "time": 44.0,
+      "object": "finale",
+      "state": {
+        "opacity": 0.9
+      },
+      "easing": "linear"
+    },
+    {
+      "time": 45.0,
+      "object": "finale",
+      "state": {
+        "opacity": 0.0
+      },
+      "easing": "ease_in_cubic"
+    }
+  ],
+  "events": [
+    {
+      "object": "vec",
+      "trigger": "drag",
+      "action": {
+        "type": "emit_custom",
+        "event_name": "vector_moved",
+        "properties": {
+          "from": "$drag.from",
+          "to": "$drag.to"
+        }
+      }
+    },
+    {
+      "object": "vec",
+      "trigger": "click",
+      "action": {
+        "type": "tween_to",
+        "target": "vec",
+        "property": "color",
+        "value": "#E3B341",
+        "duration": 0.4,
+        "easing": "ease_out_cubic"
+      }
+    },
+    {
+      "object": "title",
+      "trigger": "click",
+      "action": {
+        "type": "jump_to_time",
+        "value": 0.0
+      }
+    }
+  ],
+  "camera": {
+    "timeline": [
+      {
+        "time": 20.0,
+        "state": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1.0
+        },
+        "easing": "linear"
+      },
+      {
+        "time": 27.0,
+        "state": {
+          "x": -80.0,
+          "y": 26.666666666666664,
+          "zoom": 1.25
+        },
+        "easing": "ease_in_out_sine"
+      },
+      {
+        "time": 33.0,
+        "state": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1.0
+        },
+        "easing": "ease_in_out_sine"
+      }
+    ]
+  }
+}

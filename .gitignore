@@ -1,3 +1,7 @@
+# ── Local tooling / planning scratch (not part of the project) ───────────────
+.claude/
+/plan-v1.md
+
 # ── Rust build artifacts ──────────────────────────────────────────────────────
 /target/
 **/*.rs.bk
@@ -19,7 +23,12 @@ sdks/javascript/pnpm-lock.yaml
 # ── WASM build artifacts ──────────────────────────────────────────────────────
 crates/lumina-wasm/pkg/
 
-# ── Python bindings (future lumina-py) ───────────────────────────────────────
+# ── mdBook output + generated schema ──────────────────────────────────────────
+docs/book/
+docs/src/generated/
+
+# ── Python bindings ───────────────────────────────────────────────────────────
+sdks/python/target/
 *.egg-info/
 dist/
 __pycache__/
