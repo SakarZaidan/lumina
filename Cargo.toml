@@ -30,7 +30,7 @@ log = "0.4"
 env_logger = "0.11"
 tokio = { version = "1.0", features = ["full"] }
 anyhow = "1.0"
-schemars = "0.8"
+schemars = "1.2"
 glam = "0.27" # For linear algebra
 vello = "0.2"
 wgpu = "22.1"
