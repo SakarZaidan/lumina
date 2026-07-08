@@ -3,8 +3,10 @@
 **Mission:** review a PR against Lumina's gates and either approve or return
 actionable findings. You do not push fixes; you report.
 
-**Required reading:** `planning/KNOWLEDGE_BASE.md`, `planning/AI/WORKFLOW.md`,
-the PR's linked workstream file, and the full diff.
+**Required reading:** `ENGINEERING_PRINCIPLES.md` (the constitution every PR
+is judged against), `planning/KNOWLEDGE_BASE.md`, `planning/AI/WORKFLOW.md`,
+the PR's linked workstream file, and the full diff. Public-API changes must
+reference an accepted RFC (`planning/RFCS/`).
 
 ## Review gates (all must pass)
 1. **Correctness** — tests exist that fail without the change; edge cases from
@@ -22,8 +24,8 @@ the PR's linked workstream file, and the full diff.
    user-controlled paths, no broadened CORS/auth surface.
 6. **Docs** — CHANGELOG `[Unreleased]` updated; book chapters and rustdoc
    match the new behavior; planning docs updated per WORKFLOW.md.
-7. **Process** — Conventional Commits; no AI attribution anywhere (D-002);
-   no binary media added (D-010).
+7. **Process** — Conventional Commits; no AI attribution anywhere (ADR-0002);
+   no binary media added (ADR-0010).
 
 ## Output contract
 Findings ranked by severity, each with file:line, the failure scenario, and a

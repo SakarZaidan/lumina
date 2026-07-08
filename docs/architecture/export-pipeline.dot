@@ -1,0 +1,20 @@
+// Export pipeline: frames → files. Rendered by gen-diagrams.sh.
+digraph export_pipeline {
+  rankdir=LR; bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fillcolor="#1E3A5F", fontcolor=white,
+        color="#4A90D9", fontname="Helvetica", fontsize=12];
+  edge [color="#4A90D9", fontname="Helvetica", fontsize=10, fontcolor="#7FA8D9"];
+
+  exporter [label="Exporter<R: Renderer>\nframe loop (serial → rayon in v0.5)"];
+  frames   [label="RGBA frames", fillcolor="#2E5F3A"];
+  png      [label="PNG sequence\n(image crate)"];
+  ffmpeg   [label="ffmpeg subprocess\nstdin RGBA pipe", fillcolor="#5F1E1E"];
+  mp4      [label="MP4\nlibx264 crf18"];
+  webm     [label="WebM\nlibvpx-vp9"];
+  gif      [label="GIF\npalettegen + dither"];
+
+  exporter -> frames;
+  frames -> png;
+  frames -> ffmpeg [label="stream_frames"];
+  ffmpeg -> mp4; ffmpeg -> webm; ffmpeg -> gif;
+}

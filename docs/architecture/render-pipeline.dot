@@ -1,0 +1,23 @@
+// Render pipeline: per-frame state → RGBA pixels. Rendered by gen-diagrams.sh.
+digraph render_pipeline {
+  rankdir=LR; bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fillcolor="#1E3A5F", fontcolor=white,
+        color="#4A90D9", fontname="Helvetica", fontsize=12];
+  edge [color="#4A90D9", fontname="Helvetica", fontsize=10, fontcolor="#7FA8D9"];
+
+  state  [label="objects + states(t)\n+ camera(t)", fillcolor="#2E5F3A"];
+  trait_ [label="Renderer trait\nrender_frame()"];
+  subgraph cluster_backends {
+    label="backends"; fontname="Helvetica"; fontcolor="#7FA8D9"; color="#4A90D9";
+    skia  [label="SkiaRenderer (CPU)\nreference: all effects"];
+    vello [label="VelloRenderer (GPU)\nparity gaps → v0.4"];
+  }
+  raster [label="shared raster module\nglyphs (fontdue) · SVG (resvg)\nparticles (analytic)"];
+  frame  [label="RGBA frame\ndeterministic", fillcolor="#2E5F3A"];
+
+  state -> trait_;
+  trait_ -> skia; trait_ -> vello;
+  skia -> raster [dir=back, style=dashed];
+  vello -> raster [dir=back, style=dashed];
+  skia -> frame; vello -> frame;
+}

@@ -3,8 +3,10 @@
 **Mission:** execute one workstream (feature, fix, or refactor) end-to-end on a
 work branch, leaving the repository releasable.
 
-**Required reading before any change:** `planning/KNOWLEDGE_BASE.md`,
-`planning/AI/WORKFLOW.md`, and the active `planning/WORKSTREAMS/ws-*.md`.
+**Required reading before any change:** `ENGINEERING_PRINCIPLES.md`,
+`planning/KNOWLEDGE_BASE.md`, `planning/AI/WORKFLOW.md`, and the active
+`planning/WORKSTREAMS/ws-*.md`. Public-API changes need an accepted RFC
+(`planning/RFCS/`) before implementation.
 
 ## Allowed
 - Code, test, and doc changes within the workstream's stated scope and files.
@@ -17,7 +19,7 @@ work branch, leaving the repository releasable.
 - New `unwrap`/`expect`/`panic!`/`unsafe` in production code.
 - Adding dependencies without recording the reason in the PR body.
 - Touching pushed tags, rewriting public history, committing binary media.
-- Any AI attribution in commits or PR bodies (D-002).
+- Any AI attribution in commits or PR bodies (ADR-0002).
 
 ## Output contract
 - Conventional Commits on a correctly named branch (WORKFLOW.md).

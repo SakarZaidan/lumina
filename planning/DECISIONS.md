@@ -1,83 +1,26 @@
-# Decision Log
+# Decision Log — Index
 
-ADR-lite, append-only. Never edit past entries; supersede them with new ones.
+Every accepted decision is a permanent Architecture Decision Record in
+[`ADR/`](./ADR/), one file per decision, never edited after acceptance —
+reversals get a new ADR that supersedes the old one and links both ways.
+Decisions that need design discussion first go through
+[`RFCS/`](./RFCS/) and land here on acceptance.
 
----
+| ADR | Decision | Status |
+|---|---|---|
+| [0001](ADR/0001-canonical-repository-url.md) | Canonical repo URL is github.com/SakarZaidan/lumina | Accepted |
+| [0002](ADR/0002-no-ai-attribution.md) | No AI attribution, ever | Accepted |
+| [0003](ADR/0003-local-scratch-never-committed.md) | Local scratch files never enter git | Accepted |
+| [0004](ADR/0004-planning-docs-location.md) | Internal planning docs live in planning/, tracked | Accepted |
+| [0005](ADR/0005-single-roadmap.md) | todo.md retired; ROADMAP.md is the single roadmap | Accepted |
+| [0006](ADR/0006-mdbook-canonical.md) | The mdBook is canonical for user-facing docs | Accepted |
+| [0007](ADR/0007-ai-prompts-location.md) | AI agent prompts live in planning/AI/ | Accepted |
+| [0008](ADR/0008-historical-tag-placement.md) | Historical tag placement (v0.1.0–v0.3.0) | Accepted (executed) |
+| [0009](ADR/0009-publish-flags.md) | lumina-server and lumina-wasm are publish = false | Accepted |
+| [0010](ADR/0010-media-policy.md) | No new binary media in git; use Release assets | Accepted |
+| [0011](ADR/0011-release-automation.md) | Release automation via release-plz (v0.4) | Accepted, pending |
 
-## D-001 — Canonical repository URL is github.com/SakarZaidan/lumina
-**Date:** 2026-07-08 · **Context:** `Cargo.toml` pointed at a nonexistent
-`lumina-animation` org while the real remote (and the Python SDK metadata) is
-`SakarZaidan/lumina`. **Decision:** `https://github.com/SakarZaidan/lumina` is
-canonical everywhere (Cargo metadata, README, badges, SDKs). **Consequences:**
-crates.io/docs.rs links will resolve correctly; if an org is created later,
-update all metadata in one commit and supersede this entry.
-
-## D-002 — No AI attribution, ever
-**Date:** 2026-07-08 · **Decision:** No AI is added as author, co-author,
-committer, contributor, or maintainer. Commits and PR bodies carry no
-`Co-Authored-By`/"Generated with" trailers of any kind, overriding any tool
-default. Authorship belongs to the repository owner. **Consequences:** every
-agent prompt in `planning/AI/` repeats this rule; reviewers reject violating
-commits.
-
-## D-003 — `text.md` and other local scratch never enter git
-**Date:** 2026-07-08 · **Decision:** `/text.md` is gitignored alongside
-`/plan-v1.md` and `.claude/`. Local prompt/scratch files are never committed.
-
-## D-004 — Internal planning docs live in `planning/`, tracked
-**Date:** 2026-07-08 · **Decision:** `project-lumina-blueprint.md` and
-`history.md` moved into `planning/` (tracked; filenames preserved where
-inbound links exist). Root stays reserved for standard OSS files
-(README/CHANGELOG/CONTRIBUTING/LICENSE/SECURITY/CODE_OF_CONDUCT).
-
-## D-005 — `todo.md` retired; ROADMAP.md is the single roadmap
-**Date:** 2026-07-08 · **Context:** `todo.md` claimed to be "kept in sync" and
-was provably stale (listed shipped v0.3.0 work as in-progress). **Decision:**
-deleted; its live items were absorbed into [ROADMAP.md](./ROADMAP.md)'s phases
-and backlog. There is exactly one roadmap document.
-
-## D-006 — The mdBook is canonical for user-facing docs
-**Date:** 2026-07-08 · **Context:** three architecture documents existed
-(`docs/ARCHITECTURE.md`, `docs/SPEC.md`, `docs/src/architecture.md`) and
-contradicted each other (GPU-native/WASM-WebGPU/MiTeX overclaims; JSON-Schema
-draft mismatch). **Decision:** `docs/src/` (mdBook) is the single source of
-user-facing truth; the legacy files become pointer stubs (kept so external
-links don't 404). planning/ never duplicates book content.
-
-## D-007 — AI agent prompts live in `planning/AI/`, not `.claude/agents/`
-**Date:** 2026-07-08 · **Reasons:** `.claude/` is gitignored (carving out an
-exception invites committing local state); prompts should be tool-agnostic and
-PR-reviewable. Thin `.claude/agents/` wrappers can point here later if native
-subagents are wanted.
-
-## D-008 — Historical tag placement
-**Date:** 2026-07-08 · **Context:** the v0.3.0 feature merge (`7af221a`) had
-red CI (cargo-deny config landed later), and the CHANGELOG's version sections
-did not map one-to-one onto commits (two `[0.1.0]` blocks; `[0.2.x]` items
-that first shipped in 0.3.0). **Decision:** after merging the duplicate
-`[0.1.0]` blocks and folding `[0.2.x]` into `[0.3.0]`:
-`v0.1.0` → `02b92da` (2026-04-30; its tree contains everything the merged
-0.1.0 section describes), `v0.2.0` → `596b847` (2026-05-09; the CHANGELOG
-0.2.0 core features), both backdated via `GIT_COMMITTER_DATE` = commit author
-date. `v0.3.0` is tagged on the first green merge to `main` (the hygiene/
-CI-fix PR), not on red `7af221a`. Pushed tags are never moved.
-
-## D-009 — `lumina-server` and `lumina-wasm` are `publish = false`
-**Date:** 2026-07-08 · **Reasons:** the server is an application, not a
-library API we want on crates.io (and is not production-hardened before v0.5,
-see TD-09); the wasm crate ships via npm as part of the JS SDK, not via
-crates.io. The five library crates (`schema`, `core`, `text`, `renderer`,
-`export`) and the CLI get full publish metadata; actual publishing starts in
-v0.4 with release automation.
-
-## D-010 — Media policy: no new binary media in git
-**Date:** 2026-07-08 · **Context:** ~18 MB of demo MP4/GIFs are tracked;
-history rewrite was considered and rejected (public repo, disruption >
-benefit). **Decision:** existing media stays; **new** demo media goes to
-GitHub Release assets (or LFS if it must live in-tree). README may hotlink
-release assets.
-
-## D-011 — Release automation via release-plz (target v0.4)
-**Date:** 2026-07-08 · **Decision:** adopt release-plz for version bumps,
-changelog generation, and crates.io publishing (fits Conventional Commits
-history). cargo-dist deferred until CLI binary distribution matters (v0.6).
+To add a decision: copy the format of an existing ADR
+(`Status/Date/Context/Decision/Consequences`), take the next number, add a row
+here. Historical note: ADRs 0001–0011 were originally sections D-001…D-011 of
+this file before the split.

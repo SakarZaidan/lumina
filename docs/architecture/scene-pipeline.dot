@@ -1,0 +1,20 @@
+// Scene pipeline: LSF JSON → per-frame state. Rendered by gen-diagrams.sh.
+digraph scene_pipeline {
+  rankdir=LR; bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fillcolor="#1E3A5F", fontcolor=white,
+        color="#4A90D9", fontname="Helvetica", fontsize=12];
+  edge [color="#4A90D9", fontname="Helvetica", fontsize=10, fontcolor="#7FA8D9"];
+
+  lsf      [label=".lsf JSON", fillcolor="#0F0F1A"];
+  schema   [label="lumina-schema\nserde deserialize"];
+  validate [label="validate_scene_data\n(structured errors +\nfix_suggestion)"];
+  graph_   [label="SceneGraph\nroots / group children"];
+  timeline [label="Timeline\nper-property keyframe tracks"];
+  state    [label="get_state_at(t)\n+ get_camera_at(t)", fillcolor="#2E5F3A"];
+
+  lsf -> schema -> validate;
+  validate -> graph_ [label="objects"];
+  validate -> timeline [label="initial props\n+ timeline entries"];
+  timeline -> state [label="easing +\nCIELAB interp"];
+  graph_ -> state [style=dashed, label="structure"];
+}

@@ -15,13 +15,13 @@ changes** — code work is phased in ROADMAP.md.
 
 ## Tasks
 
-- [x] `.gitignore` — add `/text.md` (D-003)
+- [x] `.gitignore` — add `/text.md` (ADR-0003)
 - [x] `planning/` system: README, ROADMAP (absorbs todo.md), STATUS,
       KNOWLEDGE_BASE, TECH_DEBT, DECISIONS, WORKSTREAMS, AI prompts;
       move blueprint + history.md under planning/
-- [x] Cargo metadata: canonical repo URL (D-001), authors, per-crate
+- [x] Cargo metadata: canonical repo URL (ADR-0001), authors, per-crate
       description/keywords/categories/readme, `publish = false` on
-      server+wasm (D-009); pyproject 0.2.0→0.3.0; MSRV probed = **1.88**
+      server+wasm (ADR-0009); pyproject 0.2.0→0.3.0; MSRV probed = **1.88**
       (1.78 and 1.85 fail on locked deps), `rust-version` declared;
       JS SDK package.json URL/version aligned too
 - [x] Crate-level `//!` rustdoc, all crates + CLI
@@ -32,11 +32,11 @@ changes** — code work is phased in ROADMAP.md.
       dependabot.yml, issue-template config.yml
 - [x] examples/README.md with portability notes
 - [x] mdBook v0.3.0 refresh: events chapter, flag updates, parity table;
-      legacy ARCHITECTURE.md/SPEC.md → pointer stubs (D-006)
+      legacy ARCHITECTURE.md/SPEC.md → pointer stubs (ADR-0006)
 - [x] PR #2 → green CI on main → merged as `9c35474`
 - [x] Tags v0.1.0 (02b92da, backdated), v0.2.0 (596b847, backdated),
-      v0.3.0 (9c35474, D-008); GitHub Release for v0.3.0 with showcase
-      media attached as assets (D-010)
+      v0.3.0 (9c35474, ADR-0008); GitHub Release for v0.3.0 with showcase
+      media attached as assets (ADR-0010)
 - [x] GitHub Pages enabled by the repo owner; book live at
       https://sakarzaidan.github.io/lumina/ (Events chapter verified)
 

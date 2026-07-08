@@ -1,0 +1,17 @@
+// Event pipeline: host input → playback/overrides. Rendered by gen-diagrams.sh.
+digraph event_pipeline {
+  rankdir=LR; bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fillcolor="#1E3A5F", fontcolor=white,
+        color="#4A90D9", fontname="Helvetica", fontsize=12];
+  edge [color="#4A90D9", fontname="Helvetica", fontsize=10, fontcolor="#7FA8D9"];
+
+  input   [label="host input\n(click / drag …)", fillcolor="#0F0F1A"];
+  hittest [label="hit_test(x, y, t)\ngeometry-aware, z-ordered"];
+  event   [label="Event\n{object_id, trigger, payload}"];
+  bus     [label="EventBus\nmatch declared events\n$drag.* substitution"];
+  outcome [label="EventOutcome\nactions · current_time\nplaying · emitted", fillcolor="#2E5F3A"];
+  host    [label="host applies:\nseek / pause / overrides\ntooltips / custom events"];
+
+  input -> hittest -> event -> bus -> outcome -> host;
+  host -> input [style=dashed, label="next frame"];
+}
