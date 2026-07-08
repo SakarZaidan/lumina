@@ -1,6 +1,6 @@
 # WS-01 — Repository Hygiene & v0.3.0 Release
 
-**Status:** In progress (2026-07-08) · **Priority:** P0 · **Effort:** 1 session
+**Status:** ✅ Done (2026-07-08) · **Priority:** P0 · **Effort:** 1 session
 **Linked debt:** TD-13 (drift part), TD-14 (dependabot part), TD-15 (crate-level part)
 
 > This file doubles as the workstream template: copy its section structure for
@@ -33,11 +33,12 @@ changes** — code work is phased in ROADMAP.md.
 - [x] examples/README.md with portability notes
 - [x] mdBook v0.3.0 refresh: events chapter, flag updates, parity table;
       legacy ARCHITECTURE.md/SPEC.md → pointer stubs (D-006)
-- [ ] PR → green CI on main → merge
-- [ ] Tags v0.1.0 (02b92da, backdated), v0.2.0 (596b847, backdated),
-      v0.3.0 (new green merge, D-008); GitHub Release for v0.3.0
-- [ ] GitHub Pages must be enabled by the repo owner (Settings → Pages →
-      Source: GitHub Actions) before the deploy-docs job can succeed
+- [x] PR #2 → green CI on main → merged as `9c35474`
+- [x] Tags v0.1.0 (02b92da, backdated), v0.2.0 (596b847, backdated),
+      v0.3.0 (9c35474, D-008); GitHub Release for v0.3.0 with showcase
+      media attached as assets (D-010)
+- [x] GitHub Pages enabled by the repo owner; book live at
+      https://sakarzaidan.github.io/lumina/ (Events chapter verified)
 
 ## Acceptance criteria
 

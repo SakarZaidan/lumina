@@ -5,6 +5,17 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-08 (later) — v0.3.0 released
+
+- PR #2 merged to `main` as `9c35474`; CI fully green (a fresh RUSTSEC batch
+  was fixed in-flight: anyhow → 1.0.103, crossbeam-epoch → 0.9.20,
+  ttf-parser unmaintained ignored + registered as TD-17).
+- GitHub Pages enabled by the owner; book live at
+  <https://sakarzaidan.github.io/lumina/> including the new Events chapter.
+- Tags pushed: `v0.1.0` (02b92da), `v0.2.0` (596b847), `v0.3.0` (9c35474);
+  GitHub Release v0.3.0 created with showcase media as assets (D-010).
+- WS-01 complete. Next up: WS-02 backend parity (v0.4) — see ROADMAP.
+
 ## 2026-07-08 — Repo audit, planning system, hygiene batch
 
 - Full three-track engineering audit completed (core crates, tooling/CI, docs/git).
