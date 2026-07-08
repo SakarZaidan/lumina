@@ -35,6 +35,10 @@ ignore = [
     # Not vulnerabilities — informational "unmaintained" advisories only.
     "RUSTSEC-2024-0436", # paste (via wgpu → vello)
     "RUSTSEC-2025-0057", # fxhash (via wgpu-core)
+    # ttf-parser parses untrusted font files, so "unmaintained" matters more
+    # here than for the two above — revisit when fontdue/resvg bump their
+    # ttf-parser pin (tracked as TD-17 in planning/TECH_DEBT.md).
+    "RUSTSEC-2026-0192", # ttf-parser (via fontdue 0.9 / resvg 0.42)
 ]
 
 [sources]

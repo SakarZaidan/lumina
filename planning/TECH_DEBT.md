@@ -21,6 +21,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-14 | CI gaps: no MSRV/`rust-version`, Linux-only, wasm tests + benches never run, no release automation, no dependabot, no concurrency-cancel | Medium | Regressions land undetected; manual releases | v0.4 (dependabot: hygiene batch) | Open |
 | TD-15 | Rustdoc: most `pub` items lack `///`; no `missing_docs` lint | Medium | docs.rs quality; API discoverability | Crate-level `//!` in hygiene batch; full fill v0.4 | Open |
 | TD-16 | Examples hardcode Linux font paths (`/usr/share/fonts/...`) | Medium | macOS/Windows users can't run examples | v0.4 (bundle OFL font) | Open |
+| TD-17 | `ttf-parser` 0.21 unmaintained (RUSTSEC-2026-0192) yet parses untrusted font files; pinned via fontdue 0.9 / resvg 0.42 | Medium | Font-parsing bugs won't get upstream fixes | v0.4 (bump fontdue/resvg to versions on a maintained fork) | Open |
 
 ## Notes per item
 
