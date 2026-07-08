@@ -4,7 +4,10 @@
 
 - **Rust** (latest stable, via [rustup](https://rustup.rs))
 - **FFmpeg** for MP4 export (`apt install ffmpeg` / `brew install ffmpeg`)
-- A TTF font for text rendering (e.g. `fonts-liberation` on Ubuntu)
+- A TTF font for text rendering (e.g. `fonts-liberation` on Ubuntu). The
+  example scenes reference Debian/Ubuntu font paths — on macOS/Windows,
+  substitute any local TTF path (see
+  [`examples/README.md`](https://github.com/SakarZaidan/lumina/blob/main/examples/README.md)).
 
 ## Build
 
@@ -22,6 +25,9 @@ cargo build --release
 
 # PNG frame sequence (no FFmpeg needed)
 ./target/release/lumina-cli --scene examples/hello.lsf --output frames/ --format png
+
+# WebM (VP9) or GIF, on the GPU backend
+./target/release/lumina-cli --scene examples/showcase_grand.lsf --output reel --format webm --backend vello
 ```
 
 Useful flags:
@@ -29,7 +35,7 @@ Useful flags:
 | Flag | Effect |
 |---|---|
 | `--backend skia\|vello` | CPU rasterizer (default) or GPU rasterizer. |
-| `--format mp4\|png` | Encoded video or a numbered PNG sequence. |
+| `--format png\|mp4\|webm\|gif` | Numbered PNG sequence, or encoded video (mp4/webm/gif need FFmpeg). |
 | `--watch` | Re-render a preview frame whenever the scene file changes. |
 | `--verbose` | Print render timing at the end. |
 

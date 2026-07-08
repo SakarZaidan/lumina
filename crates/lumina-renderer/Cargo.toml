@@ -2,8 +2,15 @@
 name = "lumina-renderer"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "CPU (tiny-skia) and GPU (vello/wgpu) renderers for the Lumina animation engine"
+keywords = ["renderer", "graphics", "vello", "skia", "animation"]
+categories = ["graphics", "rendering"]
+readme = "../../README.md"
 
 [dependencies]
 lumina-core = { path = "../lumina-core" }

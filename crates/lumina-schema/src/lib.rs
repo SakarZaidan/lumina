@@ -1,3 +1,18 @@
+//! Scene data model for the Lumina animation engine.
+//!
+//! This is the leaf crate of the workspace: pure serde/schemars types with no
+//! logic. It defines the Lumina Scene Format (LSF) — [`Scene`], the 17-variant
+//! [`Object`] enum with per-type property structs, [`Paint`] (solid colors and
+//! gradients), timeline and event entries, and the camera model — plus every
+//! default value used by the engine.
+//!
+//! All types derive [`schemars::JsonSchema`], so the full JSON Schema of the
+//! scene format can be generated for validation and AI/authoring tooling
+//! (see the `/schema` endpoint in `lumina-server`).
+//!
+//! Layering: `lumina-schema` → `lumina-core` → `lumina-renderer` →
+//! `lumina-export`. Runtime behavior lives upstream; this crate is data only.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

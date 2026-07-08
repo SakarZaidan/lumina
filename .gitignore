@@ -1,6 +1,7 @@
 # ── Local tooling / planning scratch (not part of the project) ───────────────
 .claude/
 /plan-v1.md
+/text.md
 
 # ── Rust build artifacts ──────────────────────────────────────────────────────
 /target/

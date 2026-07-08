@@ -2,8 +2,15 @@
 name = "lumina-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Command-line renderer for Lumina scenes (.lsf): PNG/MP4/WebM/GIF on CPU or GPU backends"
+keywords = ["animation", "cli", "rendering", "video"]
+categories = ["command-line-utilities", "multimedia::video"]
+readme = "../../README.md"
 
 [dependencies]
 lumina-core = { path = "../../crates/lumina-core" }

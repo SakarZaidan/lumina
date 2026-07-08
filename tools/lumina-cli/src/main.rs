@@ -1,3 +1,16 @@
+//! Command-line renderer for Lumina scenes.
+//!
+//! Loads an LSF scene file and renders it to a PNG frame sequence, MP4, WebM,
+//! or GIF on either the CPU (`skia`) or GPU (`vello`) backend:
+//!
+//! ```text
+//! lumina-cli --scene examples/hello.lsf --output hello --format mp4
+//! lumina-cli --scene scene.lsf --backend vello --format webm
+//! lumina-cli --scene scene.lsf --watch   # live PNG preview on file change
+//! ```
+//!
+//! Video formats require `ffmpeg` on PATH (see `lumina-export`).
+
 use clap::Parser;
 use lumina_export::Exporter;
 use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};

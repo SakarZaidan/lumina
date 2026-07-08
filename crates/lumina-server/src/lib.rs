@@ -1,3 +1,19 @@
+//! HTTP API server for the Lumina animation engine.
+//!
+//! An `axum` REST service designed for AI/authoring loops:
+//!
+//! - `GET /health`, `GET /schema` (JSON Schema of the scene format),
+//!   `GET /objects` (object-type registry for introspection)
+//! - `POST /validate` — structural validation with structured errors, each
+//!   carrying a `code`, `path`, and machine-actionable `fix_suggestion`
+//! - `POST /patch` (RFC-6902) and `POST /scene_patch` (semantic ops)
+//! - `POST /render` — renders the posted scene and returns MP4/WebM/GIF bytes
+//!
+//! **Security note:** this server is not yet hardened for untrusted networks
+//! (no authentication, permissive CORS, no rate or body-size limits — see
+//! `SECURITY.md` and planning/TECH_DEBT.md TD-09). Run it locally or behind
+//! a trusted reverse proxy.
+
 use axum::{
     extract::Json,
     http::StatusCode,

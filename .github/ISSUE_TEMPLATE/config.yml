@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://sakarzaidan.github.io/lumina/
+    about: The Lumina book — getting started, scene format, architecture.
+  - name: 🔒 Security report
+    url: https://github.com/SakarZaidan/lumina/security/advisories/new
+    about: Report vulnerabilities privately — please do not open a public issue.

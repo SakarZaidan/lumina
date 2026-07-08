@@ -1,7 +1,7 @@
 [book]
 title = "Lumina"
 description = "The animation engine for the AI era — declarative JSON in, video out."
-authors = ["Lumina"]
+authors = ["Sakar Hashim"]
 language = "en"
 src = "src"
 

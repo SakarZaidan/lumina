@@ -1,3 +1,14 @@
+//! Text engine for the Lumina animation engine.
+//!
+//! A thin layer over [`fontdue`]: font loading with deterministic,
+//! insertion-ordered fallback ([`TextEngine::font_for_char`] tries the
+//! preferred font first, then walks the remaining loaded fonts), and text
+//! measurement with letter-spacing support.
+//!
+//! Glyph rasterization itself happens in `lumina-renderer` (shared between
+//! the CPU and GPU backends); this crate only answers "which font can draw
+//! this character" and "how wide is this string".
+
 use fontdue::{Font, FontSettings};
 use lumina_schema::TextProps;
 use std::collections::HashMap;

@@ -1,3 +1,22 @@
+//! Rendering backends for the Lumina animation engine.
+//!
+//! Exposes the [`Renderer`] trait — "given objects and their animated states
+//! at one instant, produce an RGBA frame" — and two implementations:
+//!
+//! - [`skia_backend::SkiaRenderer`] — CPU rasterizer over `tiny-skia`. The
+//!   reference backend: all 17 object types, gradients, drop shadows,
+//!   rounded rectangles, dashed strokes, SVG (via `resvg`) and animated-GIF
+//!   compositing.
+//! - [`vello_backend::VelloRenderer`] — GPU backend over `vello`/`wgpu`
+//!   (headless). Covers all object types including text, images, SVG and
+//!   particles; gradients, shadows, rounded rectangles and dashed lines are
+//!   not yet ported (see the backend-parity table in the book's
+//!   architecture chapter).
+//!
+//! Both backends share glyph/particle rasterization (`raster`), so text and
+//! particles are pixel-identical across CPU and GPU. Rendering is
+//! deterministic: the same inputs always produce the same frame.
+
 pub(crate) mod raster;
 pub mod skia_backend;
 pub mod vello_backend;

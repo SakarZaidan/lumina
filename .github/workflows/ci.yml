@@ -77,7 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      # v2 ships a current Cargo that understands Cargo.lock format v4.
+      - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
 

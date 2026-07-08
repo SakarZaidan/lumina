@@ -2,8 +2,15 @@
 name = "lumina-server"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "HTTP API server for the Lumina animation engine: validation, rendering, scene patching"
+# Application crate, not a library product; not production-hardened yet (see
+# planning/TECH_DEBT.md TD-09 and planning/DECISIONS.md D-009).
+publish = false
 
 [[bin]]
 name = "lumina-server"

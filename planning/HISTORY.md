@@ -2,8 +2,8 @@
 
 A high-level, human-readable narrative of where Lumina has been, what it does
 today, and where it's headed. For the precise, release-by-release record see
-[`CHANGELOG.md`](./CHANGELOG.md); for the granular task list see
-[`todo.md`](./todo.md).
+[`CHANGELOG.md`](../CHANGELOG.md); for what's next see
+[`ROADMAP.md`](./ROADMAP.md).
 
 ---
 

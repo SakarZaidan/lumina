@@ -31,6 +31,10 @@ someone else's machine.
 | Browser playback (WASM, CPU) | 60 fps for simple scenes; fewer for heavy ones |
 | Interactive HTML | no video encode → near-instant |
 
+Export currently renders frames on a single thread and streams them to
+FFmpeg; frame-parallel export (frames are independent) is planned for v0.5 —
+see `planning/ROADMAP.md`.
+
 ## Tips
 
 - Group static sub-trees so transforms apply once.

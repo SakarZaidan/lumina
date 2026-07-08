@@ -1,3 +1,25 @@
+//! Animation runtime for the Lumina engine.
+//!
+//! Consumes the data model from `lumina-schema` and provides all engine
+//! logic:
+//!
+//! - [`scene::SceneGraph`] — object map with root/child resolution through
+//!   groups.
+//! - [`timeline::Timeline`] — per-object, per-property keyframe tracks;
+//!   evaluate the full scene state at any time with `get_state_at`, and the
+//!   camera with `get_camera_at`. Evaluation is deterministic and scrub-safe.
+//! - [`easing`] — 28 named easing functions (Manim-compatible and CSS
+//!   aliases) plus parameterized `cubic_bezier` and overshoot-free monotone
+//!   `spline`.
+//! - [`interpolator`] — JSON-value interpolation: numeric lerp, element-wise
+//!   arrays (path morphing), and hex colors blended in CIELAB space.
+//! - [`events`] — [`EventBus`], playback state, and interactive actions.
+//! - [`scene_patch`] — semantic patch operations (`add_object`,
+//!   `add_keyframe`, …) for programmatic scene editing.
+//!
+//! Rendering lives downstream in `lumina-renderer`; this crate never touches
+//! pixels.
+
 pub mod easing;
 pub mod events;
 pub mod interpolator;

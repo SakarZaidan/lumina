@@ -45,9 +45,36 @@ properties is in the [Schema Reference](./schema-reference.md) and from the
 ## Timeline & conflict rules
 
 - The timeline is a flat list of keyframes; each targets one object and a set of properties at a `time` (seconds).
-- Between two keyframes for the same property, the value is interpolated and the named `easing` is applied.
+- Between two keyframes for the same property, the value is interpolated and the named `easing` is applied (the easing named on the **destination** keyframe wins, CSS-style).
 - Colors interpolate in **CIELAB**; point arrays and SVG paths **morph** vertex-by-vertex (padding the shorter one).
 - A property that appears in the timeline but not in the object's initial `properties` uses the type default.
+
+## Easings
+
+28 named easing functions: `linear`, the quad/cubic/quart/sine
+in/out/in-out families, `ease_in_expo`/`ease_out_expo`,
+`ease_in_circ`/`ease_out_circ`, elastic and bounce variants, `spring` (RK4
+physics), plus the Manim-style `smooth`, `rush_into`, `rush_from`,
+`there_and_back`, and the CSS aliases `ease`, `ease_in`, `ease_out`,
+`ease_in_out`. Two are parameterized via `easing_params`:
+
+```json
+{ "time": 2.0, "object": "box", "state": { "x": 800 },
+  "easing": "cubic_bezier", "easing_params": [0.34, 1.56, 0.64, 1.0] }
+```
+
+`cubic_bezier(x1, y1, x2, y2)` implements the CSS spec (binary-search
+parametric solver). `spline` interpolates through arbitrary keypoints with
+monotone-cubic (Fritsch–Carlson) segments — guaranteed overshoot-free:
+
+```json
+{ "time": 4.0, "object": "dot", "state": { "y": 200 },
+  "easing": "spline",
+  "easing_params": { "keypoints": [[0.0, 0.0], [0.3, 0.9], [0.7, 0.4], [1.0, 1.0]] } }
+```
+
+> Note: an unrecognized easing name currently falls back to `linear`
+> silently; making this a validation error is planned for v0.4.
 
 ## Groups & transforms
 
