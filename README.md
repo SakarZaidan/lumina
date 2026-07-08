@@ -1,9 +1,9 @@
 # Lumina
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-69%20passing-brightgreen)](#tests)
-[![Rust](https://img.shields.io/badge/rust-1.78%2B-orange)](https://rustup.rs)
-[![Docs](https://img.shields.io/badge/docs-lumina.dev-navy)](docs/src/introduction.md)
+[![CI](https://github.com/SakarZaidan/lumina/actions/workflows/ci.yml/badge.svg)](https://github.com/SakarZaidan/lumina/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)](https://rustup.rs)
+[![Docs](https://img.shields.io/badge/docs-book-navy)](https://sakarzaidan.github.io/lumina/)
 
 **Lumina** is a production-grade animation engine built in Rust. Write a JSON scene file, get a video out. No GUI, no scripting, no runtime dependencies beyond FFmpeg for MP4 export.
 
@@ -123,7 +123,7 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 
 ### Animation
 
-- **27 easing functions + `cubic_bezier` + `spline`** — Linear, quad/cubic/quart/sine in/out/in-out variants, expo, circ, elastic, bounce, spring physics, `smooth` (Manim-compatible), `there_and_back`, CSS aliases. `cubic_bezier(x1,y1,x2,y2)` implements the full CSS spec via a binary-search parametric solver; `spline` does overshoot-free monotone-cubic interpolation through `easing_params.keypoints`.
+- **28 easing functions + `cubic_bezier` + `spline`** — Linear, quad/cubic/quart/sine in/out/in-out variants, expo, circ, elastic, bounce, spring physics, `smooth` (Manim-compatible), `there_and_back`, CSS aliases. `cubic_bezier(x1,y1,x2,y2)` implements the full CSS spec via a binary-search parametric solver; `spline` does overshoot-free monotone-cubic interpolation through `easing_params.keypoints`.
 - **Draw-on animation** — `draw_fraction: 0.0→1.0` on Line, BezierCurve, Plot, Path, and LaTeX objects.
 - **Path morphing** — Animate one polygon/path into another of a different vertex count.
 - **LAB colorspace interpolation** — Color transitions through hue avoid muddy sRGB midpoints.
@@ -551,7 +551,7 @@ curl http://localhost:3000/schema
 
 | Phase | Status | Scope |
 |---|---|---|
-| Phase 1 — Core Engine | **Complete** | LSF schema, Skia renderer, timeline, 27 easings, export, CLI, server |
+| Phase 1 — Core Engine | **Complete** | LSF schema, Skia renderer, timeline, easing library, export, CLI, server |
 | Phase 2 — Rendering Quality | **Complete** | Vello GPU backend, camera system, Plot/Axes, LAB color, draw-on animation, font rendering |
 | Phase 3 — WASM & Web | **Complete** | Full WASM hit-test (17 types), React SDK, vanilla-JS SDK, `useLumina` hook |
 | Phase 4 — Advanced Animation | **Complete** | cubic_bezier easing, path morphing, LaTeX draw_fraction, font fallback, file watcher, benches |
@@ -564,7 +564,7 @@ curl http://localhost:3000/schema
 
 ## Contributing
 
-All PRs require `cargo test --workspace --exclude lumina-wasm` to pass. See [CONTRIBUTING.md](docs/src/contributing.md).
+All PRs require `cargo test --workspace --exclude lumina-wasm --exclude lumina-bench` to pass. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
