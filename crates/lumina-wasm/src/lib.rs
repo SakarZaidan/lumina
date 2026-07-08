@@ -1,3 +1,15 @@
+//! WebAssembly bindings for the Lumina animation engine.
+//!
+//! Exposes [`LuminaEngine`] to JavaScript via `wasm-bindgen`: construct it
+//! from scene JSON, call `render_frame(time)` for RGBA pixels to paint onto a
+//! canvas, drive interactivity with `process_event`/`hit_test` (geometry-aware
+//! hit-testing across all 17 object types, z-order respected), and load fonts
+//! and images at runtime.
+//!
+//! Rendering uses the CPU (`tiny-skia`) backend compiled to wasm; running the
+//! GPU backend in the browser via WebGPU is on the roadmap. Consumed by the
+//! JavaScript SDK in `sdks/javascript`.
+
 use lumina_core::{Event, EventBus, SceneGraph, Timeline};
 use lumina_renderer::skia_backend::SkiaRenderer;
 use lumina_renderer::Renderer;

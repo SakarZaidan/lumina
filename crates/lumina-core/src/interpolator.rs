@@ -1,7 +1,7 @@
 use crate::easing::eval_easing;
 use serde_json::Value;
 
-/// Interpolate between two JSON values at normalized progress `t` in [0,1].
+/// Interpolate between two JSON values at normalized progress `t` in `[0, 1]`.
 ///
 /// - Numbers: linear lerp after easing.
 /// - Arrays: element-wise interpolation; shorter array is padded by repeating

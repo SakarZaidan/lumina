@@ -1,3 +1,15 @@
+//! Export pipeline for the Lumina animation engine.
+//!
+//! [`Exporter`] drives any [`lumina_renderer::Renderer`] frame by frame and
+//! writes the result as:
+//!
+//! - a PNG frame sequence (via the `image` crate), or
+//! - MP4 (H.264), WebM (VP9), or GIF (palette-based) by streaming raw RGBA
+//!   frames to an **external `ffmpeg` binary** found on `PATH`.
+//!
+//! There is no in-process encoder: video export requires ffmpeg to be
+//! installed, and fails with a descriptive error when it is missing.
+
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgba};
 use lumina_core::{SceneGraph, Timeline};
