@@ -1,9 +1,40 @@
 # Current State
 
+## Health dashboard
+
+Updated with every entry below (and re-verified at every release). 🟢 healthy
+· 🟡 known gaps, tracked · 🔴 broken/blocked.
+
+| Area | | Notes |
+|---|---|---|
+| CI on `main` | 🟢 | all 8 jobs green (release run `9c35474`) |
+| Tests | 🟢 | 92 + 3 wasm passing; zero flakes |
+| Coverage | 🟡 | not measured yet — tooling v0.4 |
+| Benchmarks | 🟡 | exist, manual only; not in CI (TD-14) |
+| Docs (book + rustdoc) | 🟢 | book live on Pages, current for v0.3.0 |
+| Examples | 🟢 | all render; Linux font paths only (TD-16) |
+| Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
+| Backend parity | 🟡 | vello gaps documented; fix is v0.4 flagship (TD-01) |
+| Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
+| Dependencies | 🟢 | deny green; dependabot active (5 PRs pending triage) |
+
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-07-08 (evening) — Constitution, RFC/ADR system, metrics, diagrams
+
+- Added the constitution set at root: VISION.md, DESIGN.md,
+  ENGINEERING_PRINCIPLES.md (linked from README and CONTRIBUTING).
+- DECISIONS.md split into per-decision `planning/ADR/0001–0011`; DECISIONS.md
+  is now the index. New `planning/RFCS/` process gates public-API changes.
+- New `planning/METRICS.md` (measured v0.3.0 snapshot + quality scorecard)
+  and the health dashboard above; both are release-checklist duties now.
+- New `planning/ECOSYSTEM.md` (layers 0–3, what the core owes the ecosystem).
+- `docs/architecture/`: gen-diagrams.sh renders the crate dependency graph
+  from `cargo metadata` + 4 hand-maintained pipeline diagrams; embedded in
+  the book's architecture chapter.
 
 ## 2026-07-08 (later) — v0.3.0 released
 
@@ -13,7 +44,7 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 - GitHub Pages enabled by the owner; book live at
   <https://sakarzaidan.github.io/lumina/> including the new Events chapter.
 - Tags pushed: `v0.1.0` (02b92da), `v0.2.0` (596b847), `v0.3.0` (9c35474);
-  GitHub Release v0.3.0 created with showcase media as assets (D-010).
+  GitHub Release v0.3.0 created with showcase media as assets (ADR-0010).
 - WS-01 complete. Next up: WS-02 backend parity (v0.4) — see ROADMAP.
 
 ## 2026-07-08 — Repo audit, planning system, hygiene batch
