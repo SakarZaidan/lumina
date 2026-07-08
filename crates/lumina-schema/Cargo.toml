@@ -2,8 +2,15 @@
 name = "lumina-schema"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Scene data model and JSON Schema for the Lumina animation engine (LSF format)"
+keywords = ["animation", "schema", "json-schema", "scene", "lsf"]
+categories = ["graphics", "data-structures"]
+readme = "../../README.md"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

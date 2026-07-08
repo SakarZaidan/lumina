@@ -2,8 +2,15 @@
 name = "lumina-text"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Text engine for the Lumina animation engine: font loading, per-character fallback, measurement"
+keywords = ["text", "fonts", "glyphs", "animation"]
+categories = ["text-processing", "graphics"]
+readme = "../../README.md"
 
 [dependencies]
 lumina-schema = { path = "../lumina-schema" }

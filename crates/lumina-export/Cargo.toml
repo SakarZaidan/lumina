@@ -2,8 +2,15 @@
 name = "lumina-export"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Video and image export for the Lumina animation engine: MP4/WebM/GIF via ffmpeg, PNG sequences"
+keywords = ["video", "export", "ffmpeg", "gif", "animation"]
+categories = ["multimedia::video", "multimedia::encoding"]
+readme = "../../README.md"
 
 [dependencies]
 lumina-core = { path = "../lumina-core" }

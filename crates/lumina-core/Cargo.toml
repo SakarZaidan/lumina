@@ -2,8 +2,15 @@
 name = "lumina-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Animation runtime for the Lumina engine: scene graph, keyframe timeline, easings, interpolation, events, scene patching"
+keywords = ["animation", "timeline", "easing", "interpolation", "keyframes"]
+categories = ["graphics", "multimedia"]
+readme = "../../README.md"
 
 [dependencies]
 lumina-schema = { path = "../lumina-schema" }
