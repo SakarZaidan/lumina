@@ -9,6 +9,8 @@
 
 Designed from the start to be written by humans, LLMs, and code generators — the schema is declarative, fully validated, and machine-friendly.
 
+> **Why Lumina, and what never changes:** [VISION.md](VISION.md) · **Why it's built this way:** [DESIGN.md](DESIGN.md) · **How we engineer:** [ENGINEERING_PRINCIPLES.md](ENGINEERING_PRINCIPLES.md)
+
 ---
 
 ## Showcase

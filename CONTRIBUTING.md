@@ -4,9 +4,13 @@ Thank you for your interest in contributing! Whether it's bug fixes, features,
 or documentation, help is welcome. The bar is simple: the workspace stays green
 and new behavior is covered by a test.
 
-This file is the canonical contribution guide. Repo conventions and workflow
-details live in [`planning/KNOWLEDGE_BASE.md`](planning/KNOWLEDGE_BASE.md) and
-[`planning/AI/WORKFLOW.md`](planning/AI/WORKFLOW.md).
+This file is the canonical contribution guide. Read
+[VISION.md](VISION.md) first, and know that every PR is judged against
+[ENGINEERING_PRINCIPLES.md](ENGINEERING_PRINCIPLES.md). Repo conventions and
+workflow details live in
+[`planning/KNOWLEDGE_BASE.md`](planning/KNOWLEDGE_BASE.md) and
+[`planning/AI/WORKFLOW.md`](planning/AI/WORKFLOW.md); substantial public-API
+changes go through [`planning/RFCS/`](planning/RFCS/) before implementation.
 
 ## Setup
 
