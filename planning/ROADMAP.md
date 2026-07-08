@@ -5,7 +5,7 @@ and humans share — JSON scene in, pixel-identical animation out, on CPU, GPU,
 and the web. Reference-quality Rust: layered crates, no panics in production
 code, every claim in the docs true of the code.
 
-This is the single roadmap document (see D-005). Phases are re-evaluated at
+This is the single roadmap document (see ADR-0005). Phases are re-evaluated at
 each release boundary against the repository as it then is. Debt IDs reference
 [TECH_DEBT.md](./TECH_DEBT.md).
 
@@ -34,7 +34,7 @@ publishable and contributable.
 - [ ] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
   per crate (TD-15).
 - [ ] Release automation: adopt release-plz; first crates.io publish of the
-  five library crates + CLI (D-009, D-011).
+  five library crates + CLI (ADR-0009, ADR-0011).
 - [ ] Examples portability: bundle an OFL-licensed font under
   `examples/assets/`, stop hardcoding `/usr/share/fonts` (TD-16).
 
@@ -88,7 +88,7 @@ checkout in CI.
 - [ ] Test-debt closure (TD-10): property tests (proptest) for
   interpolator/easing; unit suites for `lumina-text`, `lumina-schema`, CLI.
 - [ ] Publish Python SDK to PyPI (maturin CI) and JS SDK to npm; expose
-  webm/gif in the Python API (TD-13); cargo-dist for CLI binaries (D-011).
+  webm/gif in the Python API (TD-13); cargo-dist for CLI binaries (ADR-0011).
 
 **Exit criteria:** schema v2 documented with migration guide; `pip install`
 and `npm install` work from public registries.

@@ -62,15 +62,15 @@ cargo run -p lumina-cli -- --scene examples/hello.lsf --output out --format mp4
   `schema`, `server`, `wasm`, `export`, `text`, `cli`), `book`, `planning`,
   `sdk-js`, `sdk-py`, `ci`, `examples`. Branches: `feat/…`, `fix/…`, `docs/…`,
   `ci/…`. PRs merge with merge commits. Full rules: [AI/WORKFLOW.md](./AI/WORKFLOW.md).
-- **No AI attribution anywhere** (D-002): no `Co-Authored-By` trailers, no
+- **No AI attribution anywhere** (ADR-0002): no `Co-Authored-By` trailers, no
   "generated with" footers in commits or PR bodies.
 - **No panics in production code**: no `unwrap`/`expect`/`panic!`/`unsafe`
   outside tests (the codebase is currently clean — keep it that way; the PR
   template checks it).
-- **Media policy** (D-010): no new binary media committed to git; use GitHub
+- **Media policy** (ADR-0010): no new binary media committed to git; use GitHub
   Release assets (or LFS if unavoidable). Existing `media/` stays; no history
   rewrite.
-- **Docs**: mdBook (`docs/src/`) is canonical for user-facing docs (D-006).
+- **Docs**: mdBook (`docs/src/`) is canonical for user-facing docs (ADR-0006).
   JSON Schema is draft-07 (what schemars 0.8 emits).
 
 ## Gotchas

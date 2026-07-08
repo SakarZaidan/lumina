@@ -3,7 +3,7 @@
 **Rule zero: never add an AI as author, co-author, committer, contributor, or
 maintainer. No `Co-Authored-By` or "generated with" trailers in any commit
 message or PR body — strip tool defaults. All work is attributed to the
-repository owner. (D-002)**
+repository owner. (ADR-0002)**
 
 ## Branches
 
@@ -25,9 +25,18 @@ repository owner. (D-002)**
 - One logical change per commit; keep `git mv` and heavy content edits in
   separate commits to preserve rename detection.
 
+## RFCs — before implementation
+
+Changes to the LSF schema (beyond additive defaulted fields), the `Renderer`
+trait, server endpoints/error format, or SDK public surfaces require an
+accepted RFC first — see [`planning/RFCS/README.md`](../RFCS/README.md).
+Accepted RFCs are recorded as ADRs in [`planning/ADR/`](../ADR/).
+
 ## Pull requests
 
 - Target `main`; merge with a **merge commit** (matches existing history).
+- Every PR is judged against
+  [ENGINEERING_PRINCIPLES.md](../../ENGINEERING_PRINCIPLES.md).
 - Fill `.github/pull_request_template.md`. Before requesting review, all of:
 
 ```bash
@@ -42,7 +51,7 @@ mdbook build docs        # when docs/src changed
   chapters, `planning/STATUS.md`, and `planning/TECH_DEBT.md` (close items by
   linking the PR; register new debt found).
 - No new `unwrap`/`expect`/`panic!`/`unsafe` in production code.
-- No new binary media in git (D-010).
+- No new binary media in git (ADR-0010).
 
 ## Releases
 
@@ -54,10 +63,15 @@ mdbook build docs        # when docs/src changed
 4. On freshly pulled `main`: `git tag -a vX.Y.Z -m "Lumina vX.Y.Z — <headline>"`,
    `git push origin vX.Y.Z`.
 5. `gh release create vX.Y.Z` with the CHANGELOG section as notes; attach
-   demo media here rather than committing it (D-010).
-6. Add a `planning/STATUS.md` entry; revise `planning/ROADMAP.md` phases.
-7. Never move a pushed tag (D-008). From v0.4: release-plz automates 1–5
-   (D-011).
+   demo media here rather than committing it (ADR-0010).
+6. Add a `planning/STATUS.md` entry and re-verify its health dashboard;
+   revise `planning/ROADMAP.md` phases.
+7. Refresh `planning/METRICS.md`: re-measure the snapshot (new column) and
+   re-score the quality scorecard for the release.
+8. Regenerate architecture diagrams if crate deps or pipelines changed
+   (`docs/architecture/gen-diagrams.sh`).
+9. Never move a pushed tag (ADR-0008). From v0.4: release-plz automates 1–5
+   (ADR-0011).
 
 ## Review gates
 

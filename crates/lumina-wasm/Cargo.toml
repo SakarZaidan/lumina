@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "WebAssembly bindings for the Lumina animation engine: in-browser rendering, events, hit-testing"
-# Ships via npm as part of the JavaScript SDK, not via crates.io (D-009).
+# Ships via npm as part of the JavaScript SDK, not via crates.io (ADR-0009).
 publish = false
 
 [lib]

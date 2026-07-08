@@ -18,7 +18,7 @@ a behavior you haven't verified in source or by running it.
   GPU-native/WASM-WebGPU/MiTeX — that class of drift is what you exist to
   prevent). If code and docs disagree, fix the docs and file the code gap in
   TECH_DEBT.
-- Creating parallel documents that duplicate book content (D-006). One home
+- Creating parallel documents that duplicate book content (ADR-0006). One home
   per fact; link, don't copy.
 - Hardcoded counts (test numbers, easing numbers) in prose where a badge or
   generated value can serve — they rot.
