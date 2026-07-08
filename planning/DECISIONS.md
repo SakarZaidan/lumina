@@ -50,14 +50,17 @@ exception invites committing local state); prompts should be tool-agnostic and
 PR-reviewable. Thin `.claude/agents/` wrappers can point here later if native
 subagents are wanted.
 
-## D-008 — v0.3.0 tag placement
+## D-008 — Historical tag placement
 **Date:** 2026-07-08 · **Context:** the v0.3.0 feature merge (`7af221a`) had
-red CI (cargo-deny config landed later). **Decision:** `v0.3.0` is tagged on
-the first green merge to `main` (the hygiene/CI-fix PR), not on `7af221a`.
-`v0.1.0` → `9348d97` and `v0.2.0` → `02b92da` are tagged backdated
-(`GIT_COMMITTER_DATE` = commit author date). `596b847` stays untagged — its
-content was never released separately and is folded into 0.3.0 in the
-CHANGELOG. Pushed tags are never moved.
+red CI (cargo-deny config landed later), and the CHANGELOG's version sections
+did not map one-to-one onto commits (two `[0.1.0]` blocks; `[0.2.x]` items
+that first shipped in 0.3.0). **Decision:** after merging the duplicate
+`[0.1.0]` blocks and folding `[0.2.x]` into `[0.3.0]`:
+`v0.1.0` → `02b92da` (2026-04-30; its tree contains everything the merged
+0.1.0 section describes), `v0.2.0` → `596b847` (2026-05-09; the CHANGELOG
+0.2.0 core features), both backdated via `GIT_COMMITTER_DATE` = commit author
+date. `v0.3.0` is tagged on the first green merge to `main` (the hygiene/
+CI-fix PR), not on red `7af221a`. Pushed tags are never moved.
 
 ## D-009 — `lumina-server` and `lumina-wasm` are `publish = false`
 **Date:** 2026-07-08 · **Reasons:** the server is an application, not a
