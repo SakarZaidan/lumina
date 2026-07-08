@@ -1,7 +1,13 @@
 # Architecture
 
 Lumina is a modular Rust workspace. Each crate has one job, and the renderer is
-backend-agnostic behind a single trait.
+backend-agnostic behind a single trait. (Why it's shaped this way is a separate
+document: [DESIGN.md](https://github.com/SakarZaidan/lumina/blob/main/DESIGN.md).)
+
+![Crate dependency graph](./diagrams/dependency-graph.svg)
+
+*Generated from `cargo metadata` by `docs/architecture/gen-diagrams.sh` —
+these are the real dependency edges, not an illustration.*
 
 ```
 lumina/
@@ -27,6 +33,17 @@ LSF JSON
   → Renderer (Skia CPU  | Vello GPU)
   → Export (PNG sequence | FFmpeg → MP4)   or   WASM canvas
 ```
+
+![Scene pipeline](./diagrams/scene-pipeline.svg)
+
+![Render pipeline](./diagrams/render-pipeline.svg)
+
+![Export pipeline](./diagrams/export-pipeline.svg)
+
+The event flow (host input → hit-test → event bus → playback outcome) is
+diagrammed in [Events & Interactivity](./events.md#the-event-bus):
+
+![Event pipeline](./diagrams/event-pipeline.svg)
 
 ## The Renderer trait
 
