@@ -104,8 +104,9 @@ fn load_fixture(name: &str) -> Scene {
     serde_json::from_str(&json).unwrap_or_else(|e| panic!("fixture {name} is not valid LSF: {e}"))
 }
 
-/// Load scene font assets into a renderer, resolving repo-relative paths
-/// (the convention used by `examples/`) against the workspace root.
+/// Load scene font and image/SVG assets into a renderer, resolving
+/// repo-relative paths (the convention used by `examples/`) against the
+/// workspace root.
 fn load_assets(renderer: &mut dyn Renderer, scene: &Scene) {
     for font in &scene.assets.fonts {
         let path = workspace_root().join(&font.path);
@@ -114,6 +115,14 @@ fn load_assets(renderer: &mut dyn Renderer, scene: &Scene) {
         renderer
             .load_font(&font.id, &data)
             .expect("font load failed");
+    }
+    for image in &scene.assets.images {
+        let path = workspace_root().join(&image.path);
+        let data =
+            std::fs::read(&path).unwrap_or_else(|e| panic!("cannot read image {path:?}: {e}"));
+        renderer
+            .load_image(&image.id, &data)
+            .expect("image load failed");
     }
 }
 
@@ -341,4 +350,21 @@ fn parity_12_particles() {
 #[test]
 fn parity_13_opacity_zindex() {
     assert_parity("13_opacity_zindex", DEFAULT_TOL);
+}
+
+#[test]
+fn parity_14_plot_axes() {
+    assert_parity("14_plot_axes", DEFAULT_TOL);
+}
+
+#[test]
+fn parity_16_svg_asset() {
+    assert_parity("16_svg_asset", DEFAULT_TOL);
+}
+
+#[test]
+fn parity_17_showcase_combined() {
+    // Combines gradients, shadows, rounded rects, text, groups, particles
+    // and a camera move; text is present, so use the text budget.
+    assert_parity("17_showcase_combined", TEXT_TOL);
 }
