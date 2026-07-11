@@ -185,7 +185,7 @@ impl VelloRenderer {
         let root = crate::common::scene::camera_transform(camera, width, height);
 
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut scene, &id, objects, states, root);
+            self.draw_node(&mut scene, &id, objects, states, root, (width, height));
         }
 
         scene
@@ -198,6 +198,7 @@ impl VelloRenderer {
         objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
         parent: crate::common::scene::Mat2x3,
+        canvas: (u32, u32),
     ) {
         let obj = match objects.get(id) {
             Some(o) => o,
@@ -213,22 +214,25 @@ impl VelloRenderer {
                 let transform = crate::common::scene::group_transform(parent, state);
 
                 for child_id in crate::common::scene::sorted_children(&props.children, objects) {
-                    self.draw_node(scene, child_id, objects, states, transform);
+                    self.draw_node(scene, child_id, objects, states, transform, canvas);
                 }
             }
-            _ => self.draw_leaf(scene, obj, state, parent.to_kurbo(), objects, states),
+            _ => self.draw_leaf(scene, obj, state, parent, canvas, objects, states),
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_leaf(
         &self,
         scene: &mut Scene,
         obj: &Object,
         state: &Value,
-        affine: Affine,
+        mat: crate::common::scene::Mat2x3,
+        canvas: (u32, u32),
         _objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
     ) {
+        let affine = mat.to_kurbo();
         match obj {
             Object::Circle(_) => {
                 let cx = state["cx"].as_f64().unwrap_or(0.0);
@@ -246,6 +250,13 @@ impl VelloRenderer {
                     (radius * 2.0) as f32,
                     (radius * 2.0) as f32,
                 );
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let mut pb = tiny_skia::PathBuilder::new();
+                    pb.push_circle(cx as f32, cy as f32, radius as f32);
+                    if let Some(path) = pb.finish() {
+                        draw_shadow_image(scene, canvas, &path, mat, &spec);
+                    }
+                }
                 let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
                     .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
                 scene.fill(
@@ -286,6 +297,24 @@ impl VelloRenderer {
                 let stroke = crate::common::fill::parse_stroke(state, opacity);
                 let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
 
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let tiny_path = if rx > 0.0 {
+                        crate::common::path::to_tiny_path(&crate::common::path::rounded_rect(
+                            x as f32, y as f32, w as f32, h as f32, rx, ry,
+                        ))
+                    } else {
+                        tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).and_then(
+                            |r| {
+                                let mut pb = tiny_skia::PathBuilder::new();
+                                pb.push_rect(r);
+                                pb.finish()
+                            },
+                        )
+                    };
+                    if let Some(path) = tiny_path {
+                        draw_shadow_image(scene, canvas, &path, mat, &spec);
+                    }
+                }
                 if rx > 0.0 {
                     // Rounded corners: same quadratic-arc geometry as the CPU backend.
                     let path =
@@ -469,6 +498,26 @@ impl VelloRenderer {
                 }
                 let bbox = (min_x, min_y, max_x - min_x, max_y - min_y);
 
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let mut pb = tiny_skia::PathBuilder::new();
+                    for (i, p) in points.iter().enumerate() {
+                        let arr = match p.as_array() {
+                            Some(a) => a,
+                            None => continue,
+                        };
+                        let px = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                        let py = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                        if i == 0 {
+                            pb.move_to(px, py);
+                        } else {
+                            pb.line_to(px, py);
+                        }
+                    }
+                    pb.close();
+                    if let Some(tiny_path) = pb.finish() {
+                        draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
+                    }
+                }
                 let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
                     .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
                 scene.fill(
@@ -497,6 +546,11 @@ impl VelloRenderer {
                 if let Some(data) = crate::common::path::parse_svg_path(d) {
                     let path = crate::common::path::to_kurbo_path(&data);
                     let bbox = crate::common::path::bbox(&data).unwrap_or((0.0, 0.0, 0.0, 0.0));
+                    if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                        if let Some(tiny_path) = crate::common::path::to_tiny_path(&data) {
+                            draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
+                        }
+                    }
                     if let Some(fill) = crate::common::fill::parse_fill(&state["fill"], opacity) {
                         scene.fill(
                             Fill::NonZero,
@@ -1124,6 +1178,33 @@ fn peniko_stops(stops: &[(f32, [u8; 4])]) -> Vec<ColorStop> {
         .iter()
         .map(|(p, c)| ColorStop::from((*p, crate::common::color::to_peniko(*c))))
         .collect()
+}
+
+/// Composite a drop shadow into the scene: rasterize the shared blurred
+/// silhouette (identical bytes to the CPU backend) and draw it as a
+/// full-canvas image under an opacity layer.
+fn draw_shadow_image(
+    scene: &mut Scene,
+    canvas: (u32, u32),
+    path: &tiny_skia::Path,
+    mat: crate::common::scene::Mat2x3,
+    spec: &crate::common::shadow::ShadowSpec,
+) {
+    let pm =
+        match crate::common::shadow::shadow_pixmap(canvas.0, canvas.1, path, mat.to_tiny(), spec) {
+            Some(p) => p,
+            None => return,
+        };
+    let img = rgba_to_image(raster::pixmap_to_straight_rgba(&pm), canvas.0, canvas.1);
+    let full = Rect::new(0.0, 0.0, canvas.0 as f64, canvas.1 as f64);
+    scene.push_layer(
+        BlendMode::new(Mix::Normal, Compose::SrcOver),
+        spec.opacity.clamp(0.0, 1.0),
+        Affine::IDENTITY,
+        &full,
+    );
+    scene.draw_image(&img, Affine::IDENTITY);
+    scene.pop_layer();
 }
 
 /// Heuristic: does this byte slice look like an SVG document?

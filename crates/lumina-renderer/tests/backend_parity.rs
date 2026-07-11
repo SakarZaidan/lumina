@@ -309,6 +309,11 @@ fn parity_06_gradient_radial() {
 }
 
 #[test]
+fn parity_07_shadows() {
+    assert_parity("07_shadows", DEFAULT_TOL);
+}
+
+#[test]
 fn parity_08_rounded_rect() {
     assert_parity("08_rounded_rect", DEFAULT_TOL);
 }
