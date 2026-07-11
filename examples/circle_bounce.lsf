@@ -12,7 +12,11 @@
     "duration": 4.0,
     "background": "#111122"
   },
-  "assets": {},
+  "assets": {
+    "fonts": [
+      { "id": "sans", "path": "examples/assets/fonts/LiberationSans-Regular.ttf" }
+    ]
+  },
   "objects": {
     "ball": {
       "type": "Circle",

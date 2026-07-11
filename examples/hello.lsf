@@ -12,7 +12,11 @@
     "duration": 3.0,
     "background": "#0F0F1A"
   },
-  "assets": {},
+  "assets": {
+    "fonts": [
+      { "id": "sans", "path": "examples/assets/fonts/LiberationSans-Regular.ttf" }
+    ]
+  },
   "objects": {
     "title": {
       "type": "Text",
