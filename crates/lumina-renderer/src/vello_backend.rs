@@ -1070,30 +1070,7 @@ fn z_index_of(obj: &Object) -> i32 {
 }
 
 fn parse_vello_color(hex: &str, opacity: f32) -> Color {
-    let hex = hex.trim_start_matches('#');
-    let (r, g, b, a_factor) = match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            (r, g, b, 1.0_f32)
-        }
-        8 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(255) as f32 / 255.0;
-            (r, g, b, a)
-        }
-        3 => {
-            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(255);
-            (r, g, b, 1.0_f32)
-        }
-        _ => (255, 255, 255, 1.0_f32),
-    };
-    Color::rgba8(r, g, b, ((opacity * a_factor) * 255.0) as u8)
+    crate::common::color::to_peniko(crate::common::color::parse_rgba8(hex, opacity))
 }
 
 fn parse_svg_path_kurbo(d: &str) -> Option<BezPath> {

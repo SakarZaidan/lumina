@@ -17,6 +17,7 @@
 //! particles are pixel-identical across CPU and GPU. Rendering is
 //! deterministic: the same inputs always produce the same frame.
 
+pub(crate) mod common;
 pub(crate) mod raster;
 pub mod skia_backend;
 pub mod vello_backend;

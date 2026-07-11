@@ -1975,28 +1975,5 @@ fn paint_shape(
 }
 
 pub(crate) fn parse_color(hex: &str, opacity: f32) -> Color {
-    let hex = hex.trim_start_matches('#');
-    match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (opacity * 255.0) as u8)
-        }
-        8 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (a as f32 * opacity) as u8)
-        }
-        3 => {
-            // Short form: #RGB → #RRGGBB
-            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (opacity * 255.0) as u8)
-        }
-        _ => Color::WHITE,
-    }
+    crate::common::color::to_tiny(crate::common::color::parse_rgba8(hex, opacity))
 }
