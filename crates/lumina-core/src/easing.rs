@@ -134,6 +134,78 @@ fn bezier_component(p1: f32, p2: f32, t: f32) -> f32 {
     3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t
 }
 
+/// Every easing name accepted by [`eval_easing`] / [`get_easing_fn`] — the
+/// single source of truth for validation and did-you-mean suggestions.
+/// `cubic_bezier` and `spline` additionally require `easing_params`.
+pub const EASING_NAMES: &[&str] = &[
+    "linear",
+    "ease_in_quad",
+    "ease_out_quad",
+    "ease_in_out_quad",
+    "ease_in_cubic",
+    "ease_out_cubic",
+    "ease_in_out_cubic",
+    "ease_in_quart",
+    "ease_out_quart",
+    "ease_in_out_quart",
+    "ease_in_sine",
+    "ease_out_sine",
+    "ease_in_out_sine",
+    "ease_in_expo",
+    "ease_out_expo",
+    "ease_in_circ",
+    "ease_out_circ",
+    "ease_in_elastic",
+    "ease_out_elastic",
+    "ease_in_out_elastic",
+    "ease_in_bounce",
+    "ease_out_bounce",
+    "spring",
+    "smooth",
+    "rush_into",
+    "rush_from",
+    "there_and_back",
+    "ease",
+    "ease_in",
+    "ease_out",
+    "ease_in_out",
+    "cubic_bezier",
+    "spline",
+];
+
+/// Is `name` a recognized easing?
+pub fn is_valid_easing(name: &str) -> bool {
+    EASING_NAMES.contains(&name)
+}
+
+/// The closest known easing name (edit distance ≤ 3), for
+/// "did you mean …?" validation messages.
+pub fn suggest_easing(name: &str) -> Option<&'static str> {
+    EASING_NAMES
+        .iter()
+        .map(|candidate| (edit_distance(name, candidate), *candidate))
+        .min_by_key(|(d, _)| *d)
+        .filter(|(d, _)| *d <= 3)
+        .map(|(_, c)| c)
+}
+
+/// Classic dynamic-programming Levenshtein distance.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        cur[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            cur[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
 pub fn get_easing_fn(name: &str) -> EasingFn {
     match name {
         "linear" => linear,
@@ -178,8 +250,12 @@ pub fn get_easing_fn(name: &str) -> EasingFn {
         "ease_in" => ease_in_cubic,
         "ease_out" => ease_out_cubic,
         "ease_in_out" => ease_in_out_cubic,
-        // Unknown falls back to linear (callers should warn)
-        _ => linear,
+        // Unknown names are rejected by scene validation (UNKNOWN_EASING);
+        // this fallback is defense-in-depth for unvalidated callers only.
+        unknown => {
+            log::warn!("unknown easing '{unknown}', falling back to linear");
+            linear
+        }
     }
 }
 
