@@ -9,10 +9,13 @@
 //! - `POST /patch` (RFC-6902) and `POST /scene_patch` (semantic ops)
 //! - `POST /render` — renders the posted scene and returns MP4/WebM/GIF bytes
 //!
-//! **Security note:** this server is not yet hardened for untrusted networks
-//! (no authentication, permissive CORS, no rate or body-size limits — see
-//! `SECURITY.md` and planning/TECH_DEBT.md TD-09). Run it locally or behind
-//! a trusted reverse proxy.
+//! **Security note:** requests are capped at 8 MiB, `/render` asset paths
+//! are restricted to `LUMINA_ASSET_ROOT` (default: the working directory),
+//! and bind/serve failures return errors instead of panicking. The server
+//! is still not hardened for untrusted networks — no authentication, rate
+//! limiting, or CORS allowlist until v0.5 (see `SECURITY.md` and
+//! planning/TECH_DEBT.md TD-09). Run it locally or behind a trusted
+//! reverse proxy.
 
 use axum::{
     extract::Json,
@@ -184,6 +187,34 @@ async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
     .into_response()
 }
 
+/// Resolve a scene-declared asset path against the allowed asset root.
+///
+/// The root is `LUMINA_ASSET_ROOT` (default: the server's working
+/// directory). Canonicalization resolves `..` and symlinks before the
+/// prefix check, so traversal cannot escape the root. Returns the resolved
+/// path or a client-safe error message (no filesystem details).
+fn resolve_asset_path(requested: &str) -> Result<std::path::PathBuf, String> {
+    let root = std::env::var_os("LUMINA_ASSET_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let root = root
+        .canonicalize()
+        .map_err(|_| "asset root is not accessible".to_string())?;
+    let candidate = if std::path::Path::new(requested).is_absolute() {
+        std::path::PathBuf::from(requested)
+    } else {
+        root.join(requested)
+    };
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|_| format!("asset '{requested}' not found under the asset root"))?;
+    if resolved.starts_with(&root) {
+        Ok(resolved)
+    } else {
+        Err(format!("asset '{requested}' is outside the asset root"))
+    }
+}
+
 async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     let validation = validate_scene_data(&payload.scene);
     if !validation.valid {
@@ -191,27 +222,36 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     }
 
     let mut renderer = SkiaRenderer::new();
-    // Load declared font/image assets from disk. Asset paths may be unreachable
-    // in a sandboxed server context, so we log and skip on error rather than
-    // failing the whole render.
+    // Load declared font/image assets from disk, restricted to the asset
+    // root (LUMINA_ASSET_ROOT, default CWD): /render must not be a remote
+    // arbitrary-file read. Paths escaping the root fail the request;
+    // in-root but unreadable/undecodable assets are logged and skipped.
     for font in &payload.scene.assets.fonts {
-        match std::fs::read(&font.path) {
+        let path = match resolve_asset_path(&font.path) {
+            Ok(p) => p,
+            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+        };
+        match std::fs::read(&path) {
             Ok(data) => {
                 if let Err(e) = renderer.load_font(&font.id, &data) {
                     log::warn!("Skipping font '{}': {:?}", font.id, e);
                 }
             }
-            Err(e) => log::warn!("Cannot read font '{}' at {:?}: {}", font.id, font.path, e),
+            Err(e) => log::warn!("Cannot read font '{}' at {:?}: {}", font.id, path, e),
         }
     }
     for img in &payload.scene.assets.images {
-        match std::fs::read(&img.path) {
+        let path = match resolve_asset_path(&img.path) {
+            Ok(p) => p,
+            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+        };
+        match std::fs::read(&path) {
             Ok(data) => {
                 if let Err(e) = renderer.load_image(&img.id, &data) {
                     log::warn!("Skipping image '{}': {:?}", img.id, e);
                 }
             }
-            Err(e) => log::warn!("Cannot read image '{}' at {:?}: {}", img.id, img.path, e),
+            Err(e) => log::warn!("Cannot read image '{}' at {:?}: {}", img.id, path, e),
         }
     }
     let mut exporter = Exporter::new(renderer);
@@ -246,7 +286,13 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
                 .status(StatusCode::OK)
                 .header("Content-Type", content_type)
                 .body(axum::body::Body::from(data))
-                .unwrap(),
+                .unwrap_or_else(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Response build error: {e}"),
+                    )
+                        .into_response()
+                }),
             Err(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to read output: {}", e),
@@ -263,6 +309,10 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 
 // ── Router + server entry point ───────────────────────────────────────────────
 
+/// Maximum accepted request body: scenes are JSON of at most a few MB;
+/// anything larger is rejected up front (413) instead of being buffered.
+const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health_check))
@@ -272,15 +322,18 @@ pub fn build_router() -> Router {
         .route("/patch", post(patch_scene))
         .route("/scene_patch", post(scene_patch))
         .route("/render", post(render_scene))
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(CorsLayer::permissive())
 }
 
-pub async fn run_server() {
+/// Bind and serve until shutdown. Returns instead of panicking when the
+/// port is taken or the listener dies, so embedders can report the error.
+pub async fn run_server() -> Result<(), std::io::Error> {
     let app = build_router();
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     log::info!("Lumina Server listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -290,6 +343,19 @@ mod tests {
     use super::*;
     use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
     use std::collections::HashMap;
+
+    #[test]
+    fn asset_paths_inside_root_resolve() {
+        // CWD is the crate root during tests; Cargo.toml is a real in-root file.
+        assert!(resolve_asset_path("Cargo.toml").is_ok());
+    }
+
+    #[test]
+    fn asset_paths_escaping_root_are_rejected() {
+        assert!(resolve_asset_path("../../etc/passwd").is_err());
+        assert!(resolve_asset_path("/etc/passwd").is_err());
+        assert!(resolve_asset_path("../lumina-core/Cargo.toml").is_err());
+    }
 
     fn minimal_scene() -> Scene {
         Scene {
