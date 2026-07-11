@@ -11,12 +11,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
 
 ### Added
+- **Cross-backend pixel-diff harness** — every fixture scene in
+  `crates/lumina-renderer/tests/fixtures/` renders on both the Skia (CPU) and
+  Vello (GPU) backends and must agree within an AA-aware per-pixel tolerance;
+  failures dump both frames plus a diff heat map, uploaded as CI artifacts.
+  CI now requires a wgpu adapter (lavapipe) so Vello tests can never silently
+  skip (TD-11, [#11]).
 - **Bundled example font** — Liberation Sans 2.1.5 (Regular + Bold, SIL OFL 1.1)
   under `examples/assets/fonts/`; all example scenes, generator scripts, and
   docs now use repo-relative font paths, so examples render text on macOS and
   Windows too (TD-16, [#10]).
 
 ### Fixed
+- The Vello backend stroked shapes with round caps/joins (kurbo defaults)
+  while the Skia backend uses butt caps and miter joins — GPU renders grew
+  round nubs at line ends and rounded sharp corners ([#11]).
 - `hello.lsf`, `circle_bounce.lsf`, and `pythagorean.lsf` declared no font
   asset, so their Text objects silently never rendered; they now use the
   bundled font ([#10]).
@@ -167,6 +176,7 @@ _The items below landed after 0.2.0 and were never released separately;
 - **Demo** — `examples/unit_circle.lsf` (52 s, 1080p, 30 fps).
 
 [#10]: https://github.com/SakarZaidan/lumina/pull/10
+[#11]: https://github.com/SakarZaidan/lumina/pull/11
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

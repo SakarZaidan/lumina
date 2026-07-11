@@ -1,6 +1,6 @@
 # WS-02 — Renderer Backend Parity (v0.4 flagship)
 
-**Status:** Not started · **Priority:** P0 for v0.4 · **Effort:** multi-session
+**Status:** In progress — harness live ([#11](https://github.com/SakarZaidan/lumina/pull/11)), extraction next · **Priority:** P0 for v0.4 · **Effort:** multi-session
 **Linked debt:** TD-01, TD-02, TD-11 (cluster), TD-08
 
 ## Goal

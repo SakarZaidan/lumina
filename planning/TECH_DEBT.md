@@ -15,13 +15,14 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-08 | Unknown easing names silently fall back to `linear` | Low | Authoring correctness | v0.4 | Open |
 | TD-09 | Server not production-safe: permissive CORS, no auth/rate/body limits, asset-path arbitrary file read, `.unwrap()` on bind/serve/response | High | Anyone deploying `lumina-server` publicly | Safety minimum v0.4; full hardening v0.5 | Open |
 | TD-10 | Zero tests: `lumina-text`, `lumina-schema`, `lumina-cli` | Medium | Font fallback, serde contract, CLI regressions | v0.6 | Open |
-| TD-11 | No cross-backend pixel-diff test | High | Parity is unverifiable; blocks safe refactors | v0.4 | Open |
+| TD-11 | No cross-backend pixel-diff test | High | Parity is unverifiable; blocks safe refactors | v0.4 | Harness live with 8 parity-safe fixtures ([#11](https://github.com/SakarZaidan/lumina/pull/11)); closes when the TD-01 scene set is complete |
 | TD-12 | JS SDK unbuildable (`../wasm/` import missing, no wasm-pack wiring); `node_modules` committed | High | JS SDK unusable from clean checkout | v0.5 | Open |
 | TD-13 | Python SDK: version drift, no tests, unpublished; webm/gif not exposed | Medium | Python users | drift fixed 2026-07-08; rest v0.6 | Open |
 | TD-14 | CI gaps: no MSRV/`rust-version`, Linux-only, wasm tests + benches never run, no release automation, no dependabot, no concurrency-cancel | Medium | Regressions land undetected; manual releases | v0.4 (dependabot: hygiene batch) | Open |
 | TD-15 | Rustdoc: most `pub` items lack `///`; no `missing_docs` lint | Medium | docs.rs quality; API discoverability | Crate-level `//!` in hygiene batch; full fill v0.4 | Open |
 | TD-16 | Examples hardcode Linux font paths (`/usr/share/fonts/...`) | Medium | macOS/Windows users can't run examples | v0.4 (bundle OFL font) | **Closed** ([#10](https://github.com/SakarZaidan/lumina/pull/10)) |
 | TD-17 | `ttf-parser` 0.21 unmaintained (RUSTSEC-2026-0192) yet parses untrusted font files; pinned via fontdue 0.9 / resvg 0.42 | Medium | Font-parsing bugs won't get upstream fixes | v0.4 (bump fontdue/resvg to versions on a maintained fork) | Open |
+| TD-18 | Text layout duplicated: Skia draws glyphs inline, Vello resamples a `raster.rs` string bitmap — glyph AA and low-opacity blending diverge (text parity fixture needs a wider tolerance) | Medium | Cross-backend text fidelity, esp. under camera zoom | v0.5 | Open |
 
 ## Notes per item
 

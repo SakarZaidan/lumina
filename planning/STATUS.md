@@ -23,6 +23,20 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-12 (later) — Pixel-diff parity harness live (TD-11)
+
+- PR [#11](https://github.com/SakarZaidan/lumina/pull/11) (stacked on #10):
+  cross-backend harness renders 8 fixtures on Skia + Vello, AA-aware
+  comparator (3×3 neighborhood rescue + mean-delta tint check), failure
+  artifacts to `target/parity-failures/` and CI upload.
+- First real catch, fixed in-PR: Vello stroked with kurbo's round caps/joins
+  vs Skia's butt/miter — all GPU line ends and sharp corners diverged.
+- CI test job now installs lavapipe and sets `LUMINA_REQUIRE_VELLO=1`
+  (missing adapter = failure, not silent skip).
+- New debt TD-18: duplicated text layout paths (Skia inline vs raster.rs
+  bitmap); text fixture carries a wider tolerance until unified (v0.5).
+- WS-02 → In progress. Next: `common/` extraction (TD-02).
+
 ## 2026-07-12 — v0.4 kickoff: bundled OFL font (TD-16)
 
 - v0.4 execution started per ROADMAP/WS-02; PR sequence planned A–J
