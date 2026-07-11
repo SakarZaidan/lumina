@@ -10,3 +10,4 @@
 pub(crate) mod color;
 pub(crate) mod path;
 pub(crate) mod scene;
+pub(crate) mod shadow;

@@ -278,7 +278,7 @@ impl SkiaRenderer {
                         .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
                     let stroke = parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -307,7 +307,7 @@ impl SkiaRenderer {
                     .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
                 let stroke = parse_stroke(state, opacity);
                 let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let shadow = parse_shadow(state);
+                let shadow = crate::common::shadow::parse_shadow(state);
 
                 if rx > 0.0 || shadow.is_some() {
                     // Rounded and/or shadowed rectangles go through the path renderer.
@@ -386,7 +386,7 @@ impl SkiaRenderer {
                         .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
                     let stroke = parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -406,7 +406,7 @@ impl SkiaRenderer {
                     let fill = parse_fill(&state["fill"], opacity);
                     let stroke = parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -1621,113 +1621,6 @@ fn apply_fill(paint: &mut Paint, fill: &FillStyle, bbox: Rect) {
     }
 }
 
-/// A resolved drop-shadow specification.
-struct ShadowSpec {
-    color: Color,
-    blur: f32,
-    dx: f32,
-    dy: f32,
-    opacity: f32,
-}
-
-fn parse_shadow(state: &Value) -> Option<ShadowSpec> {
-    let map = match state.get("shadow") {
-        Some(Value::Object(m)) => m,
-        _ => return None,
-    };
-    let color_hex = map
-        .get("color")
-        .and_then(|c| c.as_str())
-        .unwrap_or("#000000");
-    Some(ShadowSpec {
-        color: parse_color(color_hex, 1.0),
-        blur: map.get("blur").and_then(|b| b.as_f64()).unwrap_or(0.0) as f32,
-        dx: map.get("dx").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        dy: map.get("dy").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        opacity: map.get("opacity").and_then(|o| o.as_f64()).unwrap_or(1.0) as f32,
-    })
-}
-
-/// Render a blurred, offset silhouette of `path` beneath a shape.
-fn draw_shadow(dst: &mut Pixmap, path: &Path, transform: Transform, shadow: &ShadowSpec) {
-    let mut off = match Pixmap::new(dst.width(), dst.height()) {
-        Some(p) => p,
-        None => return,
-    };
-    let mut paint = Paint::default();
-    paint.set_color(shadow.color);
-    paint.anti_alias = true;
-    let t = Transform::from_translate(shadow.dx, shadow.dy).pre_concat(transform);
-    off.fill_path(path, &paint, FillRule::Winding, t, None);
-    let r = shadow.blur.clamp(0.0, 50.0).round() as usize;
-    box_blur(&mut off, r);
-    let pp = PixmapPaint {
-        opacity: shadow.opacity.clamp(0.0, 1.0),
-        blend_mode: BlendMode::SourceOver,
-        quality: FilterQuality::Nearest,
-    };
-    dst.draw_pixmap(0, 0, off.as_ref(), &pp, Transform::identity(), None);
-}
-
-/// Separable 3-pass box blur (≈ Gaussian) over premultiplied RGBA bytes.
-fn box_blur(pm: &mut Pixmap, radius: usize) {
-    if radius == 0 {
-        return;
-    }
-    let w = pm.width() as usize;
-    let h = pm.height() as usize;
-    if w == 0 || h == 0 {
-        return;
-    }
-    let data = pm.data_mut();
-    let mut tmp = vec![0u8; data.len()];
-    for _ in 0..3 {
-        blur_pass_h(data, &mut tmp, w, h, radius);
-        blur_pass_v(&tmp, data, w, h, radius);
-    }
-}
-
-fn blur_pass_h(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize) {
-    let win = (2 * r + 1) as u32;
-    for y in 0..h {
-        let base = y * w;
-        for c in 0..4 {
-            let get = |x: usize| src[(base + x.min(w - 1)) * 4 + c] as u32;
-            let mut sum: u32 = 0;
-            for i in 0..=2 * r {
-                sum += get(i.saturating_sub(r));
-            }
-            for x in 0..w {
-                dst[(base + x) * 4 + c] = (sum / win) as u8;
-                let add_idx = (x + r + 1).min(w - 1);
-                let sub_idx = x.saturating_sub(r);
-                sum += get(add_idx);
-                sum -= get(sub_idx);
-            }
-        }
-    }
-}
-
-fn blur_pass_v(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize) {
-    let win = (2 * r + 1) as u32;
-    for x in 0..w {
-        for c in 0..4 {
-            let get = |y: usize| src[(y.min(h - 1) * w + x) * 4 + c] as u32;
-            let mut sum: u32 = 0;
-            for i in 0..=2 * r {
-                sum += get(i.saturating_sub(r));
-            }
-            for y in 0..h {
-                dst[(y * w + x) * 4 + c] = (sum / win) as u8;
-                let add_idx = (y + r + 1).min(h - 1);
-                let sub_idx = y.saturating_sub(r);
-                sum += get(add_idx);
-                sum -= get(sub_idx);
-            }
-        }
-    }
-}
-
 /// Build a rounded-rectangle path using quadratic corner arcs.
 fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> Option<Path> {
     let rx = rx.min(w / 2.0).max(0.0);
@@ -1754,11 +1647,11 @@ fn paint_shape(
     fill: Option<&FillStyle>,
     stroke: Option<&FillStyle>,
     stroke_width: f32,
-    shadow: Option<&ShadowSpec>,
+    shadow: Option<&crate::common::shadow::ShadowSpec>,
 ) {
     let bbox = path.bounds();
     if let Some(sh) = shadow {
-        draw_shadow(pixmap, path, transform, sh);
+        crate::common::shadow::draw_shadow(pixmap, path, transform, sh);
     }
     if let Some(f) = fill {
         let mut paint = Paint::default();
