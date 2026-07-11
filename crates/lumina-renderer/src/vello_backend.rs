@@ -178,37 +178,12 @@ impl VelloRenderer {
             &Rect::new(0.0, 0.0, width as f64, height as f64),
         );
 
-        // Camera root transform
-        let root_affine = if let Some(cam) = camera {
-            let cx = width as f64 / 2.0;
-            let cy = height as f64 / 2.0;
-            Affine::translate(Vec2::new(cx + cam.x as f64, cy + cam.y as f64))
-                * Affine::scale(cam.zoom as f64)
-                * Affine::translate(Vec2::new(-cx, -cy))
-        } else {
-            Affine::IDENTITY
-        };
+        // Camera root transform (shared with the CPU backend so the
+        // matrices are bit-identical).
+        let root = crate::common::scene::camera_transform(camera, width, height);
 
-        // Determine which objects are group children (exclude from root render pass)
-        let mut child_ids = std::collections::HashSet::new();
-        for obj in objects.values() {
-            if let Object::Group(g) = obj {
-                for cid in &g.children {
-                    child_ids.insert(cid.clone());
-                }
-            }
-        }
-
-        // Sort root objects by z-index
-        let mut roots: Vec<(&str, i32)> = objects
-            .iter()
-            .filter(|(id, _)| !child_ids.contains(*id))
-            .map(|(id, obj)| (id.as_str(), z_index_of(obj)))
-            .collect();
-        roots.sort_by_key(|(_, z)| *z);
-
-        for (id, _) in roots {
-            self.draw_node(&mut scene, id, objects, states, root_affine);
+        for id in crate::common::scene::sorted_root_ids(objects) {
+            self.draw_node(&mut scene, &id, objects, states, root);
         }
 
         scene
@@ -220,7 +195,7 @@ impl VelloRenderer {
         id: &str,
         objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
-        parent_affine: Affine,
+        parent: crate::common::scene::Mat2x3,
     ) {
         let obj = match objects.get(id) {
             Some(o) => o,
@@ -233,31 +208,13 @@ impl VelloRenderer {
 
         match obj {
             Object::Group(props) => {
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let scale = state["scale"].as_f64().unwrap_or(1.0);
-                let rotation_deg = state["rotation"].as_f64().unwrap_or(0.0);
+                let transform = crate::common::scene::group_transform(parent, state);
 
-                let mut affine = parent_affine * Affine::translate(Vec2::new(x, y));
-                if scale != 1.0 {
-                    affine *= Affine::scale(scale);
-                }
-                if rotation_deg != 0.0 {
-                    affine *= Affine::rotate(rotation_deg.to_radians());
-                }
-
-                let mut children: Vec<(&str, i32)> = props
-                    .children
-                    .iter()
-                    .map(|cid| (cid.as_str(), objects.get(cid).map(z_index_of).unwrap_or(0)))
-                    .collect();
-                children.sort_by_key(|(_, z)| *z);
-
-                for (child_id, _) in children {
-                    self.draw_node(scene, child_id, objects, states, affine);
+                for child_id in crate::common::scene::sorted_children(&props.children, objects) {
+                    self.draw_node(scene, child_id, objects, states, transform);
                 }
             }
-            _ => self.draw_leaf(scene, obj, state, parent_affine, objects, states),
+            _ => self.draw_leaf(scene, obj, state, parent.to_kurbo(), objects, states),
         }
     }
 
@@ -1045,28 +1002,6 @@ fn looks_like_svg(data: &[u8]) -> bool {
     let s = String::from_utf8_lossy(head);
     let trimmed = s.trim_start();
     trimmed.starts_with("<?xml") || trimmed.starts_with("<svg") || s.contains("<svg")
-}
-
-fn z_index_of(obj: &Object) -> i32 {
-    match obj {
-        Object::Circle(p) => p.z_index,
-        Object::Rectangle(p) => p.z_index,
-        Object::Polygon(p) => p.z_index,
-        Object::Path(p) => p.z_index,
-        Object::Line(p) => p.z_index,
-        Object::Arrow(p) => p.z_index,
-        Object::Text(p) => p.z_index,
-        Object::LaTeX(p) => p.z_index,
-        Object::Group(p) => p.z_index,
-        Object::Image(p) => p.z_index,
-        Object::SVG(p) => p.z_index,
-        Object::NumberLine(p) => p.z_index,
-        Object::Axes(p) => p.z_index,
-        Object::Plot(p) => p.z_index,
-        Object::BezierCurve(p) => p.z_index,
-        Object::MathML(p) => p.z_index,
-        Object::Particles(p) => p.z_index,
-    }
 }
 
 fn parse_vello_color(hex: &str, opacity: f32) -> Color {

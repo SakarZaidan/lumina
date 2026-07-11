@@ -111,48 +111,6 @@ impl SkiaRenderer {
         Some(pm)
     }
 
-    fn z_index(obj: &Object) -> i32 {
-        match obj {
-            Object::Circle(p) => p.z_index,
-            Object::Rectangle(p) => p.z_index,
-            Object::Polygon(p) => p.z_index,
-            Object::Path(p) => p.z_index,
-            Object::Line(p) => p.z_index,
-            Object::Arrow(p) => p.z_index,
-            Object::Text(p) => p.z_index,
-            Object::LaTeX(p) => p.z_index,
-            Object::Group(p) => p.z_index,
-            Object::Image(p) => p.z_index,
-            Object::SVG(p) => p.z_index,
-            Object::NumberLine(p) => p.z_index,
-            Object::Axes(p) => p.z_index,
-            Object::Plot(p) => p.z_index,
-            Object::BezierCurve(p) => p.z_index,
-            Object::MathML(p) => p.z_index,
-            Object::Particles(p) => p.z_index,
-        }
-    }
-
-    fn get_root_objects_sorted(&self, objects: &HashMap<String, Object>) -> Vec<String> {
-        let mut child_ids = std::collections::HashSet::new();
-        for obj in objects.values() {
-            if let Object::Group(group) = obj {
-                for child_id in &group.children {
-                    child_ids.insert(child_id.clone());
-                }
-            }
-        }
-
-        let mut roots: Vec<(String, i32)> = objects
-            .iter()
-            .filter(|(id, _)| !child_ids.contains(*id))
-            .map(|(id, obj)| (id.clone(), Self::z_index(obj)))
-            .collect();
-
-        roots.sort_by_key(|(_, z)| *z);
-        roots.into_iter().map(|(id, _)| id).collect()
-    }
-
     fn resolve_axes_context(
         &self,
         axes_id: &str,
@@ -278,34 +236,14 @@ impl SkiaRenderer {
 
         match obj {
             Object::Group(props) => {
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let scale = state["scale"].as_f64().unwrap_or(1.0) as f32;
-                // rotation is stored in degrees (user-facing unit)
-                let rotation_deg = state["rotation"].as_f64().unwrap_or(0.0) as f32;
+                let transform = crate::common::scene::group_transform(
+                    crate::common::scene::Mat2x3::from_tiny(parent_transform),
+                    state,
+                )
+                .to_tiny();
 
-                let mut transform = parent_transform;
-                transform = transform.pre_translate(x, y);
-                if scale != 1.0 {
-                    transform = transform.pre_scale(scale, scale);
-                }
-                if rotation_deg != 0.0 {
-                    transform = transform.pre_rotate(rotation_deg);
-                }
-
-                // Sort children by z_index before drawing
-                let mut children: Vec<(String, i32)> = props
-                    .children
-                    .iter()
-                    .map(|cid| {
-                        let z = objects.get(cid).map(Self::z_index).unwrap_or(0);
-                        (cid.clone(), z)
-                    })
-                    .collect();
-                children.sort_by_key(|(_, z)| *z);
-
-                for (child_id, _) in children {
-                    self.draw_node(pixmap, &child_id, objects, states, transform)?;
+                for child_id in crate::common::scene::sorted_children(&props.children, objects) {
+                    self.draw_node(pixmap, child_id, objects, states, transform)?;
                 }
             }
             _ => {
@@ -1044,18 +982,10 @@ impl Renderer for SkiaRenderer {
 
         pixmap.fill(parse_color(background, 1.0));
 
-        let root_transform = if let Some(cam) = camera {
-            let cx = width as f32 / 2.0;
-            let cy = height as f32 / 2.0;
-            Transform::from_translate(cx + cam.x, cy + cam.y)
-                .pre_concat(Transform::from_scale(cam.zoom, cam.zoom))
-                .pre_concat(Transform::from_translate(-cx, -cy))
-        } else {
-            Transform::identity()
-        };
+        let root_transform =
+            crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
-        let roots = self.get_root_objects_sorted(objects);
-        for id in roots {
+        for id in crate::common::scene::sorted_root_ids(objects) {
             self.draw_node(&mut pixmap, &id, objects, states, root_transform)?;
         }
 

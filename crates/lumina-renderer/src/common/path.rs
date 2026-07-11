@@ -9,6 +9,9 @@
 pub(crate) enum PathCmd {
     MoveTo(f32, f32),
     LineTo(f32, f32),
+    // Not emitted by the SVG parser (no Q/q support yet); constructed by the
+    // rounded-rectangle builder.
+    #[allow(dead_code)]
     QuadTo(f32, f32, f32, f32),
     CubicTo(f32, f32, f32, f32, f32, f32),
     Close,
@@ -17,12 +20,6 @@ pub(crate) enum PathCmd {
 /// A backend-neutral path: an ordered list of absolute commands.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct PathData(pub(crate) Vec<PathCmd>);
-
-impl PathData {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
 
 /// Parse SVG path data into a [`PathData`].
 /// Supports: M/m (move), L/l (line), H/h (horizontal), V/v (vertical),
