@@ -7,7 +7,7 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 
 | Area | | Notes |
 |---|---|---|
-| CI on `main` | 🟢 | all 8 jobs green (release run `9c35474`) |
+| CI on `main` | 🟢 | 3-OS matrix + MSRV + wasm tests pending merge of #17 stack |
 | Tests | 🟢 | 92 + 3 wasm passing; zero flakes |
 | Coverage | 🟡 | not measured yet — tooling v0.4 |
 | Benchmarks | 🟡 | exist, manual only; not in CI (TD-14) |
@@ -22,6 +22,15 @@ Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-07-13 (later) — CI foundations (TD-14)
+
+- PR [#17](https://github.com/SakarZaidan/lumina/pull/17) (stacked on #16):
+  3-OS test matrix (require-Vello Linux-only for now), MSRV 1.88 job,
+  concurrency-cancel, wasm-bindgen tests now actually run (Node).
+- First-ever macOS/Windows runs — watch this PR's matrix legs for
+  platform surprises; fixes land on the same branch.
+- TD-14 remainder: criterion-in-CI (v0.5), release automation (owner).
 
 ## 2026-07-13 — Server safety minimum (TD-09 part 1)
 

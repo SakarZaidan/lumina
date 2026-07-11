@@ -48,6 +48,11 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   docs now use repo-relative font paths, so examples render text on macOS and
   Windows too (TD-16, [#10]).
 
+### CI
+- Tests now run on ubuntu/macos/windows; new MSRV (1.88) check job;
+  concurrent pushes cancel superseded runs; the wasm-bindgen test suite
+  actually executes (it previously never ran in CI) (TD-14, [#17]).
+
 ### Security
 - `lumina-server` v0.4 safety minimum: `/render` asset paths are confined to
   `LUMINA_ASSET_ROOT` (was: arbitrary-file read), request bodies capped at
@@ -213,6 +218,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#14]: https://github.com/SakarZaidan/lumina/pull/14
 [#15]: https://github.com/SakarZaidan/lumina/pull/15
 [#16]: https://github.com/SakarZaidan/lumina/pull/16
+[#17]: https://github.com/SakarZaidan/lumina/pull/17
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

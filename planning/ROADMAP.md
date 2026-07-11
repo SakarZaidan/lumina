@@ -28,7 +28,7 @@ publishable and contributable.
   (TD-08, #15; mildly breaking — done while the scene corpus is small).
 - [x] Server safety minimum (TD-09 part 1, #16): asset-root allowlist for
   `/render`, remove `.unwrap()` on bind/serve/response, request body-size limit.
-- [ ] CI foundations (TD-14): `rust-version` in workspace + MSRV job,
+- [x] CI foundations (TD-14, #17): `rust-version` in workspace + MSRV job,
   ubuntu/macos/windows test matrix, concurrency-cancel, run
   `wasm-bindgen-test` suite.
 - [ ] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
