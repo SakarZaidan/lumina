@@ -24,9 +24,8 @@ use axum::{
 use lumina_export::Exporter;
 use lumina_renderer::skia_backend::SkiaRenderer;
 use lumina_renderer::Renderer;
-use lumina_schema::{Object, Scene};
+use lumina_schema::Scene;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -63,225 +62,13 @@ pub struct ScenePatchRequest {
     pub patch: lumina_core::ScenePatch,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationResponse {
-    pub valid: bool,
-    pub errors: Vec<ValidationError>,
-    pub warnings: Vec<ValidationWarning>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationError {
-    pub code: String,
-    pub path: String,
-    pub message: String,
-    pub fix_suggestion: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationWarning {
-    pub code: String,
-    pub path: String,
-    pub message: String,
-}
-
 // ── Semantic validation ───────────────────────────────────────────────────────
-
-/// Perform semantic validation of a parsed Scene.
-/// Returns errors (render-blocking) and warnings (non-blocking).
-pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
-    let mut errors = Vec::new();
-    let mut warnings = Vec::new();
-
-    let object_ids: HashSet<&str> = scene.objects.keys().map(|s| s.as_str()).collect();
-
-    // Check 1: Timeline entries must reference declared object IDs
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if !object_ids.contains(entry.object.as_str()) {
-            let suggestion = object_ids
-                .iter()
-                .find(|id| id.starts_with(&entry.object[..entry.object.len().min(3)]))
-                .map(|s| format!("Did you mean '{}'?", s))
-                .unwrap_or_else(|| "Check the 'objects' block for valid IDs.".to_string());
-
-            errors.push(ValidationError {
-                code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.timeline[{}].object", i),
-                message: format!(
-                    "Timeline entry {} references object '{}', which is not in 'objects'.",
-                    i, entry.object
-                ),
-                fix_suggestion: suggestion,
-            });
-        }
-    }
-
-    // Check 2: Event entries must reference declared object IDs
-    for (i, event) in scene.events.iter().enumerate() {
-        if !object_ids.contains(event.object.as_str()) {
-            errors.push(ValidationError {
-                code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.events[{}].object", i),
-                message: format!(
-                    "Event {} references object '{}', which is not declared.",
-                    i, event.object
-                ),
-                fix_suggestion: format!(
-                    "Add '{}' to the 'objects' block or correct the event's object field.",
-                    event.object
-                ),
-            });
-        }
-    }
-
-    // Check 3: Group children must reference declared object IDs
-    for (obj_id, obj) in &scene.objects {
-        if let Object::Group(group) = obj {
-            for child_id in &group.children {
-                if !object_ids.contains(child_id.as_str()) {
-                    errors.push(ValidationError {
-                        code: "UNKNOWN_CHILD_ID".to_string(),
-                        path: format!("$.objects.{}.properties.children", obj_id),
-                        message: format!(
-                            "Group '{}' references child '{}', which is not declared.",
-                            obj_id, child_id
-                        ),
-                        fix_suggestion: format!(
-                            "Add '{}' to the 'objects' block or remove it from group '{}'.",
-                            child_id, obj_id
-                        ),
-                    });
-                }
-            }
-        }
-    }
-
-    // Check 4: Circular group references
-    if let Some(cycle) = detect_group_cycle(&scene.objects) {
-        errors.push(ValidationError {
-            code: "CIRCULAR_GROUP_REFERENCE".to_string(),
-            path: "$.objects".to_string(),
-            message: format!(
-                "Circular group reference: {}. Groups cannot contain themselves.",
-                cycle.join(" → ")
-            ),
-            fix_suggestion: "Remove the circular dependency from the group's children list."
-                .to_string(),
-        });
-    }
-
-    // Check 5: Keyframes beyond canvas duration (warning)
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if entry.time > scene.canvas.duration {
-            warnings.push(ValidationWarning {
-                code: "KEYFRAME_BEYOND_DURATION".to_string(),
-                path: format!("$.timeline[{}].time", i),
-                message: format!(
-                    "Keyframe {} has time={:.2}s but canvas duration is {:.2}s. It will never play.",
-                    i, entry.time, scene.canvas.duration
-                ),
-            });
-        }
-    }
-
-    // Check 6: Duplicate keyframes (same object + property + time) — warning
-    let mut seen: HashMap<(String, String, String), usize> = HashMap::new();
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if let serde_json::Value::Object(state) = &entry.state {
-            for prop_name in state.keys() {
-                let key = (
-                    entry.object.clone(),
-                    prop_name.clone(),
-                    format!("{:.6}", entry.time),
-                );
-                if let Some(first_idx) = seen.get(&key) {
-                    warnings.push(ValidationWarning {
-                        code: "DUPLICATE_KEYFRAME".to_string(),
-                        path: format!("$.timeline[{}]", i),
-                        message: format!(
-                            "Duplicate keyframe for '{}' property '{}' at t={:.2}s (first at index {}). Last declaration wins.",
-                            entry.object, prop_name, entry.time, first_idx
-                        ),
-                    });
-                } else {
-                    seen.insert(key, i);
-                }
-            }
-        }
-    }
-
-    // Check 7: Canvas dimensions must be positive
-    if scene.canvas.width == 0 || scene.canvas.height == 0 {
-        errors.push(ValidationError {
-            code: "INVALID_CANVAS_SIZE".to_string(),
-            path: "$.canvas".to_string(),
-            message: format!(
-                "Canvas size {}x{} is invalid. Both dimensions must be > 0.",
-                scene.canvas.width, scene.canvas.height
-            ),
-            fix_suggestion:
-                "Set canvas.width and canvas.height to positive integers (e.g. 1280, 720)."
-                    .to_string(),
-        });
-    }
-
-    // Check 8: Large scene warning
-    if scene.objects.len() > 500 {
-        warnings.push(ValidationWarning {
-            code: "LARGE_SCENE".to_string(),
-            path: "$.objects".to_string(),
-            message: format!(
-                "Scene has {} objects. Consider grouping related objects to improve performance.",
-                scene.objects.len()
-            ),
-        });
-    }
-
-    ValidationResponse {
-        valid: errors.is_empty(),
-        errors,
-        warnings,
-    }
-}
-
-fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<Vec<String>> {
-    fn dfs(
-        id: &str,
-        objects: &HashMap<String, Object>,
-        visited: &mut HashSet<String>,
-        path: &mut Vec<String>,
-    ) -> Option<Vec<String>> {
-        if path.contains(&id.to_string()) {
-            let start = path.iter().position(|x| x == id).unwrap();
-            let mut cycle = path[start..].to_vec();
-            cycle.push(id.to_string());
-            return Some(cycle);
-        }
-        if visited.contains(id) {
-            return None;
-        }
-        visited.insert(id.to_string());
-        if let Some(Object::Group(group)) = objects.get(id) {
-            path.push(id.to_string());
-            for child in &group.children {
-                if let Some(cycle) = dfs(child, objects, visited, path) {
-                    return Some(cycle);
-                }
-            }
-            path.pop();
-        }
-        None
-    }
-
-    let mut visited = HashSet::new();
-    for id in objects.keys() {
-        let mut path = Vec::new();
-        if let Some(cycle) = dfs(id, objects, &mut visited, &mut path) {
-            return Some(cycle);
-        }
-    }
-    None
-}
+//
+// Validation logic lives in lumina-core (shared by server, CLI and SDKs);
+// re-exported here so the server's public API is unchanged.
+pub use lumina_core::validation::{
+    validate_scene_data, ValidationError, ValidationResponse, ValidationWarning,
+};
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
@@ -501,7 +288,8 @@ pub async fn run_server() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, TimelineEntry};
+    use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
+    use std::collections::HashMap;
 
     fn minimal_scene() -> Scene {
         Scene {
