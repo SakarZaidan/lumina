@@ -8,3 +8,4 @@
 //! draw calls to their respective libraries.
 
 pub(crate) mod color;
+pub(crate) mod path;
