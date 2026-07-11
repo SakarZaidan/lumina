@@ -8,10 +8,10 @@
 //!   rounded rectangles, dashed strokes, SVG (via `resvg`) and animated-GIF
 //!   compositing.
 //! - [`vello_backend::VelloRenderer`] — GPU backend over `vello`/`wgpu`
-//!   (headless). Covers all object types including text, images, SVG,
-//!   particles, gradients, rounded rectangles and `draw_fraction` reveal;
-//!   drop shadows are the one remaining gap (see the backend-parity table
-//!   in the book's architecture chapter).
+//!   (headless). Full feature parity with the CPU backend: all object
+//!   types, gradients, drop shadows, rounded rectangles and
+//!   `draw_fraction` reveal (see the backend-parity table in the book's
+//!   architecture chapter).
 //!
 //! Both backends share glyph/particle rasterization (`raster`) and all
 //! parsing/geometry/ordering decisions (`common`), verified by the

@@ -72,12 +72,12 @@ fixture scene on both backends in CI:
 | Linear & radial gradients (fill and stroke) | ✅ | ✅ (shared geometry) |
 | Rounded rectangles (`rx`/`ry`) | ✅ | ✅ (shared geometry) |
 | `draw_fraction` stroke reveal | ✅ | ✅ (shared dash pattern) |
-| Drop shadows / glow | ✅ | ❌ not drawn (lands with WS-02) |
-| Explicit `dash` arrays on Line | ❌ | ❌ (schema field not yet implemented) |
+| Drop shadows / glow | ✅ | ✅ (shared blur pipeline) |
+| Explicit `dash` arrays on Line | ❌ | ❌ (schema field not yet implemented, TD-19) |
 
-A scene using drop shadows still renders differently on `--backend vello`
-until the final WS-02 change lands
-(see `planning/WORKSTREAMS/ws-02-backend-parity.md`).
+Every feature row is exercised by the parity suite; scenes render the same
+on either backend within the suite's tolerances (text carries a slightly
+wider budget until its two layout paths are unified, TD-18).
 
 ## Key design choices
 
