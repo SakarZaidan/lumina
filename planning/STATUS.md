@@ -14,7 +14,7 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Docs (book + rustdoc) | 🟢 | book live on Pages, current for v0.3.0 |
 | Examples | 🟢 | all render on any OS; OFL font bundled (TD-16 closed, #10) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
-| Backend parity | 🟡 | vello gaps documented; fix is v0.4 flagship (TD-01) |
+| Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite in CI (TD-01/TD-11 closed) |
 | Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
 | Dependencies | 🟢 | deny green; dependabot active (5 PRs pending triage) |
 
@@ -22,6 +22,18 @@ Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-07-12 (night, later) — Vello shadows; TD-01 + TD-11 closed
+
+- PR [#14](https://github.com/SakarZaidan/lumina/pull/14) (stacked on #13):
+  GPU drop shadows composite the shared blurred silhouette (identical
+  bytes to CPU) as a peniko::Image under an opacity layer. No vello/wgpu
+  upgrade needed — WS-02 risk resolved negative.
+- Fixture set now 16 scenes (adds shadows, plot/axes, SVG asset, combined
+  showcase); suite caught + fixed a second real bug: vello axes ticks
+  drawn at grid width (1.0) instead of axis width (2.0).
+- **Backend parity table complete** — every feature row ✅ on both
+  backends. WS-02 scope 1–3 done; only easing strictness (TD-08) remains.
 
 ## 2026-07-12 (night) — Vello gradients, rounded rects, dash (TD-01 pt 1)
 

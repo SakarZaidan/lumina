@@ -19,10 +19,10 @@ publishable and contributable.
 **Scope**
 - [x] Extract `lumina-renderer/src/common/`: shared SVG-path parser, color
   parser, scene-walk/z-sort helpers (TD-02, #12) — prerequisite for everything below.
-- [ ] Vello parity: gradients, drop shadows, rounded rectangles, dashed lines
-  (TD-01).
-- [ ] Cross-backend pixel-diff golden harness with per-channel tolerance; runs
-  in CI on a curated scene set (TD-11). This is the acceptance gate for parity
+- [x] Vello parity: gradients, drop shadows, rounded rectangles, dashed lines
+  (TD-01, #13/#14).
+- [x] Cross-backend pixel-diff golden harness with per-channel tolerance; runs
+  in CI on a curated scene set (TD-11, #11/#14). This is the acceptance gate for parity
   and the safety net for all later refactors.
 - [ ] Unknown easing name → validation error instead of silent `linear`
   (TD-08; mildly breaking — do it while the scene corpus is small).

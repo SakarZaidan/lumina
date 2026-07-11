@@ -1,6 +1,6 @@
 # WS-02 — Renderer Backend Parity (v0.4 flagship)
 
-**Status:** In progress — harness live ([#11](https://github.com/SakarZaidan/lumina/pull/11)), extraction next · **Priority:** P0 for v0.4 · **Effort:** multi-session
+**Status:** In progress — scope 1–3 done (#11–#14); only easing strictness (TD-08) remains · **Priority:** P0 for v0.4 · **Effort:** multi-session
 **Linked debt:** TD-01, TD-02, TD-11 (cluster), TD-08
 
 ## Goal
@@ -19,10 +19,10 @@ pixels within tolerance, verified in CI — and stay that way.
      `parse_vello_color`).
    - Scene-walk helpers: z-index sort, root detection, group-transform
      recursion currently duplicated per backend.
-2. **Vello parity features** (TD-01): linear/radial gradients, drop shadows
-   (match Skia's 3-pass box blur visually), rounded rectangles, dashed lines
-   incl. `draw_fraction`.
-3. **Pixel-diff harness** (TD-11): render a curated scene set (one scene per
+2. ✅ **Vello parity features** (done — TD-01, [#13](https://github.com/SakarZaidan/lumina/pull/13)/[#14](https://github.com/SakarZaidan/lumina/pull/14)): linear/radial gradients, drop shadows
+   (the shared 3-pass box blur, composited as an image), rounded rectangles,
+   `draw_fraction` dashing. Explicit `dash` arrays deferred as TD-19.
+3. ✅ **Pixel-diff harness** (done — TD-11, [#11](https://github.com/SakarZaidan/lumina/pull/11)/[#14](https://github.com/SakarZaidan/lumina/pull/14), 16 fixtures): render a curated scene set (one scene per
    feature: each object type, gradients, shadows, rounded, dash, camera,
    groups, particles) on both backends; assert per-channel diff within
    tolerance; run in CI (CPU fallback adapter). Failures dump both images as

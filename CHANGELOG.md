@@ -19,6 +19,11 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   way (TD-02, [#12]).
 
 ### Added
+- **Vello drop shadows** — the GPU backend composites the same blurred
+  silhouette bytes as the CPU backend via the shared blur pipeline; full
+  visual feature parity between backends, verified by a 16-scene parity
+  suite in CI (TD-01/TD-11 closed, [#14]). Also fixes axes tick marks
+  rendering thinner on the GPU backend.
 - **Vello gradients, rounded rectangles, and `draw_fraction` dash** — the GPU
   backend now renders linear/radial gradient fills *and strokes*, honors
   `rx`/`ry` corner radii, and reveals lines via the same dash pattern as the
@@ -192,6 +197,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#11]: https://github.com/SakarZaidan/lumina/pull/11
 [#12]: https://github.com/SakarZaidan/lumina/pull/12
 [#13]: https://github.com/SakarZaidan/lumina/pull/13
+[#14]: https://github.com/SakarZaidan/lumina/pull/14
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

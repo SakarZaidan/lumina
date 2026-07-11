@@ -5,7 +5,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 
 | ID | Title | Severity | Blast radius | Target | Status |
 |----|-------|----------|--------------|--------|--------|
-| TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | Gradients/rounded/dash done ([#13](https://github.com/SakarZaidan/lumina/pull/13)); shadows remain |
+| TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | **Closed** ([#13](https://github.com/SakarZaidan/lumina/pull/13), [#14](https://github.com/SakarZaidan/lumina/pull/14)) |
 | TD-02 | SVG-path + color parsers duplicated across backends | High | Every parity fix implemented twice | v0.4 | **Closed** ([#12](https://github.com/SakarZaidan/lumina/pull/12)) |
 | TD-03 | `Timeline::get_state_at` clones every property every frame | Medium | Render/export throughput | v0.5 | Open |
 | TD-04 | evalexpr context built inside Plot sample loop | Medium | Plot-heavy scene throughput | v0.5 | Open |
@@ -15,7 +15,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-08 | Unknown easing names silently fall back to `linear` | Low | Authoring correctness | v0.4 | Open |
 | TD-09 | Server not production-safe: permissive CORS, no auth/rate/body limits, asset-path arbitrary file read, `.unwrap()` on bind/serve/response | High | Anyone deploying `lumina-server` publicly | Safety minimum v0.4; full hardening v0.5 | Open |
 | TD-10 | Zero tests: `lumina-text`, `lumina-schema`, `lumina-cli` | Medium | Font fallback, serde contract, CLI regressions | v0.6 | Open |
-| TD-11 | No cross-backend pixel-diff test | High | Parity is unverifiable; blocks safe refactors | v0.4 | Harness live with 8 parity-safe fixtures ([#11](https://github.com/SakarZaidan/lumina/pull/11)); closes when the TD-01 scene set is complete |
+| TD-11 | No cross-backend pixel-diff test | High | Parity is unverifiable; blocks safe refactors | v0.4 | **Closed** ([#11](https://github.com/SakarZaidan/lumina/pull/11), [#14](https://github.com/SakarZaidan/lumina/pull/14) — 16-fixture suite in CI; raster-Image asset fixture deferred with TD-18) |
 | TD-12 | JS SDK unbuildable (`../wasm/` import missing, no wasm-pack wiring); `node_modules` committed | High | JS SDK unusable from clean checkout | v0.5 | Open |
 | TD-13 | Python SDK: version drift, no tests, unpublished; webm/gif not exposed | Medium | Python users | drift fixed 2026-07-08; rest v0.6 | Open |
 | TD-14 | CI gaps: no MSRV/`rust-version`, Linux-only, wasm tests + benches never run, no release automation, no dependabot, no concurrency-cancel | Medium | Regressions land undetected; manual releases | v0.4 (dependabot: hygiene batch) | Open |
