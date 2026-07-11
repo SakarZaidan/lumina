@@ -10,6 +10,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
 
+### Added
+- **Bundled example font** — Liberation Sans 2.1.5 (Regular + Bold, SIL OFL 1.1)
+  under `examples/assets/fonts/`; all example scenes, generator scripts, and
+  docs now use repo-relative font paths, so examples render text on macOS and
+  Windows too (TD-16, [#10]).
+
+### Fixed
+- `hello.lsf`, `circle_bounce.lsf`, and `pythagorean.lsf` declared no font
+  asset, so their Text objects silently never rendered; they now use the
+  bundled font ([#10]).
+
 ## [0.3.0] — 2026-06-01
 
 ### Added
@@ -155,6 +166,7 @@ _The items below landed after 0.2.0 and were never released separately;
 - **Vello GPU backend** — first `VelloRenderer` with wgpu CPU software fallback.
 - **Demo** — `examples/unit_circle.lsf` (52 s, 1080p, 30 fps).
 
+[#10]: https://github.com/SakarZaidan/lumina/pull/10
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

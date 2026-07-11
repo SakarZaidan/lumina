@@ -12,7 +12,7 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Coverage | 🟡 | not measured yet — tooling v0.4 |
 | Benchmarks | 🟡 | exist, manual only; not in CI (TD-14) |
 | Docs (book + rustdoc) | 🟢 | book live on Pages, current for v0.3.0 |
-| Examples | 🟢 | all render; Linux font paths only (TD-16) |
+| Examples | 🟢 | all render on any OS; OFL font bundled (TD-16 closed, #10) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
 | Backend parity | 🟡 | vello gaps documented; fix is v0.4 flagship (TD-01) |
 | Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
@@ -22,6 +22,18 @@ Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-07-12 — v0.4 kickoff: bundled OFL font (TD-16)
+
+- v0.4 execution started per ROADMAP/WS-02; PR sequence planned A–J
+  (font → parity harness → common/ extraction → vello parity → easing
+  strictness → server safety → CI matrix → rustdoc → dep bumps).
+- PR [#10](https://github.com/SakarZaidan/lumina/pull/10): Liberation Sans
+  2.1.5 (SIL OFL 1.1) bundled at `examples/assets/fonts/`; all scenes/docs
+  off `/usr/share/fonts`. Closes TD-16.
+- Latent bug found + fixed in-PR: hello/circle_bounce/pythagorean declared no
+  font asset — their text never rendered (no system-font fallback exists).
+- Local gate green: fmt, clippy `-D warnings`, 92/92 tests, rustdoc, mdBook.
 
 ## 2026-07-08 (evening) — Constitution, RFC/ADR system, metrics, diagrams
 
