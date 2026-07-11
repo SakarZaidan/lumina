@@ -8,6 +8,7 @@
 //! draw calls to their respective libraries.
 
 pub(crate) mod color;
+pub(crate) mod fill;
 pub(crate) mod path;
 pub(crate) mod scene;
 pub(crate) mod shadow;

@@ -274,9 +274,11 @@ impl SkiaRenderer {
                 let mut pb = PathBuilder::new();
                 pb.push_circle(cx, cy, radius);
                 if let Some(path) = pb.finish() {
-                    let fill = parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                        .unwrap_or_else(|| {
+                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
+                        });
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                     let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
@@ -303,9 +305,9 @@ impl SkiaRenderer {
                 let rx = state["rx"].as_f64().unwrap_or(0.0) as f32;
                 let ry_raw = state["ry"].as_f64().unwrap_or(0.0) as f32;
                 let ry = if ry_raw > 0.0 { ry_raw } else { rx };
-                let fill = parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                let stroke = parse_stroke(state, opacity);
+                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                let stroke = crate::common::fill::parse_stroke(state, opacity);
                 let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                 let shadow = crate::common::shadow::parse_shadow(state);
 
@@ -382,9 +384,11 @@ impl SkiaRenderer {
                 pb.close();
 
                 if let Some(path) = pb.finish() {
-                    let fill = parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                        .unwrap_or_else(|| {
+                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
+                        });
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                     let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
@@ -403,8 +407,8 @@ impl SkiaRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
                 if let Some(path) = parse_svg_path(d) {
-                    let fill = parse_fill(&state["fill"], opacity);
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity);
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
                     let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
@@ -1514,103 +1518,42 @@ fn parse_svg_path(d: &str) -> Option<Path> {
     crate::common::path::to_tiny_path(&crate::common::path::parse_svg_path(d)?)
 }
 
-/// A resolved fill/stroke source ready to apply to a tiny-skia `Paint`.
-enum FillStyle {
-    Solid(Color),
-    Linear {
-        stops: Vec<(f32, Color)>,
-        angle_deg: f32,
-    },
-    Radial {
-        stops: Vec<(f32, Color)>,
-        radius_frac: f32,
-    },
-}
-
-/// Parse a JSON value (hex string or gradient object) into a `FillStyle`.
-fn parse_fill(v: &Value, opacity: f32) -> Option<FillStyle> {
-    match v {
-        Value::String(s) => Some(FillStyle::Solid(parse_color(s, opacity))),
-        Value::Object(map) => {
-            let kind = map.get("type").and_then(|t| t.as_str()).unwrap_or("linear");
-            let stops = parse_stops(map.get("stops"), opacity)?;
-            match kind {
-                "radial" => {
-                    let radius_frac =
-                        map.get("radius").and_then(|r| r.as_f64()).unwrap_or(0.5) as f32;
-                    Some(FillStyle::Radial { stops, radius_frac })
-                }
-                _ => {
-                    let angle_deg = map.get("angle").and_then(|a| a.as_f64()).unwrap_or(0.0) as f32;
-                    Some(FillStyle::Linear { stops, angle_deg })
-                }
-            }
-        }
-        _ => None,
-    }
-}
-
-/// Stroke is optional: absent or null means "no stroke".
-fn parse_stroke(state: &Value, opacity: f32) -> Option<FillStyle> {
-    match state.get("stroke") {
-        Some(v) if !v.is_null() => parse_fill(v, opacity),
-        _ => None,
-    }
-}
-
-fn parse_stops(v: Option<&Value>, opacity: f32) -> Option<Vec<(f32, Color)>> {
-    let arr = v?.as_array()?;
-    let mut out = Vec::with_capacity(arr.len());
-    for s in arr {
-        let pair = s.as_array()?;
-        let pos = pair.first()?.as_f64()? as f32;
-        let hex = pair.get(1)?.as_str()?;
-        out.push((pos.clamp(0.0, 1.0), parse_color(hex, opacity)));
-    }
-    if out.len() < 2 {
-        return None;
-    }
-    Some(out)
-}
-
-/// Apply a `FillStyle` to a paint, deriving gradient geometry from the shape
-/// bounding box.
-fn apply_fill(paint: &mut Paint, fill: &FillStyle, bbox: Rect) {
+/// Apply a `FillSpec` to a paint, deriving gradient geometry from the shape
+/// bounding box via the shared helpers.
+fn apply_fill(paint: &mut Paint, fill: &crate::common::fill::FillSpec, bbox: Rect) {
+    use crate::common::fill::FillSpec;
+    let bb = (bbox.x(), bbox.y(), bbox.width(), bbox.height());
     match fill {
-        FillStyle::Solid(c) => {
-            paint.set_color(*c);
+        FillSpec::Solid(c) => {
+            paint.set_color(crate::common::color::to_tiny(*c));
         }
-        FillStyle::Linear { stops, angle_deg } => {
+        FillSpec::Linear { stops, angle_deg } => {
             let gstops: Vec<GradientStop> = stops
                 .iter()
-                .map(|(p, c)| GradientStop::new(*p, *c))
+                .map(|(p, c)| GradientStop::new(*p, crate::common::color::to_tiny(*c)))
                 .collect();
-            let cx = bbox.x() + bbox.width() / 2.0;
-            let cy = bbox.y() + bbox.height() / 2.0;
-            let r = bbox.width().max(bbox.height()) / 2.0;
-            let rad = angle_deg.to_radians();
-            let (dx, dy) = (rad.cos(), rad.sin());
-            let start = Point::from_xy(cx - dx * r, cy - dy * r);
-            let end = Point::from_xy(cx + dx * r, cy + dy * r);
-            if let Some(shader) =
-                LinearGradient::new(start, end, gstops, SpreadMode::Pad, Transform::identity())
-            {
+            let (start, end) = crate::common::fill::linear_geometry(bb, *angle_deg);
+            if let Some(shader) = LinearGradient::new(
+                Point::from_xy(start.0, start.1),
+                Point::from_xy(end.0, end.1),
+                gstops,
+                SpreadMode::Pad,
+                Transform::identity(),
+            ) {
                 paint.shader = shader;
             }
         }
-        FillStyle::Radial { stops, radius_frac } => {
+        FillSpec::Radial { stops, radius_frac } => {
             let gstops: Vec<GradientStop> = stops
                 .iter()
-                .map(|(p, c)| GradientStop::new(*p, *c))
+                .map(|(p, c)| GradientStop::new(*p, crate::common::color::to_tiny(*c)))
                 .collect();
-            let cx = bbox.x() + bbox.width() / 2.0;
-            let cy = bbox.y() + bbox.height() / 2.0;
-            let r = (bbox.width().max(bbox.height()) / 2.0) * radius_frac.max(0.01);
-            let center = Point::from_xy(cx, cy);
+            let (center, r) = crate::common::fill::radial_geometry(bb, *radius_frac);
+            let center = Point::from_xy(center.0, center.1);
             if let Some(shader) = RadialGradient::new(
                 center,
                 center,
-                r.max(0.01),
+                r,
                 gstops,
                 SpreadMode::Pad,
                 Transform::identity(),
@@ -1644,8 +1587,8 @@ fn paint_shape(
     pixmap: &mut Pixmap,
     path: &Path,
     transform: Transform,
-    fill: Option<&FillStyle>,
-    stroke: Option<&FillStyle>,
+    fill: Option<&crate::common::fill::FillSpec>,
+    stroke: Option<&crate::common::fill::FillSpec>,
     stroke_width: f32,
     shadow: Option<&crate::common::shadow::ShadowSpec>,
 ) {
