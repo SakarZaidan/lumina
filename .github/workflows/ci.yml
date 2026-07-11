@@ -43,9 +43,20 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg and a software Vulkan driver (lavapipe)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg mesa-vulkan-drivers
+      # LUMINA_REQUIRE_VELLO turns "no wgpu adapter" from a silent skip into a
+      # test failure, so backend parity can never quietly stop being checked.
       - run: cargo test --workspace --exclude lumina-wasm --exclude lumina-bench
+        env:
+          LUMINA_REQUIRE_VELLO: "1"
+      - name: Upload parity-failure images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-failures
+          path: target/parity-failures/
+          if-no-files-found: ignore
 
   # ── Docs ──────────────────────────────────────────────────────────────────────
   docs:
