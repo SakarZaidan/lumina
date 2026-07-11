@@ -10,6 +10,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
 
+### Changed
+- **Shared renderer `common/` module** — color parsing, SVG-path parsing
+  (backend-neutral `PathData`), z-ordering, group/camera transform math
+  (bit-identical `Mat2x3` on both backends), the drop-shadow blur pipeline,
+  fill/gradient resolution, and dash geometry now have exactly one
+  implementation consumed by both backends; a grep-gate test keeps it that
+  way (TD-02, [#12]).
+
 ### Added
 - **Cross-backend pixel-diff harness** — every fixture scene in
   `crates/lumina-renderer/tests/fixtures/` renders on both the Skia (CPU) and
@@ -177,6 +185,7 @@ _The items below landed after 0.2.0 and were never released separately;
 
 [#10]: https://github.com/SakarZaidan/lumina/pull/10
 [#11]: https://github.com/SakarZaidan/lumina/pull/11
+[#12]: https://github.com/SakarZaidan/lumina/pull/12
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

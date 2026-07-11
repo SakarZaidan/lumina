@@ -17,8 +17,8 @@ each release boundary against the repository as it then is. Debt IDs reference
 publishable and contributable.
 
 **Scope**
-- [ ] Extract `lumina-renderer/src/common/`: shared SVG-path parser, color
-  parser, scene-walk/z-sort helpers (TD-02) — prerequisite for everything below.
+- [x] Extract `lumina-renderer/src/common/`: shared SVG-path parser, color
+  parser, scene-walk/z-sort helpers (TD-02, #12) — prerequisite for everything below.
 - [ ] Vello parity: gradients, drop shadows, rounded rectangles, dashed lines
   (TD-01).
 - [ ] Cross-backend pixel-diff golden harness with per-channel tolerance; runs

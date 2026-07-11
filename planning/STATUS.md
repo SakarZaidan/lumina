@@ -23,6 +23,16 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-12 (later still) — Renderer common/ extraction (TD-02)
+
+- PR [#12](https://github.com/SakarZaidan/lumina/pull/12) (stacked on #11):
+  `lumina-renderer/src/common/` now owns color, SVG-path (`PathData`),
+  z-order/root-sort, group+camera transforms (`Mat2x3`, f32, bit-identical
+  per backend), shadow blur pipeline, fill/gradient resolution, dash.
+- One extraction per commit; parity harness + full suite green after each.
+- WS-02 scope 1 done; grep gate (`tests/duplication_gate.rs`) enforces it.
+- Next: Vello gradients/rounded/dash (TD-01 pt 1) consuming common/.
+
 ## 2026-07-12 (later) — Pixel-diff parity harness live (TD-11)
 
 - PR [#11](https://github.com/SakarZaidan/lumina/pull/11) (stacked on #10):

@@ -6,7 +6,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | ID | Title | Severity | Blast radius | Target | Status |
 |----|-------|----------|--------------|--------|--------|
 | TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | Open |
-| TD-02 | SVG-path + color parsers duplicated across backends | High | Every parity fix implemented twice | v0.4 | Open |
+| TD-02 | SVG-path + color parsers duplicated across backends | High | Every parity fix implemented twice | v0.4 | **Closed** ([#12](https://github.com/SakarZaidan/lumina/pull/12)) |
 | TD-03 | `Timeline::get_state_at` clones every property every frame | Medium | Render/export throughput | v0.5 | Open |
 | TD-04 | evalexpr context built inside Plot sample loop | Medium | Plot-heavy scene throughput | v0.5 | Open |
 | TD-05 | `rayon` declared-but-unused; export fully serial | Medium | Export wall-time (embarrassingly parallel) | v0.5 | Open |

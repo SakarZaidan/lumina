@@ -10,7 +10,7 @@ pixels within tolerance, verified in CI — and stay that way.
 
 ## Scope
 
-1. **Extract `crates/lumina-renderer/src/common/`** (do this first — TD-02):
+1. ✅ **Extract `crates/lumina-renderer/src/common/`** (done — TD-02, [#12](https://github.com/SakarZaidan/lumina/pull/12)):
    - `svg_path.rs`: single SVG-path parser emitting a backend-neutral path
      representation, adapted to `tiny_skia::Path` and `kurbo::BezPath`
      (replaces `parse_svg_path` in skia_backend.rs and
