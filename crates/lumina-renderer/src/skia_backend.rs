@@ -443,11 +443,13 @@ impl SkiaRenderer {
                     let mut stroke = Stroke::default();
                     stroke.width = stroke_width;
                     if let Some(frac) = draw_fraction {
-                        let frac = frac.clamp(0.0, 1.0);
                         let dx = x2 - x1;
                         let dy = y2 - y1;
                         let length = (dx * dx + dy * dy).sqrt().max(0.001);
-                        stroke.dash = StrokeDash::new(vec![length * frac, length * 2.0], 0.0);
+                        stroke.dash = StrokeDash::new(
+                            crate::common::stroke::draw_fraction_dash(frac, length),
+                            0.0,
+                        );
                     }
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
@@ -1564,22 +1566,9 @@ fn apply_fill(paint: &mut Paint, fill: &crate::common::fill::FillSpec, bbox: Rec
     }
 }
 
-/// Build a rounded-rectangle path using quadratic corner arcs.
+/// Build a rounded-rectangle path via the shared quadratic-arc geometry.
 fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> Option<Path> {
-    let rx = rx.min(w / 2.0).max(0.0);
-    let ry = ry.min(h / 2.0).max(0.0);
-    let mut pb = PathBuilder::new();
-    pb.move_to(x + rx, y);
-    pb.line_to(x + w - rx, y);
-    pb.quad_to(x + w, y, x + w, y + ry);
-    pb.line_to(x + w, y + h - ry);
-    pb.quad_to(x + w, y + h, x + w - rx, y + h);
-    pb.line_to(x + rx, y + h);
-    pb.quad_to(x, y + h, x, y + h - ry);
-    pb.line_to(x, y + ry);
-    pb.quad_to(x, y, x + rx, y);
-    pb.close();
-    pb.finish()
+    crate::common::path::to_tiny_path(&crate::common::path::rounded_rect(x, y, w, h, rx, ry))
 }
 
 /// Paint a closed path: optional shadow, then fill, then stroke.

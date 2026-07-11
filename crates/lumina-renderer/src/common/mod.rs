@@ -12,3 +12,4 @@ pub(crate) mod fill;
 pub(crate) mod path;
 pub(crate) mod scene;
 pub(crate) mod shadow;
+pub(crate) mod stroke;

@@ -9,12 +9,28 @@
 pub(crate) enum PathCmd {
     MoveTo(f32, f32),
     LineTo(f32, f32),
-    // Not emitted by the SVG parser (no Q/q support yet); constructed by the
-    // rounded-rectangle builder.
-    #[allow(dead_code)]
     QuadTo(f32, f32, f32, f32),
     CubicTo(f32, f32, f32, f32, f32, f32),
     Close,
+}
+
+/// Build a rounded-rectangle path using quadratic corner arcs. Radii are
+/// clamped to half the rectangle's extent; zero radii yield sharp corners.
+pub(crate) fn rounded_rect(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> PathData {
+    let rx = rx.min(w / 2.0).max(0.0);
+    let ry = ry.min(h / 2.0).max(0.0);
+    PathData(vec![
+        PathCmd::MoveTo(x + rx, y),
+        PathCmd::LineTo(x + w - rx, y),
+        PathCmd::QuadTo(x + w, y, x + w, y + ry),
+        PathCmd::LineTo(x + w, y + h - ry),
+        PathCmd::QuadTo(x + w, y + h, x + w - rx, y + h),
+        PathCmd::LineTo(x + rx, y + h),
+        PathCmd::QuadTo(x, y + h, x, y + h - ry),
+        PathCmd::LineTo(x, y + ry),
+        PathCmd::QuadTo(x, y, x + rx, y),
+        PathCmd::Close,
+    ])
 }
 
 /// A backend-neutral path: an ordered list of absolute commands.
