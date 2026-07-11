@@ -19,6 +19,11 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   way (TD-02, [#12]).
 
 ### Added
+- **Vello gradients, rounded rectangles, and `draw_fraction` dash** — the GPU
+  backend now renders linear/radial gradient fills *and strokes*, honors
+  `rx`/`ry` corner radii, and reveals lines via the same dash pattern as the
+  CPU backend, all through shared `common/` geometry. Fixes gradient fills
+  silently rendering solid white on `--backend vello` (TD-01 part 1, [#13]).
 - **Cross-backend pixel-diff harness** — every fixture scene in
   `crates/lumina-renderer/tests/fixtures/` renders on both the Skia (CPU) and
   Vello (GPU) backends and must agree within an AA-aware per-pixel tolerance;
@@ -186,6 +191,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#10]: https://github.com/SakarZaidan/lumina/pull/10
 [#11]: https://github.com/SakarZaidan/lumina/pull/11
 [#12]: https://github.com/SakarZaidan/lumina/pull/12
+[#13]: https://github.com/SakarZaidan/lumina/pull/13
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

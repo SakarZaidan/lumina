@@ -23,6 +23,18 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-12 (night) — Vello gradients, rounded rects, dash (TD-01 pt 1)
+
+- PR [#13](https://github.com/SakarZaidan/lumina/pull/13) (stacked on #12):
+  GPU backend renders gradient fills+strokes (peniko brushes, shared bbox
+  geometry), rx/ry rounded rects (shared quad-arc paths), and
+  draw_fraction via kurbo dashes. Fixes gradients silently rendering
+  solid white on vello.
+- Fixtures 05/06/08/09 added; 12-fixture parity suite green.
+- Book parity table updated; found + registered TD-19: `LineProps.dash`
+  implemented by neither backend (docs had claimed CPU support).
+- Remaining TD-01 gap: drop shadows → next PR closes TD-01 + TD-11.
+
 ## 2026-07-12 (later still) — Renderer common/ extraction (TD-02)
 
 - PR [#12](https://github.com/SakarZaidan/lumina/pull/12) (stacked on #11):

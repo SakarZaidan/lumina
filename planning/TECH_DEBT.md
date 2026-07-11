@@ -5,7 +5,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 
 | ID | Title | Severity | Blast radius | Target | Status |
 |----|-------|----------|--------------|--------|--------|
-| TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | Open |
+| TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | Gradients/rounded/dash done ([#13](https://github.com/SakarZaidan/lumina/pull/13)); shadows remain |
 | TD-02 | SVG-path + color parsers duplicated across backends | High | Every parity fix implemented twice | v0.4 | **Closed** ([#12](https://github.com/SakarZaidan/lumina/pull/12)) |
 | TD-03 | `Timeline::get_state_at` clones every property every frame | Medium | Render/export throughput | v0.5 | Open |
 | TD-04 | evalexpr context built inside Plot sample loop | Medium | Plot-heavy scene throughput | v0.5 | Open |
@@ -23,6 +23,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-16 | Examples hardcode Linux font paths (`/usr/share/fonts/...`) | Medium | macOS/Windows users can't run examples | v0.4 (bundle OFL font) | **Closed** ([#10](https://github.com/SakarZaidan/lumina/pull/10)) |
 | TD-17 | `ttf-parser` 0.21 unmaintained (RUSTSEC-2026-0192) yet parses untrusted font files; pinned via fontdue 0.9 / resvg 0.42 | Medium | Font-parsing bugs won't get upstream fixes | v0.4 (bump fontdue/resvg to versions on a maintained fork) | Open |
 | TD-18 | Text layout duplicated: Skia draws glyphs inline, Vello resamples a `raster.rs` string bitmap — glyph AA and low-opacity blending diverge (text parity fixture needs a wider tolerance) | Medium | Cross-backend text fidelity, esp. under camera zoom | v0.5 | Open |
+| TD-19 | `LineProps.dash` schema field implemented by neither backend (docs previously claimed CPU support) | Low | Dashed-line scenes silently render solid | v0.5 | Open |
 
 ## Notes per item
 
