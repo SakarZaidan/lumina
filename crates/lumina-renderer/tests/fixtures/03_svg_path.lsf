@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "meta": { "title": "Parity: SVG path", "author": "parity-harness", "created_at": "2026-07-12T00:00:00Z" },
+  "canvas": { "width": 256, "height": 256, "fps": 30, "duration": 2.0, "background": "#101018" },
+  "assets": {},
+  "objects": {
+    "blob": {
+      "type": "Path",
+      "properties": {
+        "d": "M 60 128 C 60 70 110 40 150 60 C 200 84 210 150 170 190 C 130 230 60 190 60 128 Z",
+        "fill": "#845EF7",
+        "stroke": "#D0BFFF",
+        "stroke_width": 3,
+        "z_index": 1
+      }
+    },
+    "zigzag": {
+      "type": "Path",
+      "properties": {
+        "d": "M 20 230 L 60 200 L 100 230 L 140 200 L 180 230 L 220 200",
+        "fill": "#00000000",
+        "stroke": "#63E6BE",
+        "stroke_width": 4,
+        "z_index": 2
+      }
+    }
+  },
+  "timeline": []
+}
