@@ -26,7 +26,7 @@ publishable and contributable.
   and the safety net for all later refactors.
 - [x] Unknown easing name → validation error instead of silent `linear`
   (TD-08, #15; mildly breaking — done while the scene corpus is small).
-- [ ] Server safety minimum (TD-09 part 1): asset-root allowlist for
+- [x] Server safety minimum (TD-09 part 1, #16): asset-root allowlist for
   `/render`, remove `.unwrap()` on bind/serve/response, request body-size limit.
 - [ ] CI foundations (TD-14): `rust-version` in workspace + MSRV job,
   ubuntu/macos/windows test matrix, concurrency-cancel, run

@@ -23,6 +23,16 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-13 — Server safety minimum (TD-09 part 1)
+
+- PR [#16](https://github.com/SakarZaidan/lumina/pull/16) (stacked on #15):
+  `/render` asset paths confined to `LUMINA_ASSET_ROOT` (canonicalize →
+  prefix check; was an arbitrary-file read), 8 MiB body cap (413),
+  bind/serve/response no longer panic. SECURITY.md updated.
+- Verified live with curl: escape → 400, 9 MB body → 413.
+- v0.4 remaining: CI matrix (TD-14), rustdoc (TD-15), dep bumps (TD-17);
+  release-plz blocked on owner.
+
 ## 2026-07-12 (night, latest) — Easing strictness; **WS-02 complete**
 
 - PR [#15](https://github.com/SakarZaidan/lumina/pull/15) (stacked on #14):
