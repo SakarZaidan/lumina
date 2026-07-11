@@ -46,7 +46,7 @@ Useful flags:
   "version": "1.0",
   "meta": { "title": "Fade In", "author": "you", "created_at": "2026-05-25" },
   "canvas": { "width": 1280, "height": 720, "fps": 60, "duration": 2.0, "background": "#0F0F1A" },
-  "assets": { "fonts": [{ "id": "sans", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }] },
+  "assets": { "fonts": [{ "id": "sans", "path": "examples/assets/fonts/LiberationSans-Regular.ttf" }] },
   "objects": {
     "title": { "type": "Text", "properties": { "content": "Hello, Lumina", "x": 640, "y": 360, "align": "center", "font_id": "sans", "font_size": 96, "color": "#FFFFFF", "opacity": 0.0 } }
   },

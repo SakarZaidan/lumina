@@ -75,8 +75,9 @@ cargo run -p lumina-cli -- --scene examples/hello.lsf --output out --format mp4
 
 ## Gotchas
 
-- Example `.lsf` files hardcode Linux font paths (`/usr/share/fonts/...`) —
-  see `examples/README.md` for per-OS substitutions (real fix TD-16).
+- Example `.lsf` files reference the bundled OFL font via repo-relative paths
+  (`examples/assets/fonts/…`), so the CLI must run from the repository root —
+  font paths resolve against the current working directory.
 - The Vello backend lacks gradients/shadows/rounded-rects/dashes until v0.4
   (TD-01); scenes using them render differently on `--backend vello`. The
   book's architecture chapter carries the parity table.
