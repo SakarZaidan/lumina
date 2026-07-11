@@ -11,6 +11,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
 
 ### Changed
+- **Unknown easing names are now validation errors** (`UNKNOWN_EASING`, with a
+  did-you-mean suggestion) instead of silently animating as `linear`; the CLI
+  validates every scene before rendering and gains `--check`. Mildly breaking
+  for scenes with typo'd easings — every name in
+  `lumina_core::easing::EASING_NAMES` is accepted (TD-08, [#15]).
+- **Scene validation moved to `lumina-core`** (`lumina_core::validation`);
+  `lumina-server` re-exports it unchanged, and the CLI/SDKs share the same
+  rules ([#15]).
 - **Shared renderer `common/` module** — color parsing, SVG-path parsing
   (backend-neutral `PathData`), z-ordering, group/camera transform math
   (bit-identical `Mat2x3` on both backends), the drop-shadow blur pipeline,
@@ -198,6 +206,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#12]: https://github.com/SakarZaidan/lumina/pull/12
 [#13]: https://github.com/SakarZaidan/lumina/pull/13
 [#14]: https://github.com/SakarZaidan/lumina/pull/14
+[#15]: https://github.com/SakarZaidan/lumina/pull/15
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

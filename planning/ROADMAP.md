@@ -24,8 +24,8 @@ publishable and contributable.
 - [x] Cross-backend pixel-diff golden harness with per-channel tolerance; runs
   in CI on a curated scene set (TD-11, #11/#14). This is the acceptance gate for parity
   and the safety net for all later refactors.
-- [ ] Unknown easing name → validation error instead of silent `linear`
-  (TD-08; mildly breaking — do it while the scene corpus is small).
+- [x] Unknown easing name → validation error instead of silent `linear`
+  (TD-08, #15; mildly breaking — done while the scene corpus is small).
 - [ ] Server safety minimum (TD-09 part 1): asset-root allowlist for
   `/render`, remove `.unwrap()` on bind/serve/response, request body-size limit.
 - [ ] CI foundations (TD-14): `rust-version` in workspace + MSRV job,

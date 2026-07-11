@@ -23,6 +23,19 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-12 (night, latest) — Easing strictness; **WS-02 complete**
+
+- PR [#15](https://github.com/SakarZaidan/lumina/pull/15) (stacked on #14):
+  UNKNOWN_EASING validation error with did-you-mean suggestion; registry
+  `EASING_NAMES` + drift-guard test; validation moved to
+  `lumina_core::validation` (server re-exports, CLI + SDKs share it).
+- CLI validates before every render; new `--check` flag (exit 1 on
+  errors). Whole scene corpus passes; typo'd easing verified rejected.
+- **WS-02 Done** — all four acceptance criteria met. v0.4 remaining:
+  server safety (TD-09p1), CI matrix (TD-14), rustdoc (TD-15), dep bumps
+  (TD-17); release-plz blocked on owner tokens.
+- PR stack open for review/merge in order: #10 → #11 → #12 → #13 → #14 → #15.
+
 ## 2026-07-12 (night, later) — Vello shadows; TD-01 + TD-11 closed
 
 - PR [#14](https://github.com/SakarZaidan/lumina/pull/14) (stacked on #13):

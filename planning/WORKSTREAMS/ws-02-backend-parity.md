@@ -1,6 +1,6 @@
 # WS-02 — Renderer Backend Parity (v0.4 flagship)
 
-**Status:** In progress — scope 1–3 done (#11–#14); only easing strictness (TD-08) remains · **Priority:** P0 for v0.4 · **Effort:** multi-session
+**Status:** **Done** — scope 1–4 shipped in [#11](https://github.com/SakarZaidan/lumina/pull/11)–[#15](https://github.com/SakarZaidan/lumina/pull/15); all four acceptance criteria met · **Priority:** P0 for v0.4 · **Effort:** multi-session
 **Linked debt:** TD-01, TD-02, TD-11 (cluster), TD-08
 
 ## Goal
@@ -27,8 +27,8 @@ pixels within tolerance, verified in CI — and stay that way.
    groups, particles) on both backends; assert per-channel diff within
    tolerance; run in CI (CPU fallback adapter). Failures dump both images as
    artifacts.
-4. **Easing strictness** (TD-08): unknown easing → schema-validation error
-   with `fix_suggestion` (nearest-name), not silent `linear`.
+4. ✅ **Easing strictness** (done — TD-08, [#15](https://github.com/SakarZaidan/lumina/pull/15)): unknown easing → validation error
+   with `fix_suggestion` (nearest-name via edit distance), not silent `linear`.
 
 ## Non-goals
 

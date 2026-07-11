@@ -12,7 +12,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-05 | `rayon` declared-but-unused; export fully serial | Medium | Export wall-time (embarrassingly parallel) | v0.5 | Open |
 | TD-06 | `mitex` declared-but-unused; LaTeX is Unicode substitution | Medium | Math-typesetting fidelity; honest docs | v0.6 | Open |
 | TD-07 | Untyped `serde_json::Value` properties silently default on typos | High | Authoring correctness; breaking schema change | v0.6 | Open |
-| TD-08 | Unknown easing names silently fall back to `linear` | Low | Authoring correctness | v0.4 | Open |
+| TD-08 | Unknown easing names silently fall back to `linear` | Low | Authoring correctness | v0.4 | **Closed** ([#15](https://github.com/SakarZaidan/lumina/pull/15)) |
 | TD-09 | Server not production-safe: permissive CORS, no auth/rate/body limits, asset-path arbitrary file read, `.unwrap()` on bind/serve/response | High | Anyone deploying `lumina-server` publicly | Safety minimum v0.4; full hardening v0.5 | Open |
 | TD-10 | Zero tests: `lumina-text`, `lumina-schema`, `lumina-cli` | Medium | Font fallback, serde contract, CLI regressions | v0.6 | Open |
 | TD-11 | No cross-backend pixel-diff test | High | Parity is unverifiable; blocks safe refactors | v0.4 | **Closed** ([#11](https://github.com/SakarZaidan/lumina/pull/11), [#14](https://github.com/SakarZaidan/lumina/pull/14) — 16-fixture suite in CI; raster-Image asset fixture deferred with TD-18) |
