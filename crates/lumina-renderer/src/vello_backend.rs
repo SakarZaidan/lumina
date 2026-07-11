@@ -633,8 +633,10 @@ impl VelloRenderer {
                 let ox = x + (0.0 - x_min) * scale;
                 let oy = y - (0.0 - y_min) * scale;
 
+                // Ticks use the axis stroke width (2.0) exactly like the CPU
+                // backend; only grid lines are thin.
                 let axis_stroke = flat_stroke(2.0);
-                let tick_stroke = flat_stroke(1.0);
+                let grid_stroke = flat_stroke(1.0);
                 let grid_color =
                     Color::rgba8(color.r, color.g, color.b, ((color.a as f32) * 0.2) as u8);
 
@@ -664,7 +666,7 @@ impl VelloRenderer {
                     }
                     let px = ox + tx * scale;
                     scene.stroke(
-                        &tick_stroke,
+                        &axis_stroke,
                         affine,
                         color,
                         None,
@@ -672,7 +674,7 @@ impl VelloRenderer {
                     );
                     if draw_grid && (tx - 0.0).abs() > 1e-4 {
                         scene.stroke(
-                            &tick_stroke,
+                            &grid_stroke,
                             affine,
                             grid_color,
                             None,
@@ -690,7 +692,7 @@ impl VelloRenderer {
                     }
                     let py = oy - ty * scale;
                     scene.stroke(
-                        &tick_stroke,
+                        &axis_stroke,
                         affine,
                         color,
                         None,
@@ -698,7 +700,7 @@ impl VelloRenderer {
                     );
                     if draw_grid && (ty - 0.0).abs() > 1e-4 {
                         scene.stroke(
-                            &tick_stroke,
+                            &grid_stroke,
                             affine,
                             grid_color,
                             None,
