@@ -12,7 +12,7 @@ use image::AnimationDecoder;
 // Use vello's re-exported wgpu (v0.20) — workspace wgpu is v22, types are incompatible
 use vello::wgpu;
 use vello::{
-    kurbo::{Affine, BezPath, Circle, Line, Rect, Stroke as KurboStroke, Vec2},
+    kurbo::{Affine, BezPath, Cap, Circle, Join, Line, Rect, Stroke as KurboStroke, Vec2},
     peniko::{BlendMode, Blob, Color, Compose, Fill, Format, Image, Mix},
     AaConfig, AaSupport, RenderParams, RendererOptions, Scene,
 };
@@ -288,7 +288,7 @@ impl VelloRenderer {
                 if let Some(stroke_hex) = state["stroke"].as_str() {
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
                     let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &circle);
+                    scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &circle);
                 }
             }
             Object::Rectangle(_) => {
@@ -309,7 +309,7 @@ impl VelloRenderer {
                 if let Some(stroke_hex) = state["stroke"].as_str() {
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
                     let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &rect);
+                    scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &rect);
                 }
             }
             Object::Line(_) => {
@@ -327,7 +327,7 @@ impl VelloRenderer {
                 let ty = y1 + (y2 - y1) * draw_fraction as f64;
 
                 let line = Line::new((x1, y1), (tx, ty));
-                scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &line);
+                scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &line);
             }
             Object::Arrow(_) => {
                 let from = state["from"].as_array();
@@ -346,7 +346,7 @@ impl VelloRenderer {
                     parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
 
                 let line = Line::new((fx, fy), (tx, ty));
-                scene.stroke(&KurboStroke::new(sw), affine, color, None, &line);
+                scene.stroke(&flat_stroke(sw), affine, color, None, &line);
 
                 // Arrowhead
                 let dx = tx - fx;
@@ -366,7 +366,7 @@ impl VelloRenderer {
                     tx - head_len * (angle + head_angle).cos(),
                     ty - head_len * (angle + head_angle).sin(),
                 ));
-                scene.stroke(&KurboStroke::new(sw), affine, color, None, &head);
+                scene.stroke(&flat_stroke(sw), affine, color, None, &head);
             }
             Object::BezierCurve(_) => {
                 let get_pt = |key: &str| -> Option<(f64, f64)> {
@@ -413,7 +413,7 @@ impl VelloRenderer {
                 let mut path = BezPath::new();
                 path.move_to((x0, y0));
                 path.curve_to((ax, ay), (dx, dy), (fx, fy));
-                scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
             }
             Object::Polygon(_) => {
                 let points = match state["points"].as_array() {
@@ -445,7 +445,7 @@ impl VelloRenderer {
                 if let Some(stroke_hex) = state["stroke"].as_str() {
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
                     let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                    scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
                 }
             }
             Object::Path(_) => {
@@ -460,7 +460,7 @@ impl VelloRenderer {
                     if let Some(stroke_hex) = state["stroke"].as_str() {
                         let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
                         let stroke_color = parse_vello_color(stroke_hex, opacity);
-                        scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                        scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
                     }
                 }
             }
@@ -479,7 +479,7 @@ impl VelloRenderer {
                     return;
                 }
 
-                let stroke = KurboStroke::new(2.0);
+                let stroke = flat_stroke(2.0);
                 let main = Line::new((x, y), (x + length, y));
                 scene.stroke(&stroke, affine, color, None, &main);
 
@@ -525,8 +525,8 @@ impl VelloRenderer {
                 let ox = x + (0.0 - x_min) * scale;
                 let oy = y - (0.0 - y_min) * scale;
 
-                let axis_stroke = KurboStroke::new(2.0);
-                let tick_stroke = KurboStroke::new(1.0);
+                let axis_stroke = flat_stroke(2.0);
+                let tick_stroke = flat_stroke(1.0);
                 let grid_color =
                     Color::rgba8(color.r, color.g, color.b, ((color.a as f32) * 0.2) as u8);
 
@@ -1027,6 +1027,16 @@ impl Renderer for VelloRenderer {
 /// Wrap straight-alpha RGBA8 bytes in a `peniko::Image` for `draw_image`.
 fn rgba_to_image(rgba: Vec<u8>, width: u32, height: u32) -> Image {
     Image::new(Blob::from(rgba), Format::Rgba8, width, height)
+}
+
+/// Stroke matching tiny-skia's `Stroke::default()`: butt caps, miter joins
+/// (limit 4). kurbo defaults to round caps/joins, which visibly diverges
+/// from the CPU backend at line ends and sharp corners.
+fn flat_stroke(width: f64) -> KurboStroke {
+    KurboStroke::new(width)
+        .with_caps(Cap::Butt)
+        .with_join(Join::Miter)
+        .with_miter_limit(4.0)
 }
 
 /// Heuristic: does this byte slice look like an SVG document?
