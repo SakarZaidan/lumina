@@ -9,6 +9,12 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+# Supersede in-flight runs of the same branch/PR instead of queueing behind
+# them (but never cancel a main run mid-deploy).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   # ── Format ────────────────────────────────────────────────────────────────────
   fmt:
@@ -35,28 +41,55 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: cargo clippy --workspace --exclude lumina-wasm --all-targets
 
-  # ── Tests ─────────────────────────────────────────────────────────────────────
+  # ── Tests (3-OS matrix) ──────────────────────────────────────────────────────
   test:
-    name: Tests
-    runs-on: ubuntu-latest
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install FFmpeg and a software Vulkan driver (lavapipe)
+      - name: Install FFmpeg and a software Vulkan driver (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg mesa-vulkan-drivers
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
       # LUMINA_REQUIRE_VELLO turns "no wgpu adapter" from a silent skip into a
       # test failure, so backend parity can never quietly stop being checked.
+      # Required on Linux (lavapipe is installed above); macOS/Windows rely on
+      # Metal / DX12-WARP fallback adapters and keep the graceful skip until
+      # the matrix proves them reliable.
       - run: cargo test --workspace --exclude lumina-wasm --exclude lumina-bench
         env:
-          LUMINA_REQUIRE_VELLO: "1"
+          LUMINA_REQUIRE_VELLO: ${{ runner.os == 'Linux' && '1' || '0' }}
       - name: Upload parity-failure images
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: parity-failures
+          name: parity-failures-${{ matrix.os }}
           path: target/parity-failures/
           if-no-files-found: ignore
+
+  # ── MSRV ──────────────────────────────────────────────────────────────────────
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Keep in lockstep with [workspace.package] rust-version.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --exclude lumina-wasm --exclude lumina-bench --all-targets
 
   # ── Docs ──────────────────────────────────────────────────────────────────────
   docs:
@@ -81,6 +114,8 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - run: wasm-pack build crates/lumina-wasm --target web
+      - name: Run wasm-bindgen tests (Node)
+        run: wasm-pack test --node crates/lumina-wasm
 
   # ── cargo-deny ────────────────────────────────────────────────────────────────
   deny:
