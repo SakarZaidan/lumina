@@ -58,21 +58,25 @@ right state per frame.
 Skia (CPU) is the reference backend with full feature coverage. Vello
 (GPU/wgpu, headless) reached object-type parity in v0.3.0 — text, LaTeX,
 MathML, images, SVG and particles render on the GPU via a shared
-rasterization module, so those are pixel-identical across backends. The
-remaining gaps are tracked for v0.4:
+rasterization module. Since v0.4, everything that *decides* what to draw —
+parsing, geometry, ordering, transform math — lives once in the renderer's
+`common/` module and is consumed by both backends, and parity is enforced
+by a cross-backend pixel-diff suite
+(`crates/lumina-renderer/tests/backend_parity.rs`) that renders every
+fixture scene on both backends in CI:
 
 | Feature | Skia (CPU) | Vello (GPU) |
 |---|---|---|
 | All 17 object types | ✅ | ✅ |
 | Text / LaTeX / MathML / Image / SVG / Particles | ✅ | ✅ (shared rasterizer) |
-| Linear & radial gradients | ✅ | ❌ solid fallback |
-| Drop shadows / glow | ✅ | ❌ not drawn |
-| Rounded rectangles (`rx`/`ry`) | ✅ | ❌ square corners |
-| Dashed lines (`dash`) | ✅ | ❌ solid stroke |
+| Linear & radial gradients (fill and stroke) | ✅ | ✅ (shared geometry) |
+| Rounded rectangles (`rx`/`ry`) | ✅ | ✅ (shared geometry) |
+| `draw_fraction` stroke reveal | ✅ | ✅ (shared dash pattern) |
+| Drop shadows / glow | ✅ | ❌ not drawn (lands with WS-02) |
+| Explicit `dash` arrays on Line | ❌ | ❌ (schema field not yet implemented) |
 
-A scene that uses the features in the lower rows will render differently on
-`--backend vello`. The v0.4 workstream closes these gaps behind a
-cross-backend pixel-diff test suite
+A scene using drop shadows still renders differently on `--backend vello`
+until the final WS-02 change lands
 (see `planning/WORKSTREAMS/ws-02-backend-parity.md`).
 
 ## Key design choices
