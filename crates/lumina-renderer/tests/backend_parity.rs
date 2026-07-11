@@ -66,6 +66,16 @@ const PATH_TOL: Tolerance = Tolerance {
     max_mean_delta: 0.6,
 };
 
+/// Gradient ramps may interpolate slightly differently between rasterizers
+/// (mid-ramp rounding), so the direct per-channel tolerance is wider while
+/// the pixel and mean budgets stay strict.
+const GRADIENT_TOL: Tolerance = Tolerance {
+    max_channel_delta: 8,
+    aa_tol: 48,
+    max_diff_pixel_frac: 0.001,
+    max_mean_delta: 0.8,
+};
+
 /// Wider budget: text renders through two parallel code paths — Skia
 /// composites each glyph directly, Vello resamples a pre-rendered string
 /// bitmap (`raster.rs`) — which shifts glyph AA and low-opacity blending.
@@ -286,6 +296,26 @@ fn parity_03_svg_path() {
 #[test]
 fn parity_04_text() {
     assert_parity("04_text", TEXT_TOL);
+}
+
+#[test]
+fn parity_05_gradient_linear() {
+    assert_parity("05_gradient_linear", GRADIENT_TOL);
+}
+
+#[test]
+fn parity_06_gradient_radial() {
+    assert_parity("06_gradient_radial", GRADIENT_TOL);
+}
+
+#[test]
+fn parity_08_rounded_rect() {
+    assert_parity("08_rounded_rect", DEFAULT_TOL);
+}
+
+#[test]
+fn parity_09_dash_fraction() {
+    assert_parity("09_dash_fraction", DEFAULT_TOL);
 }
 
 #[test]

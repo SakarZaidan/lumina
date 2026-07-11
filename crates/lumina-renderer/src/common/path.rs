@@ -37,6 +37,40 @@ pub(crate) fn rounded_rect(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct PathData(pub(crate) Vec<PathCmd>);
 
+/// Control-point bounding box `(x, y, w, h)` of a path — the same
+/// conservative bounds tiny-skia reports for the equivalent `Path`, so
+/// gradient geometry derived from it matches across backends.
+pub(crate) fn bbox(p: &PathData) -> Option<(f32, f32, f32, f32)> {
+    let mut min = (f32::INFINITY, f32::INFINITY);
+    let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let mut add = |x: f32, y: f32| {
+        min.0 = min.0.min(x);
+        min.1 = min.1.min(y);
+        max.0 = max.0.max(x);
+        max.1 = max.1.max(y);
+    };
+    for cmd in &p.0 {
+        match *cmd {
+            PathCmd::MoveTo(x, y) | PathCmd::LineTo(x, y) => add(x, y),
+            PathCmd::QuadTo(cx, cy, x, y) => {
+                add(cx, cy);
+                add(x, y);
+            }
+            PathCmd::CubicTo(x1, y1, x2, y2, x, y) => {
+                add(x1, y1);
+                add(x2, y2);
+                add(x, y);
+            }
+            PathCmd::Close => {}
+        }
+    }
+    if min.0.is_finite() {
+        Some((min.0, min.1, max.0 - min.0, max.1 - min.1))
+    } else {
+        None
+    }
+}
+
 /// Parse SVG path data into a [`PathData`].
 /// Supports: M/m (move), L/l (line), H/h (horizontal), V/v (vertical),
 ///           C/c (cubic bezier), Z/z (close).
