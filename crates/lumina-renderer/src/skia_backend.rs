@@ -41,6 +41,8 @@ impl AxesContext {
     }
 }
 
+/// CPU reference renderer over `tiny-skia`. Full feature coverage; the
+/// GPU backend is held to this one's output by the parity suite.
 pub struct SkiaRenderer {
     text_engine: TextEngine,
     images: HashMap<String, DecodedAsset>,
@@ -50,6 +52,7 @@ pub struct SkiaRenderer {
 }
 
 impl SkiaRenderer {
+    /// A renderer with no assets loaded.
     pub fn new() -> Self {
         Self {
             text_engine: TextEngine::new(),

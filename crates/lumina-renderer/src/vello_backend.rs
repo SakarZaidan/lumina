@@ -31,6 +31,10 @@ enum VelloAsset {
     Svg(Box<resvg::usvg::Tree>),
 }
 
+/// GPU renderer over `vello`/`wgpu`, running headless with the CPU
+/// fallback adapter forced so it works in CI and containers. Feature
+/// parity with [`crate::skia_backend::SkiaRenderer`] is enforced by the
+/// pixel-diff parity suite.
 pub struct VelloRenderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
