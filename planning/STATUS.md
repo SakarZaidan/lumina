@@ -16,12 +16,23 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
 | Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite in CI (TD-01/TD-11 closed) |
 | Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
-| Dependencies | 🟢 | deny green; dependabot active (5 PRs pending triage) |
+| Dependencies | 🟢 | deny green; resvg/tiny-skia current; ttf-parser 0.21 only via fontdue (TD-17) |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-07-13 (evening) — Dep bumps; v0.4 code work complete
+
+- PR [#19](https://github.com/SakarZaidan/lumina/pull/19) (stacked on #18):
+  resvg 0.47 + tiny-skia 0.12 — untrusted-SVG path off ttf-parser 0.21;
+  fontdue (latest release) still pins it → TD-17 retargeted to v0.5 with
+  TD-18. Parity suite = regression net; all green incl. wasm + deny.
+- **v0.4 roadmap code items all done** (7 TD closed, 2 partial-by-design).
+  Open PR stack: #10→#11→#12→#13→#14→#15→#16→#17→#18→#19, merge in order.
+- Remaining before v0.4.0 release: merge stack, owner enables release-plz
+  tokens (ADR-0011), CHANGELOG retitle, tag, METRICS refresh.
 
 ## 2026-07-13 (later still) — Rustdoc fill (TD-15)
 

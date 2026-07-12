@@ -58,6 +58,12 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   concurrent pushes cancel superseded runs; the wasm-bindgen test suite
   actually executes (it previously never ran in CI) (TD-14, [#17]).
 
+### Dependencies
+- resvg 0.42 → 0.47 and tiny-skia 0.11 → 0.12: the untrusted-SVG parsing
+  path moves off unmaintained ttf-parser 0.21 (RUSTSEC-2026-0192); the sole
+  remaining 0.21 consumer is fontdue (latest release), tracked in TD-17
+  ([#19]).
+
 ### Security
 - `lumina-server` v0.4 safety minimum: `/render` asset paths are confined to
   `LUMINA_ASSET_ROOT` (was: arbitrary-file read), request bodies capped at
@@ -225,6 +231,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#16]: https://github.com/SakarZaidan/lumina/pull/16
 [#17]: https://github.com/SakarZaidan/lumina/pull/17
 [#18]: https://github.com/SakarZaidan/lumina/pull/18
+[#19]: https://github.com/SakarZaidan/lumina/pull/19
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0
