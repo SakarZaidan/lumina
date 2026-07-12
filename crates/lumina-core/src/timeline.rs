@@ -3,8 +3,12 @@ use lumina_schema::Scene;
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// Per-object, per-property keyframe tracks; evaluation is deterministic
+/// and scrub-safe (any time can be queried in any order).
 pub struct Timeline {
+    /// Scene duration in seconds (from the canvas block).
     pub duration: f32,
+    /// Frames per second (from the canvas block).
     pub fps: u32,
     /// object_id → property_name → keyframes (sorted by time)
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
@@ -13,15 +17,21 @@ pub struct Timeline {
 }
 
 #[derive(Clone, Debug)]
+/// One keyframe on a property track.
 pub struct Keyframe {
+    /// Time in seconds.
     pub time: f32,
+    /// Property value at this keyframe.
     pub value: Value,
+    /// Easing applied when interpolating *toward* this keyframe.
     pub easing: String,
     /// Parameters for parameterized easings such as `cubic_bezier`.
     pub easing_params: Option<Value>,
 }
 
 impl Timeline {
+    /// Build tracks from the scene: initial object properties become t=0
+    /// keyframes, then timeline entries add theirs.
     pub fn from_scene(scene: &Scene) -> Self {
         let mut tracks: HashMap<String, HashMap<String, Vec<Keyframe>>> = HashMap::new();
 
@@ -82,6 +92,8 @@ impl Timeline {
         }
     }
 
+    /// Set an interactive override that takes precedence over keyframes
+    /// (used by `tween_to`/`set_property` event actions).
     pub fn override_property(&mut self, object_id: &str, property: &str, value: Value) {
         self.overrides
             .entry(object_id.to_string())
@@ -89,6 +101,7 @@ impl Timeline {
             .insert(property.to_string(), value);
     }
 
+    /// Evaluate every object's full property state at `time`.
     pub fn get_state_at(&self, time: f32) -> HashMap<String, Value> {
         let mut state: HashMap<String, HashMap<String, Value>> = HashMap::new();
 
@@ -114,6 +127,8 @@ impl Timeline {
             .collect()
     }
 
+    /// Evaluate the camera state at `time` (identity when the scene has no
+    /// camera block).
     pub fn get_camera_at(&self, time: f32, scene: &Scene) -> lumina_schema::CameraState {
         use crate::easing::get_easing_fn;
         use lumina_schema::CameraState;

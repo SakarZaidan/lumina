@@ -3,9 +3,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// An interaction delivered by the host (click, drag, hover, …).
 pub struct Event {
+    /// Id of the object the interaction targets.
     pub object_id: String,
+    /// Trigger name as declared in the scene's `events` block (e.g. `"click"`).
     pub trigger: String,
+    /// Host-supplied payload; `$drag.*` placeholders are substituted from it.
     pub payload: Option<Value>,
 }
 
@@ -15,7 +19,9 @@ pub struct Event {
 /// effect.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaybackState {
+    /// Current playhead position in seconds.
     pub current_time: f32,
+    /// Whether the timeline is advancing.
     pub playing: bool,
 }
 
@@ -33,24 +39,35 @@ impl Default for PlaybackState {
 /// custom events emitted for the host.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventOutcome {
+    /// Actions the host must apply (tooltips, property sets, …).
     pub actions: Vec<SchemaAction>,
+    /// Playhead position after the event was handled.
     pub current_time: f32,
+    /// Playback state after the event was handled.
     pub playing: bool,
+    /// Custom events emitted toward the host application.
     pub emitted: Vec<EmittedEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A custom event surfaced to the host via an `emit_custom` action.
 pub struct EmittedEvent {
+    /// Name declared in the scene's `emit_custom` action.
     pub event_name: String,
+    /// Payload after `$drag.*` placeholder substitution.
     pub payload: Value,
 }
 
+/// Dispatches host interactions against the scene's `events` table and
+/// owns the resulting playback state.
 pub struct EventBus {
     event_definitions: Vec<EventEntry>,
+    /// Current playback state (mutated by playback-control actions).
     pub playback: PlaybackState,
 }
 
 impl EventBus {
+    /// Build a bus over the scene's declared events, starting paused at t=0.
     pub fn new(scene: &Scene) -> Self {
         Self {
             event_definitions: scene.events.clone(),

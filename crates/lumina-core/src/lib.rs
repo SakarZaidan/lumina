@@ -22,11 +22,18 @@
 //! Rendering lives downstream in `lumina-renderer`; this crate never touches
 //! pixels.
 
+#![warn(missing_docs)]
+
+/// Named easing functions plus the canonical name registry.
 pub mod easing;
+/// Interactive event dispatch and playback state.
 pub mod events;
+/// JSON-value interpolation (numbers, arrays, LAB-space colors).
 pub mod interpolator;
+/// Scene graph: object map with root/child resolution.
 pub mod scene;
 pub mod scene_patch;
+/// Keyframe tracks and scene-state evaluation at any time.
 pub mod timeline;
 pub mod validation;
 

@@ -11,24 +11,37 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Serialize, Clone)]
+/// Outcome of [`validate_scene_data`].
 pub struct ValidationResponse {
+    /// True when there are no render-blocking errors.
     pub valid: bool,
+    /// Render-blocking problems.
     pub errors: Vec<ValidationError>,
+    /// Advisory findings that never block rendering.
     pub warnings: Vec<ValidationWarning>,
 }
 
 #[derive(Debug, Serialize, Clone)]
+/// A render-blocking validation finding.
 pub struct ValidationError {
+    /// Stable machine-readable code (e.g. `UNKNOWN_EASING`).
     pub code: String,
+    /// JSONPath-style location of the offending value.
     pub path: String,
+    /// Human-readable description.
     pub message: String,
+    /// Actionable correction, written for self-fixing authoring loops.
     pub fix_suggestion: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
+/// An advisory validation finding.
 pub struct ValidationWarning {
+    /// Stable machine-readable code (e.g. `DUPLICATE_KEYFRAME`).
     pub code: String,
+    /// JSONPath-style location of the value concerned.
     pub path: String,
+    /// Human-readable description.
     pub message: String,
 }
 

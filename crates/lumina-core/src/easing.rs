@@ -1,3 +1,4 @@
+/// An easing curve: maps normalized progress `t ∈ [0, 1]` to eased progress.
 pub type EasingFn = fn(f32) -> f32;
 
 /// Evaluate an easing function by name with optional parameters.
@@ -206,6 +207,9 @@ fn edit_distance(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+/// Look up a non-parameterized easing by name. Unknown names log a
+/// warning and fall back to [`linear`]; scene validation rejects them
+/// before rendering (`UNKNOWN_EASING`).
 pub fn get_easing_fn(name: &str) -> EasingFn {
     match name {
         "linear" => linear,
@@ -259,20 +263,24 @@ pub fn get_easing_fn(name: &str) -> EasingFn {
     }
 }
 
+/// Identity easing: constant velocity.
 pub fn linear(t: f32) -> f32 {
     t
 }
 
 // --- Quad ---
 
+/// Quadratic ease-in: accelerates from rest.
 pub fn ease_in_quad(t: f32) -> f32 {
     t * t
 }
 
+/// Quadratic ease-out: decelerates to rest.
 pub fn ease_out_quad(t: f32) -> f32 {
     t * (2.0 - t)
 }
 
+/// Quadratic ease-in-out: accelerate, then decelerate.
 pub fn ease_in_out_quad(t: f32) -> f32 {
     if t < 0.5 {
         2.0 * t * t
@@ -283,15 +291,18 @@ pub fn ease_in_out_quad(t: f32) -> f32 {
 
 // --- Cubic ---
 
+/// Cubic ease-in: stronger acceleration than quad.
 pub fn ease_in_cubic(t: f32) -> f32 {
     t * t * t
 }
 
+/// Cubic ease-out: stronger deceleration than quad.
 pub fn ease_out_cubic(t: f32) -> f32 {
     let t = t - 1.0;
     t * t * t + 1.0
 }
 
+/// Cubic ease-in-out.
 pub fn ease_in_out_cubic(t: f32) -> f32 {
     if t < 0.5 {
         4.0 * t * t * t
@@ -303,15 +314,18 @@ pub fn ease_in_out_cubic(t: f32) -> f32 {
 
 // --- Quart ---
 
+/// Quartic ease-in: very pronounced acceleration.
 pub fn ease_in_quart(t: f32) -> f32 {
     t * t * t * t
 }
 
+/// Quartic ease-out: very pronounced deceleration.
 pub fn ease_out_quart(t: f32) -> f32 {
     let t = t - 1.0;
     1.0 - t * t * t * t
 }
 
+/// Quartic ease-in-out.
 pub fn ease_in_out_quart(t: f32) -> f32 {
     if t < 0.5 {
         8.0 * t * t * t * t
@@ -323,20 +337,24 @@ pub fn ease_in_out_quart(t: f32) -> f32 {
 
 // --- Sine ---
 
+/// Sinusoidal ease-in: gentle acceleration.
 pub fn ease_in_sine(t: f32) -> f32 {
     1.0 - (t * std::f32::consts::FRAC_PI_2).cos()
 }
 
+/// Sinusoidal ease-out: gentle deceleration.
 pub fn ease_out_sine(t: f32) -> f32 {
     (t * std::f32::consts::FRAC_PI_2).sin()
 }
 
+/// Sinusoidal ease-in-out.
 pub fn ease_in_out_sine(t: f32) -> f32 {
     -((std::f32::consts::PI * t).cos() - 1.0) / 2.0
 }
 
 // --- Expo ---
 
+/// Exponential ease-in: near-zero start, explosive finish.
 pub fn ease_in_expo(t: f32) -> f32 {
     if t == 0.0 {
         0.0
@@ -345,6 +363,7 @@ pub fn ease_in_expo(t: f32) -> f32 {
     }
 }
 
+/// Exponential ease-out: explosive start, asymptotic finish.
 pub fn ease_out_expo(t: f32) -> f32 {
     if t == 1.0 {
         1.0
@@ -355,10 +374,12 @@ pub fn ease_out_expo(t: f32) -> f32 {
 
 // --- Circ ---
 
+/// Circular ease-in (quarter-circle arc).
 pub fn ease_in_circ(t: f32) -> f32 {
     1.0 - (1.0 - t * t).max(0.0).sqrt()
 }
 
+/// Circular ease-out (quarter-circle arc).
 pub fn ease_out_circ(t: f32) -> f32 {
     let t = t - 1.0;
     (1.0 - t * t).max(0.0).sqrt()
@@ -369,6 +390,7 @@ pub fn ease_out_circ(t: f32) -> f32 {
 const C4: f32 = 2.0 * std::f32::consts::PI / 3.0;
 const C5: f32 = 2.0 * std::f32::consts::PI / 4.5;
 
+/// Elastic ease-in: winds up with oscillation before releasing.
 pub fn ease_in_elastic(t: f32) -> f32 {
     if t == 0.0 {
         return 0.0;
@@ -379,6 +401,7 @@ pub fn ease_in_elastic(t: f32) -> f32 {
     -(2.0_f32.powf(10.0 * t - 10.0)) * ((10.0 * t - 10.75) * C4).sin()
 }
 
+/// Elastic ease-out: overshoots and oscillates into place.
 pub fn ease_out_elastic(t: f32) -> f32 {
     if t == 0.0 {
         return 0.0;
@@ -389,6 +412,7 @@ pub fn ease_out_elastic(t: f32) -> f32 {
     2.0_f32.powf(-10.0 * t) * ((10.0 * t - 0.75) * C4).sin() + 1.0
 }
 
+/// Elastic ease-in-out.
 pub fn ease_in_out_elastic(t: f32) -> f32 {
     if t == 0.0 {
         return 0.0;
@@ -405,6 +429,7 @@ pub fn ease_in_out_elastic(t: f32) -> f32 {
 
 // --- Bounce ---
 
+/// Bounce ease-out: lands and bounces to rest.
 pub fn ease_out_bounce(t: f32) -> f32 {
     const N1: f32 = 7.5625;
     const D1: f32 = 2.75;
@@ -423,12 +448,14 @@ pub fn ease_out_bounce(t: f32) -> f32 {
     }
 }
 
+/// Bounce ease-in: mirror of [`ease_out_bounce`].
 pub fn ease_in_bounce(t: f32) -> f32 {
     1.0 - ease_out_bounce(1.0 - t)
 }
 
 // --- Spring (critically damped, default stiffness=200, damping=20, mass=1) ---
 // Approximates a spring curve on [0,1] using RK4 integration.
+/// Critically-under-damped spring (RK4-integrated), slight overshoot.
 pub fn spring(t: f32) -> f32 {
     const STIFFNESS: f32 = 200.0;
     const DAMPING: f32 = 20.0;
@@ -453,21 +480,25 @@ pub fn spring(t: f32) -> f32 {
 // --- Manim-compatible ---
 
 // Smoothstep: 3t² - 2t³ (Manim's "smooth")
+/// Manim-style smoothstep: zero velocity at both ends.
 pub fn smooth(t: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
 // Fast acceleration into a smooth stop
+/// Manim-style: fast start, smooth stop (first half of `smooth`).
 pub fn rush_into(t: f32) -> f32 {
     smooth(t / 2.0) * 2.0
 }
 
 // Slow start, then rush to end
+/// Manim-style: smooth start, fast finish (second half of `smooth`).
 pub fn rush_from(t: f32) -> f32 {
     smooth(t / 2.0 + 0.5) * 2.0 - 1.0
 }
 
 // Animate out and back to start (useful for emphasis)
+/// Manim-style: eases to 1 at t=0.5 and back to 0 at t=1.
 pub fn there_and_back(t: f32) -> f32 {
     let t = 2.0 * t;
     if t < 1.0 {
@@ -478,6 +509,7 @@ pub fn there_and_back(t: f32) -> f32 {
 }
 
 // CSS cubic-bezier(0.25, 0.1, 0.25, 1.0) approximated as ease_in_out_sine
+/// The CSS `ease` curve: cubic-bezier(0.25, 0.1, 0.25, 1.0).
 pub fn ease_css(t: f32) -> f32 {
     ease_in_out_sine(t)
 }
