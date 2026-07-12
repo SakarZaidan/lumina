@@ -17,6 +17,8 @@
 //! planning/TECH_DEBT.md TD-09). Run it locally or behind a trusted
 //! reverse proxy.
 
+#![warn(missing_docs)]
+
 use axum::{
     extract::Json,
     http::StatusCode,
@@ -34,9 +36,12 @@ use tower_http::cors::CorsLayer;
 
 // ── Request / Response types ──────────────────────────────────────────────────
 
+/// Body of `POST /render`: the scene plus the requested container format.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenderRequest {
+    /// The scene to render.
     pub scene: Scene,
+    /// Output container: `"mp4"` (default), `"webm"`, or `"gif"`.
     #[serde(default = "default_format")]
     pub format: String,
 }
@@ -45,15 +50,21 @@ fn default_format() -> String {
     "mp4".to_string()
 }
 
+/// Body of `POST /patch`: a scene document plus RFC-6902 JSON Patch ops.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PatchRequest {
+    /// The scene as a raw JSON document (patched before typing).
     pub scene: serde_json::Value,
+    /// RFC 6902 operations to apply, in order.
     pub patch: Vec<serde_json::Value>,
 }
 
+/// Response of the patch endpoints: the updated scene and its validation.
 #[derive(Debug, Serialize, Clone)]
 pub struct PatchResponse {
+    /// The scene after the patch was applied.
     pub scene: serde_json::Value,
+    /// Validation results for the patched scene.
     pub validation: ValidationResponse,
 }
 
@@ -61,7 +72,9 @@ pub struct PatchResponse {
 /// (add_object, add_keyframe, update_canvas, …) applied via `lumina_core`.
 #[derive(Debug, Deserialize)]
 pub struct ScenePatchRequest {
+    /// The scene to patch.
     pub scene: Scene,
+    /// Semantic operations to apply, in order.
     pub patch: lumina_core::ScenePatch,
 }
 
@@ -313,6 +326,8 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 /// anything larger is rejected up front (413) instead of being buffered.
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
+/// The full route table (health, schema, objects, validate, patch,
+/// scene_patch, render) with the body-size and CORS layers applied.
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health_check))
