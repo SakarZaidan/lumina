@@ -9,10 +9,14 @@
 //! the CPU and GPU backends); this crate only answers "which font can draw
 //! this character" and "how wide is this string".
 
+#![warn(missing_docs)]
+
 use fontdue::{Font, FontSettings};
 use lumina_schema::TextProps;
 use std::collections::HashMap;
 
+/// Font store with deterministic fallback: fonts are tried in load order,
+/// so the same scene always resolves glyphs to the same font.
 #[derive(Default)]
 pub struct TextEngine {
     /// Fonts stored in load order; first entry is the primary, rest are fallbacks.
@@ -22,10 +26,14 @@ pub struct TextEngine {
 }
 
 impl TextEngine {
+    /// An engine with no fonts loaded (text objects draw nothing until
+    /// [`TextEngine::load_font`] is called).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Load a TTF/OTF font under `id`. Re-loading an existing id replaces
+    /// its data but keeps its position in the fallback order.
     pub fn load_font(&mut self, id: String, data: &[u8]) -> Result<(), String> {
         let font = Font::from_bytes(data, FontSettings::default())?;
         if !self.font_order.contains(&id) {
@@ -61,6 +69,8 @@ impl TextEngine {
         self.font_order.first().and_then(|id| self.fonts.get(id))
     }
 
+    /// Lay out a text object into per-glyph instances (position, size,
+    /// color), advancing by each glyph's metric width.
     pub fn layout_text(&self, props: &TextProps) -> Vec<GlyphInstance> {
         let preferred = props.font_id.as_deref();
         let mut instances = Vec::new();
@@ -83,6 +93,7 @@ impl TextEngine {
         instances
     }
 
+    /// The font loaded under `id`, if any.
     pub fn get_font(&self, id: &str) -> Option<&Font> {
         self.fonts.get(id)
     }
@@ -98,6 +109,7 @@ impl TextEngine {
         self.font_order.first().and_then(|id| self.fonts.get(id))
     }
 
+    /// All loaded fonts, keyed by id.
     pub fn fonts(&self) -> &HashMap<String, Font> {
         &self.fonts
     }
@@ -125,10 +137,16 @@ impl TextEngine {
     }
 }
 
+/// One positioned glyph produced by [`TextEngine::layout_text`].
 pub struct GlyphInstance {
+    /// The character this glyph renders.
     pub glyph_char: char,
+    /// Left edge of the glyph's advance box, in canvas coordinates.
     pub x: f32,
+    /// Baseline y position, in canvas coordinates.
     pub y: f32,
+    /// Font size in pixels.
     pub font_size: f32,
+    /// Fill color (hex string, as authored in the scene).
     pub color: String,
 }
