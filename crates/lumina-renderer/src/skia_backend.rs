@@ -1555,8 +1555,11 @@ fn apply_fill(paint: &mut Paint, fill: &crate::common::fill::FillSpec, bbox: Rec
                 .collect();
             let (center, r) = crate::common::fill::radial_geometry(bb, *radius_frac);
             let center = Point::from_xy(center.0, center.1);
+            // tiny-skia 0.12 two-circle form; (center, 0) → (center, r) is
+            // the classic single-circle radial the schema describes.
             if let Some(shader) = RadialGradient::new(
                 center,
+                0.0,
                 center,
                 r,
                 gstops,
