@@ -23,6 +23,15 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-07-13 (later still) — Rustdoc fill (TD-15)
+
+- PR [#18](https://github.com/SakarZaidan/lumina/pull/18) (stacked on #17):
+  416 undocumented public items filled across all six library crates;
+  `#![warn(missing_docs)]` per crate + CI `-D warnings` = enforcement.
+- lumina-schema fields now state units/semantics — docs.rs becomes a
+  real authoring reference. Per-crate commits, dependency order.
+- v0.4 code work remaining: dep bumps (TD-17). Then release prep.
+
 ## 2026-07-13 (later) — CI foundations (TD-14)
 
 - PR [#17](https://github.com/SakarZaidan/lumina/pull/17) (stacked on #16):

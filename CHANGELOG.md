@@ -48,6 +48,11 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   docs now use repo-relative font paths, so examples render text on macOS and
   Windows too (TD-16, [#10]).
 
+### Documentation
+- Every public item across the six library crates is documented (416 items
+  filled); `#![warn(missing_docs)]` + CI `-D warnings` make undocumented
+  public API a build failure (TD-15, [#18]).
+
 ### CI
 - Tests now run on ubuntu/macos/windows; new MSRV (1.88) check job;
   concurrent pushes cancel superseded runs; the wasm-bindgen test suite
@@ -219,6 +224,7 @@ _The items below landed after 0.2.0 and were never released separately;
 [#15]: https://github.com/SakarZaidan/lumina/pull/15
 [#16]: https://github.com/SakarZaidan/lumina/pull/16
 [#17]: https://github.com/SakarZaidan/lumina/pull/17
+[#18]: https://github.com/SakarZaidan/lumina/pull/18
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

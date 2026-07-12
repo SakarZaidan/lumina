@@ -31,8 +31,8 @@ publishable and contributable.
 - [x] CI foundations (TD-14, #17): `rust-version` in workspace + MSRV job,
   ubuntu/macos/windows test matrix, concurrency-cancel, run
   `wasm-bindgen-test` suite.
-- [ ] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
-  per crate (TD-15).
+- [x] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
+  per crate (TD-15, #18).
 - [ ] Release automation: adopt release-plz; first crates.io publish of the
   five library crates + CLI (ADR-0009, ADR-0011).
 - [x] Examples portability: bundle an OFL-licensed font under
