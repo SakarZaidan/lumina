@@ -48,6 +48,16 @@ impl VelloRenderer {
     }
 
     async fn new_async() -> Result<Self, RendererError> {
+        // Escape hatch for environments where adapter probing is not merely
+        // unavailable but unsafe: the Windows DX12-WARP fallback aborts the
+        // process instead of reporting failure, so a graceful `Err` is never
+        // reached (TD-20). Set `LUMINA_DISABLE_VELLO=1` to skip probing.
+        if std::env::var("LUMINA_DISABLE_VELLO").as_deref() == Ok("1") {
+            return Err(RendererError::Failed(
+                "vello backend disabled by LUMINA_DISABLE_VELLO=1".to_string(),
+            ));
+        }
+
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
