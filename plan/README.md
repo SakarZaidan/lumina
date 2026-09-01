@@ -7,7 +7,7 @@ it has a beginning, eight waves, and an end (v1.0).
 ## How this relates to `planning/`
 
 They are not two planning systems. The split is deliberate and recorded in
-[ADR-0012](../planning/ADR/0012-aaa-program-location.md):
+[ADR-0013](../planning/ADR/0013-aaa-program-location.md):
 
 | | `plan/` | `planning/` |
 |---|---|---|

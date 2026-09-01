@@ -20,6 +20,7 @@ Decisions that need design discussion first go through
 | [0010](ADR/0010-media-policy.md) | No new binary media in git; use Release assets | Accepted |
 | [0011](ADR/0011-release-automation.md) | Release automation via release-plz (v0.4) | Accepted, pending |
 | [0012](ADR/0012-latex-unicode-substitution.md) | LaTeX renders by Unicode substitution; mitex dropped | Accepted |
+| [0013](ADR/0013-aaa-program-location.md) | The AAA program lives in plan/; the roadmap stays in planning/ | Accepted |
 
 To add a decision: copy the format of an existing ADR
 (`Status/Date/Context/Decision/Consequences`), take the next number, add a row
