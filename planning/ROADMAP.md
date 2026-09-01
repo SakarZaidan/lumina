@@ -9,9 +9,14 @@ This is the single roadmap document (see ADR-0005). Phases are re-evaluated at
 each release boundary against the repository as it then is. Debt IDs reference
 [TECH_DEBT.md](./TECH_DEBT.md).
 
+Design rationale and target state for each dimension live in
+[plan/](../plan/) — the AAA programme (ADR-0013). That directory proposes; this
+one schedules. Nothing there is worked until it appears here or in
+TECH_DEBT.md.
+
 ---
 
-## v0.4.0 — Correctness, Parity & Foundations
+## v0.4.0 — Correctness, Parity & Foundations — **released 2026-09-02**
 
 **Goal:** the two backends provably render the same pixels; the project becomes
 publishable and contributable.
@@ -34,7 +39,9 @@ publishable and contributable.
 - [x] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
   per crate (TD-15, #18).
 - [ ] Release automation: adopt release-plz; first crates.io publish of the
-  five library crates + CLI (ADR-0009, ADR-0011).
+  five library crates + CLI (ADR-0009, ADR-0011). **Carried to v0.5** — needs
+  a crates.io token in repository secrets; see `AAA-REL-01`/`02` in
+  [plan/11-release-distribution.md](../plan/11-release-distribution.md).
 - [x] Examples portability: bundle an OFL-licensed font under
   `examples/assets/`, stop hardcoding `/usr/share/fonts` (TD-16, #10).
 

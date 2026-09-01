@@ -8,7 +8,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
+Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md), and the
+programme to reach reference quality in [plan/](plan/).
+
+---
+
+## [0.4.0] — 2026-09-02
+
+**Correctness, backend parity, and foundations.** The two renderer backends
+now provably produce the same pixels, verified by a 16-fixture pixel-diff
+suite in CI; the project became contributable (3-OS matrix, MSRV job, every
+public item documented) and publishable.
 
 ### Changed
 - **Unknown easing names are now validation errors** (`UNKNOWN_EASING`, with a
@@ -63,6 +73,15 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   path moves off unmaintained ttf-parser 0.21 (RUSTSEC-2026-0192); the sole
   remaining 0.21 consumer is fontdue (latest release), tracked in TD-17
   ([#19]).
+- **`mitex` removed.** It had been declared since v0.1 and imported by no
+  source file — LaTeX and MathML have always rendered through Unicode
+  substitution. RUSTSEC-2026-0235 reached the workspace through that single
+  unused path, so dropping the dependency eliminates the advisory rather than
+  suppressing it, and takes the locked tree from **428 to 386 crates**
+  (TD-06 closed, ADR-0012, [#22]).
+- `rustybuzz` (RUSTSEC-2026-0206, via usvg → resvg 0.47) has no upgrade
+  available and is ignored with reasoning as TD-22. A stale `fxhash` ignore
+  was dropped — no crate in the tree matched it.
 
 ### Security
 - `lumina-server` v0.4 safety minimum: `/render` asset paths are confined to
@@ -70,6 +89,23 @@ Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
   8 MiB, and bind/serve/response no longer panic (TD-09 part 1, [#16]).
 
 ### Fixed
+- **Hit-testing never reached inside a `Group`.** `hit_test` compared every
+  object against a world-space point, so a child positioned in group-local
+  coordinates could not match, and the `Group` then reported itself as hit —
+  meaning no object inside a group could ever be the target of an event. It
+  now walks root objects only, descends through groups, and returns the
+  deepest object covering the point, with a recursion cap because the WASM
+  engine accepts unvalidated scenes from its host. Group scale and rotation
+  are still not applied to the hit point (TD-21, [#22]).
+- The WASM test suite had never run before this release and failed on
+  `missing field version`: scenes were built with
+  `serde_wasm_bindgen::to_value`, which emits a JS `Map`, and `Scene` reads
+  every field as absent from one. Tests now use `JSON.parse` — the path the
+  JS SDK takes ([#22]).
+- Windows CI aborted the renderer test process inside the Vello adapter probe
+  (DX12-WARP terminates rather than returning an error). `VelloRenderer::new`
+  gained a `LUMINA_DISABLE_VELLO` escape hatch, set for Windows only; parity
+  remains verified on Linux under `LUMINA_REQUIRE_VELLO=1` (TD-20, [#22]).
 - The Vello backend stroked shapes with round caps/joins (kurbo defaults)
   while the Skia backend uses butt caps and miter joins — GPU renders grew
   round nubs at line ends and rounded sharp corners ([#11]).
@@ -232,7 +268,9 @@ _The items below landed after 0.2.0 and were never released separately;
 [#17]: https://github.com/SakarZaidan/lumina/pull/17
 [#18]: https://github.com/SakarZaidan/lumina/pull/18
 [#19]: https://github.com/SakarZaidan/lumina/pull/19
-[Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
+[#22]: https://github.com/SakarZaidan/lumina/pull/22
+[Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/SakarZaidan/lumina/releases/tag/v0.1.0
