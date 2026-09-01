@@ -26,6 +26,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-19 | `LineProps.dash` schema field implemented by neither backend (docs previously claimed CPU support) | Low | Dashed-line scenes silently render solid | v0.5 | Open |
 | TD-20 | Vello adapter probing aborts the process on Windows CI (DX12-WARP), so the graceful skip is never reached | Medium | Backend parity unverified on Windows | v0.5 | Open — probe suppressed via `LUMINA_DISABLE_VELLO=1` ([#17](https://github.com/SakarZaidan/lumina/pull/17)) |
 | TD-21 | WASM `hit_test` applies only a group's translation, not its scale or rotation | Low | Mis-hits inside scaled/rotated groups | v0.5 | Open — needs `lumina-renderer`'s crate-private `common::scene::group_transform` shared (RFC) |
+| TD-23 | `ParticlesProps.emitter_x`/`emitter_y` lack `#[serde(default)]`, unlike every other optional prop | Low | A Particles object cannot be written without them; contradicts the documented schema convention | v0.5 | Open — found writing the resource-bound fixtures |
 | TD-22 | `rustybuzz` unmaintained (RUSTSEC-2026-0206) via usvg/resvg 0.47, and it shapes text inside untrusted SVG assets | Medium | SVG text-shaping bugs won't get upstream fixes | v0.5 | Open — resvg 0.47 is current; revisit on its next release |
 
 ## Notes per item

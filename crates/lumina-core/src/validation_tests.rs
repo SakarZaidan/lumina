@@ -79,3 +79,252 @@ mod tests {
             .any(|e| e.code == "UNKNOWN_EASING" && e.path == "$.camera.timeline[0].easing"));
     }
 }
+
+/// Adversarial inputs: every case here is a small scene that asks for an
+/// unbounded amount of work, and every one was accepted before the resource
+/// bounds landed. Each asserts a specific error code so a future refactor
+/// that removes a bound fails loudly rather than quietly.
+#[cfg(test)]
+mod resource_bounds {
+    use crate::validation::validate_scene_data;
+    use lumina_schema::Scene;
+
+    /// Build a scene from JSON, merging `canvas` and `objects` overrides.
+    fn scene(canvas: serde_json::Value, objects: serde_json::Value) -> Scene {
+        let json = serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": canvas,
+            "objects": objects,
+            "timeline": []
+        });
+        serde_json::from_value(json).expect("fixture must deserialise")
+    }
+
+    fn default_canvas() -> serde_json::Value {
+        serde_json::json!({
+            "width": 100, "height": 100, "fps": 30,
+            "duration": 1.0, "background": "#000000"
+        })
+    }
+
+    fn codes(scene: &Scene) -> Vec<String> {
+        validate_scene_data(scene)
+            .errors
+            .into_iter()
+            .map(|e| e.code)
+            .collect()
+    }
+
+    fn assert_rejected(scene: &Scene, code: &str) {
+        let found = codes(scene);
+        assert!(
+            found.iter().any(|c| c == code),
+            "expected {code}, got {found:?}"
+        );
+        assert!(!validate_scene_data(scene).valid, "scene must not be valid");
+    }
+
+    #[test]
+    fn a_canvas_larger_than_the_gpu_texture_limit_is_rejected() {
+        // 65535 x 65535 RGBA is ~17 GB, allocated once per frame.
+        let s = scene(
+            serde_json::json!({
+                "width": 65535, "height": 65535, "fps": 30,
+                "duration": 1.0, "background": "#000000"
+            }),
+            serde_json::json!({}),
+        );
+        assert_rejected(&s, "CANVAS_TOO_LARGE");
+    }
+
+    #[test]
+    fn an_enormous_frame_count_is_rejected() {
+        // 30 bytes of JSON asking for 2.4e11 frames.
+        let s = scene(
+            serde_json::json!({
+                "width": 100, "height": 100, "fps": 240,
+                "duration": 1e9, "background": "#000000"
+            }),
+            serde_json::json!({}),
+        );
+        // duration alone is over the cap, and so is the product.
+        let found = codes(&s);
+        assert!(
+            found
+                .iter()
+                .any(|c| c == "DURATION_TOO_LONG" || c == "TOO_MANY_FRAMES"),
+            "expected a duration or frame-count error, got {found:?}"
+        );
+    }
+
+    #[test]
+    fn duration_and_fps_may_each_be_reasonable_while_their_product_is_not() {
+        // Neither factor trips its own limit; the render still would.
+        let s = scene(
+            serde_json::json!({
+                "width": 100, "height": 100, "fps": 240,
+                "duration": 80000.0, "background": "#000000"
+            }),
+            serde_json::json!({}),
+        );
+        assert_rejected(&s, "TOO_MANY_FRAMES");
+    }
+
+    #[test]
+    fn a_zero_frame_rate_is_rejected() {
+        let s = scene(
+            serde_json::json!({
+                "width": 100, "height": 100, "fps": 0,
+                "duration": 1.0, "background": "#000000"
+            }),
+            serde_json::json!({}),
+        );
+        assert_rejected(&s, "INVALID_FPS");
+    }
+
+    #[test]
+    fn an_unbounded_plot_sample_count_is_rejected() {
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "ax": { "type": "Axes", "properties": {
+                    "x_range": [0.0, 10.0], "y_range": [0.0, 10.0], "x": 0.0, "y": 0.0
+                }},
+                "p": { "type": "Plot", "properties": {
+                    "function_str": "sin(x)", "axes_id": "ax", "sample_count": 4000000000u32
+                }}
+            }),
+        );
+        assert_rejected(&s, "SAMPLE_COUNT_TOO_HIGH");
+    }
+
+    #[test]
+    fn an_unbounded_expression_is_rejected() {
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "ax": { "type": "Axes", "properties": {
+                    "x_range": [0.0, 10.0], "y_range": [0.0, 10.0], "x": 0.0, "y": 0.0
+                }},
+                "p": { "type": "Plot", "properties": {
+                    "function_str": "(".repeat(50_000), "axes_id": "ax"
+                }}
+            }),
+        );
+        assert_rejected(&s, "EXPRESSION_TOO_LONG");
+    }
+
+    #[test]
+    fn an_unbounded_particle_count_is_rejected() {
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "burst": { "type": "Particles", "properties": {
+                    "count": 4000000000u32, "emitter_x": 0.0, "emitter_y": 0.0
+                }}
+            }),
+        );
+        assert_rejected(&s, "PARTICLE_COUNT_TOO_HIGH");
+    }
+
+    #[test]
+    fn a_zero_axis_step_is_rejected_rather_than_saturating_a_cast() {
+        // ((max - min) / 0.0).ceil() is inf; `inf as i32` saturates to
+        // i32::MAX, so the tick loop ran 2.1 billion times per frame.
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "ax": { "type": "Axes", "properties": {
+                    "x_range": [0.0, 10.0], "y_range": [0.0, 10.0],
+                    "x": 0.0, "y": 0.0, "x_step": 0.0
+                }}
+            }),
+        );
+        assert_rejected(&s, "INVALID_STEP");
+    }
+
+    #[test]
+    fn a_negative_axis_step_is_rejected() {
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "ax": { "type": "Axes", "properties": {
+                    "x_range": [0.0, 10.0], "y_range": [0.0, 10.0],
+                    "x": 0.0, "y": 0.0, "y_step": -1.0
+                }}
+            }),
+        );
+        assert_rejected(&s, "INVALID_STEP");
+    }
+
+    #[test]
+    fn a_number_line_with_1e15_ticks_is_rejected() {
+        let s = scene(
+            default_canvas(),
+            serde_json::json!({
+                "nl": { "type": "NumberLine", "properties": {
+                    "start": 0.0, "end": 1e9, "step": 1e-6, "x": 0.0, "y": 0.0
+                }}
+            }),
+        );
+        assert_rejected(&s, "TOO_MANY_TICKS");
+    }
+
+    #[test]
+    fn deep_group_nesting_is_rejected_instead_of_overflowing_the_stack() {
+        // A straight chain contains no cycle, so the `visited` set never
+        // trips and depth is the only thing standing between this and a
+        // stack overflow — during *validation*, before any render limit.
+        let depth = 5_000;
+        let mut objects = serde_json::Map::new();
+        for i in 0..depth {
+            let child = if i + 1 < depth {
+                vec![format!("g{}", i + 1)]
+            } else {
+                vec![]
+            };
+            objects.insert(
+                format!("g{i}"),
+                serde_json::json!({
+                    "type": "Group",
+                    "properties": { "x": 0.0, "y": 0.0, "children": child }
+                }),
+            );
+        }
+        let s = scene(default_canvas(), serde_json::Value::Object(objects));
+        assert_rejected(&s, "GROUP_NESTING_TOO_DEEP");
+    }
+
+    #[test]
+    fn an_ordinary_scene_still_validates() {
+        // The bounds must not reject anything anyone would actually write.
+        let s = scene(
+            serde_json::json!({
+                "width": 1920, "height": 1080, "fps": 60,
+                "duration": 120.0, "background": "#0F0F1A"
+            }),
+            serde_json::json!({
+                "ax": { "type": "Axes", "properties": {
+                    "x_range": [-10.0, 10.0], "y_range": [-5.0, 5.0],
+                    "x": 100.0, "y": 400.0, "x_step": 1.0, "y_step": 1.0
+                }},
+                "curve": { "type": "Plot", "properties": {
+                    "function_str": "sin(x) * cos(x / 2)", "axes_id": "ax", "sample_count": 500
+                }},
+                "sparks": { "type": "Particles", "properties": {
+                    "count": 2000, "emitter_x": 640.0, "emitter_y": 360.0
+                }},
+                "line": { "type": "NumberLine", "properties": {
+                    "start": -100.0, "end": 100.0, "step": 0.5, "x": 0.0, "y": 0.0
+                }}
+            }),
+        );
+        let response = validate_scene_data(&s);
+        assert!(
+            response.valid,
+            "a normal scene must still validate; got {:?}",
+            response.errors
+        );
+    }
+}
