@@ -68,7 +68,9 @@ This means:
 
 ### Rendering
 
-- **Dual backends at parity** — CPU rasterizer (Tiny-Skia) and GPU rasterizer (Vello/wgpu), both implementing the same `Renderer` trait. As of v0.3.0 the Vello backend renders **text, LaTeX, MathML, images, SVG and particles** in addition to geometry (gradients and drop shadows remain Skia-only).
+- **Dual backends at verified parity** — a CPU rasterizer (Tiny-Skia) and a Vello/wgpu backend, both implementing the same `Renderer` trait. As of v0.4.0 they render the same pixels across every feature, checked on every commit by a 16-fixture pixel-diff suite with an antialiasing-aware comparator. Skia defines the pixels; Vello must match them.
+
+  One caveat, stated plainly: the Vello backend currently runs with `force_fallback_adapter` and `use_cpu`, which makes it deterministic for CI but means it is not yet exercising a GPU. Hardware adapter selection is tracked in [plan/02-performance.md](plan/02-performance.md) as `AAA-P-11`.
 - **Camera system** — Zoom and pan the entire viewport as a first-class animated property. Camera state is interpolated from its own timeline with easing.
 - **17 object types** — Circle, Rectangle, Polygon, Path, Line, Arrow, Text, LaTeX, Group, Image, SVG, NumberLine, Axes, Plot, BezierCurve, MathML, Particles.
 - **Font rendering** — Load any TTF font from the scene's `assets.fonts` block. Glyphs are rasterized per-character via fontdue with correct baseline, descender, and superscript positioning.
@@ -125,7 +127,7 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 
 ### Animation
 
-- **28 easing functions + `cubic_bezier` + `spline`** — Linear, quad/cubic/quart/sine in/out/in-out variants, expo, circ, elastic, bounce, spring physics, `smooth` (Manim-compatible), `there_and_back`, CSS aliases. `cubic_bezier(x1,y1,x2,y2)` implements the full CSS spec via a binary-search parametric solver; `spline` does overshoot-free monotone-cubic interpolation through `easing_params.keypoints`.
+- **33 registered easings, including `cubic_bezier` and `spline`** — Linear, quad/cubic/quart/sine in/out/in-out variants, expo, circ, elastic, bounce, spring physics, `smooth` (Manim-compatible), `there_and_back`, CSS aliases. `cubic_bezier(x1,y1,x2,y2)` implements the full CSS spec via a binary-search parametric solver; `spline` does overshoot-free monotone-cubic interpolation through `easing_params.keypoints`.
 - **Draw-on animation** — `draw_fraction: 0.0→1.0` on Line, BezierCurve, Plot, Path, and LaTeX objects.
 - **Path morphing** — Animate one polygon/path into another of a different vertex count.
 - **LAB colorspace interpolation** — Color transitions through hue avoid muddy sRGB midpoints.
@@ -155,7 +157,8 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 
 - **Rust** — latest stable via [rustup](https://rustup.rs)
 - **FFmpeg** — for MP4 / WebM / GIF export (`apt install ffmpeg` / `brew install ffmpeg`)
-- A TTF font for text rendering (e.g. LiberationSans from `fonts-liberation` on Ubuntu)
+
+No system font is required: Liberation Sans (SIL OFL 1.1) is bundled under `examples/assets/fonts/`, so every example renders on any platform. Scenes may load any TTF through the `assets.fonts` block.
 
 ### Build
 
@@ -304,7 +307,7 @@ Particle state is computed analytically from the current time — no simulation 
 
 ---
 
-## Easing Functions (27)
+## Easing Functions
 
 ```
 linear
@@ -337,7 +340,7 @@ Use `cubic_bezier` with `easing_params` to match any CSS `cubic-bezier()` curve 
 
 ## Tests
 
-**92 tests, 0 failures.**
+**120 test functions — 117 native plus 3 wasm, and zero flakes.** That count includes the 16-fixture cross-backend parity suite, which renders every fixture on both backends and compares them pixel by pixel.
 
 ```
 lumina-core       51 tests   easing (incl. spline), timeline, interpolation (path morph + cubic_bezier),
@@ -470,9 +473,14 @@ Validation errors are structured for LLM re-injection:
 
 ## JavaScript SDK
 
-```bash
-npm install @lumina/sdk
-```
+> **Not published yet.** The package is not on npm, and it does not currently
+> build from a clean checkout — `wasm-pack` output is never wired into the
+> package ([TD-12], [#47]). The engine, the React player, the vanilla
+> `createPlayer`, and the `useLumina` hook are all written and working; only
+> the packaging is missing. The API below is what it exposes today.
+
+[TD-12]: planning/TECH_DEBT.md
+[#47]: https://github.com/SakarZaidan/lumina/issues/47
 
 ### React
 
@@ -501,6 +509,10 @@ player.seek(3.5);
 ---
 
 ## Python SDK
+
+> **Not on PyPI yet** — there is no `pip install lumina`. Build it locally with
+> [maturin](https://www.maturin.rs/); publishing is tracked in
+> [#45](https://github.com/SakarZaidan/lumina/issues/45).
 
 ```bash
 cd sdks/python && maturin develop
@@ -551,22 +563,46 @@ curl http://localhost:3000/schema
 
 ## Roadmap
 
-| Phase | Status | Scope |
-|---|---|---|
-| Phase 1 — Core Engine | **Complete** | LSF schema, Skia renderer, timeline, easing library, export, CLI, server |
-| Phase 2 — Rendering Quality | **Complete** | Vello GPU backend, camera system, Plot/Axes, LAB color, draw-on animation, font rendering |
-| Phase 3 — WASM & Web | **Complete** | Full WASM hit-test (17 types), React SDK, vanilla-JS SDK, `useLumina` hook |
-| Phase 4 — Advanced Animation | **Complete** | cubic_bezier easing, path morphing, LaTeX draw_fraction, font fallback, file watcher, benches |
-| Phase 5 — Showcase & Polish | **Complete** | 3 new example scenes, JSON Patch server, schema endpoint, cargo-deny, CI |
-| Phase 6 — Visual Effects & Media | **Complete** | Image/SVG/GIF compositing, gradients, drop shadows, rounded corners, text alignment, MathML, Particles |
-| Phase 7 — Python SDK + Docs Site | **Complete** | PyO3 + maturin Python SDK, mdBook docs site, GitHub Pages CI deploy |
-| Phase 8 — Studio | Planned | Browser timeline editor, team collaboration, Tauri desktop app |
+[**planning/ROADMAP.md**](planning/ROADMAP.md) is the single roadmap — the one
+schedule of record (ADR-0005).
+
+| Release | Theme |
+|---|---|
+| **v0.4.0** — released | Correctness, backend parity, and foundations |
+| v0.5.0 | Performance, and a server you may expose |
+| v0.6.0 | Typed schema, real LaTeX, published SDKs |
+| v1.0.0 | Stability — no new features |
+
+[**plan/**](plan/) holds the programme behind it: fourteen dimension subplans —
+architecture, performance, security, accuracy, motion, output fidelity,
+tooling, community — each citing `file:line` evidence and carrying acceptance
+tests. If you want to know *why* something is scheduled, it is explained there.
+
+### Known gaps, stated plainly
+
+Documenting limitations as prominently as features is
+[a project principle](ENGINEERING_PRINCIPLES.md), not a disclaimer.
+
+- Nothing is published to crates.io, PyPI, or npm. Building from source is the
+  only installation path today.
+- The Vello backend runs on a CPU fallback adapter, so it is not yet exercising
+  a GPU.
+- `lumina-server` is not hardened for untrusted networks — see [SECURITY.md](SECURITY.md).
+- LaTeX renders by Unicode substitution, not typesetting ([ADR-0012](planning/ADR/0012-latex-unicode-substitution.md)).
+- Five resource-exhaustion vectors found by audit are open and tracked.
 
 ---
 
 ## Contributing
 
-All PRs require `cargo test --workspace --exclude lumina-wasm --exclude lumina-bench` to pass. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome, and there are
+[**good first issues**](https://github.com/SakarZaidan/lumina/labels/good%20first%20issue)
+waiting — each names the file to change and states how you will know you are
+done.
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md). Who decides what is in
+[GOVERNANCE.md](GOVERNANCE.md); where to ask a question is in
+[SUPPORT.md](SUPPORT.md).
 
 ## License
 

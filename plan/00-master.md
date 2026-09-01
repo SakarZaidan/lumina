@@ -134,8 +134,14 @@ into the JSON the way `rustc` points into Rust.
 ### Wave 8 — Stability
 
 No new features. Semver audit, external-style security review, cross-platform
-determinism proven in CI, support statement. Branch protection is enabled
-here — last, so it never blocks the merges above.
+determinism proven in CI, support statement.
+
+Branch protection is enabled at the *start* of this wave — after every merge
+above has landed, so it never blocks them. Required status checks, no
+force-push, no deletions, enforcement including administrators, one required
+approving review. Linear history is not required: stacked pull requests and a
+walkable per-commit trail are worth more here than a straight line. The
+breaking-glass procedure is in [GOVERNANCE.md](../GOVERNANCE.md).
 
 **Gate:** every scorecard dimension ≥ 95.
 
