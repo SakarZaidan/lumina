@@ -82,9 +82,9 @@ checkout in CI.
 - [ ] Typed property system replacing raw `serde_json::Value` flow (TD-07).
   Breaking schema change with a migration guide — must precede 1.0, and comes
   after parity so one validation layer serves both proven-equivalent backends.
-- [ ] LaTeX decision (TD-06): implement real mitex-based typesetting **or**
-  drop the dependency and document the Unicode-substitution approach honestly.
-  Recorded in DECISIONS.md either way.
+- [x] LaTeX decision (TD-06): `mitex` dropped, Unicode substitution documented
+  as what it is (ADR-0012). Real typesetting, if it lands, is greenfield work
+  with its own design — not a dependency waiting to be wired up.
 - [ ] Test-debt closure (TD-10): property tests (proptest) for
   interpolator/easing; unit suites for `lumina-text`, `lumina-schema`, CLI.
 - [ ] Publish Python SDK to PyPI (maturin CI) and JS SDK to npm; expose

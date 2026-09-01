@@ -23,6 +23,23 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-01 (later) — Fresh advisories triaged; mitex dropped
+
+- Seven idle weeks produced two new RUSTSEC hits, both caught only because a
+  PR happened to run — the case for a scheduled audit rather than a
+  push-triggered one.
+- RUSTSEC-2026-0235 reached the workspace through exactly one path, and that
+  path was `mitex` — declared since v0.1, imported by nothing (TD-06). Removed
+  rather than ignored: the vulnerability is gone, not suppressed, and the
+  locked tree fell **428 → 386 crates**. Decision recorded as ADR-0012;
+  TD-06 closed.
+- RUSTSEC-2026-0206 (`rustybuzz`, via usvg/resvg 0.47) has no upgrade to take —
+  resvg 0.47 is current. Ignored with reasoning and registered as TD-22, since
+  it shapes text inside untrusted SVG assets.
+- Also dropped a stale ignore: RUSTSEC-2025-0057 (fxhash) no longer matches
+  any crate in the tree.
+- `cargo deny check`: advisories ok, bans ok, licenses ok, sources ok.
+
 ## 2026-09-01 — First matrix run triaged; two latent bugs fixed
 
 - The 3-OS matrix and the wasm suite had never run before this PR, and both
