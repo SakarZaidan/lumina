@@ -222,6 +222,12 @@ impl SkiaRenderer {
         }
     }
 
+    /// Walk one node of the scene graph, recursing through groups.
+    ///
+    /// `depth` bounds the recursion. Scenes reaching a renderer have normally
+    /// been validated (`GROUP_NESTING_TOO_DEEP`), but the renderer is a public
+    /// API in its own right and a deep chain here would overflow the stack,
+    /// which aborts the process rather than returning an error.
     fn draw_node(
         &self,
         pixmap: &mut Pixmap,
@@ -229,7 +235,14 @@ impl SkiaRenderer {
         objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
         parent_transform: Transform,
+        depth: usize,
     ) -> Result<(), RendererError> {
+        if depth > lumina_core::validation::MAX_GROUP_DEPTH {
+            return Err(RendererError::Failed(format!(
+                "group nesting deeper than {} at '{id}'",
+                lumina_core::validation::MAX_GROUP_DEPTH
+            )));
+        }
         let obj = objects.get(id).ok_or_else(|| {
             RendererError::Failed(format!("Object '{}' not found in scene graph", id))
         })?;
@@ -246,7 +259,7 @@ impl SkiaRenderer {
                 .to_tiny();
 
                 for child_id in crate::common::scene::sorted_children(&props.children, objects) {
-                    self.draw_node(pixmap, child_id, objects, states, transform)?;
+                    self.draw_node(pixmap, child_id, objects, states, transform, depth + 1)?;
                 }
             }
             _ => {
@@ -995,7 +1008,7 @@ impl Renderer for SkiaRenderer {
             crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut pixmap, &id, objects, states, root_transform)?;
+            self.draw_node(&mut pixmap, &id, objects, states, root_transform, 0)?;
         }
 
         Ok(pixmap.data().to_vec())

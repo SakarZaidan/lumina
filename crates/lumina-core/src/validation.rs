@@ -10,6 +10,42 @@ use lumina_schema::{Action, Object, Scene};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
+// ── Resource bounds ─────────────────────────────────────────────────────────
+//
+// A scene is a description of work, and until these existed nothing bounded
+// how much work a small description could ask for. The server caps request
+// bodies at 8 MiB, but `{"duration": 1e9, "fps": 240}` is 30 bytes and asks
+// for 2.4e11 frames.
+//
+// Every limit is enforced here because `validate_scene_data` is the one
+// chokepoint every entry point already calls — server, CLI, and both SDKs —
+// so a bound added here cannot be bypassed by reaching the renderer another
+// way. The numbers are chosen to sit far above any legitimate scene and far
+// below anything that threatens the host.
+
+/// Largest canvas dimension, in pixels. 16384 is the common GPU texture
+/// limit, and a 16384² RGBA frame is already 1 GiB.
+pub const MAX_CANVAS_DIMENSION: u32 = 16_384;
+/// Largest frame rate. Beyond this the output is not a video anyone watches.
+pub const MAX_FPS: u32 = 240;
+/// Longest scene, in seconds — a little over 24 hours.
+pub const MAX_DURATION_SECONDS: f32 = 86_400.0;
+/// Largest total frame count for one render (`duration × fps`).
+pub const MAX_TOTAL_FRAMES: u64 = 1_000_000;
+/// Largest `sample_count` on a `Plot`. Sampling is per frame.
+pub const MAX_PLOT_SAMPLES: u32 = 100_000;
+/// Largest `count` on a `Particles` emitter. Simulation is per frame.
+pub const MAX_PARTICLE_COUNT: u32 = 1_000_000;
+/// Largest number of tick marks a `NumberLine` or `Axes` may derive from its
+/// range and step. Each tick is a stroked path, drawn every frame.
+pub const MAX_TICK_COUNT: f64 = 100_000.0;
+/// Largest `function_str` on a `Plot`, in bytes. evalexpr parses by recursive
+/// descent, so an unbounded expression is an unbounded stack.
+pub const MAX_EXPRESSION_BYTES: usize = 4_096;
+/// Deepest chain of nested groups. Bounds the recursive walks in cycle
+/// detection here and in scene traversal in the renderers.
+pub const MAX_GROUP_DEPTH: usize = 256;
+
 #[derive(Debug, Serialize, Clone)]
 /// Outcome of [`validate_scene_data`].
 pub struct ValidationResponse {
@@ -114,9 +150,13 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         }
     }
 
-    // Check 4: Circular group references
-    if let Some(cycle) = detect_group_cycle(&scene.objects) {
-        errors.push(ValidationError {
+    // Check 4: Circular group references, and nesting too deep to walk.
+    // Both are found by the same traversal: a cycle trips the path check, a
+    // straight chain trips the depth check. The depth case matters because
+    // this walk runs *before* any render limit could apply, and overflowing
+    // its stack aborts the process rather than failing the request.
+    match detect_group_cycle(&scene.objects) {
+        Some(GroupWalk::Cycle(cycle)) => errors.push(ValidationError {
             code: "CIRCULAR_GROUP_REFERENCE".to_string(),
             path: "$.objects".to_string(),
             message: format!(
@@ -125,7 +165,19 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             ),
             fix_suggestion: "Remove the circular dependency from the group's children list."
                 .to_string(),
-        });
+        }),
+        Some(GroupWalk::TooDeep(id)) => errors.push(ValidationError {
+            code: "GROUP_NESTING_TOO_DEEP".to_string(),
+            path: format!("$.objects.{id}"),
+            message: format!(
+                "Group nesting exceeds {MAX_GROUP_DEPTH} levels at '{id}'. Scene traversal is \
+                 recursive, so deeper nesting cannot be walked safely."
+            ),
+            fix_suggestion: "Flatten the group hierarchy. Nesting this deep is almost always a \
+                             generated-scene bug rather than an authoring choice."
+                .to_string(),
+        }),
+        None => {}
     }
 
     // Check 5: Keyframes beyond canvas duration (warning)
@@ -181,6 +233,94 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 "Set canvas.width and canvas.height to positive integers (e.g. 1280, 720)."
                     .to_string(),
         });
+    }
+
+    // Check 7b: Canvas and timing must stay within renderable bounds.
+    // Unbounded values here multiply into per-frame work — see the module
+    // constants for why each limit is where it is.
+    if scene.canvas.width > MAX_CANVAS_DIMENSION || scene.canvas.height > MAX_CANVAS_DIMENSION {
+        errors.push(ValidationError {
+            code: "CANVAS_TOO_LARGE".to_string(),
+            path: "$.canvas".to_string(),
+            message: format!(
+                "Canvas size {}x{} exceeds the maximum dimension of {MAX_CANVAS_DIMENSION} px. \
+                 A frame this size is allocated once per frame rendered.",
+                scene.canvas.width, scene.canvas.height
+            ),
+            fix_suggestion: format!(
+                "Reduce canvas.width and canvas.height to at most {MAX_CANVAS_DIMENSION}."
+            ),
+        });
+    }
+
+    if scene.canvas.fps == 0 {
+        errors.push(ValidationError {
+            code: "INVALID_FPS".to_string(),
+            path: "$.canvas.fps".to_string(),
+            message: "Canvas fps is 0, so the scene has no frames.".to_string(),
+            fix_suggestion: "Set canvas.fps to a positive integer (e.g. 30 or 60).".to_string(),
+        });
+    } else if scene.canvas.fps > MAX_FPS {
+        errors.push(ValidationError {
+            code: "FPS_TOO_HIGH".to_string(),
+            path: "$.canvas.fps".to_string(),
+            message: format!(
+                "Canvas fps {} exceeds the maximum of {MAX_FPS}.",
+                scene.canvas.fps
+            ),
+            fix_suggestion: format!("Set canvas.fps to at most {MAX_FPS} (60 is typical)."),
+        });
+    }
+
+    if !scene.canvas.duration.is_finite() || scene.canvas.duration <= 0.0 {
+        errors.push(ValidationError {
+            code: "INVALID_DURATION".to_string(),
+            path: "$.canvas.duration".to_string(),
+            message: format!(
+                "Canvas duration {} is not a positive, finite number of seconds.",
+                scene.canvas.duration
+            ),
+            fix_suggestion: "Set canvas.duration to a positive number of seconds.".to_string(),
+        });
+    } else if scene.canvas.duration > MAX_DURATION_SECONDS {
+        errors.push(ValidationError {
+            code: "DURATION_TOO_LONG".to_string(),
+            path: "$.canvas.duration".to_string(),
+            message: format!(
+                "Canvas duration {}s exceeds the maximum of {MAX_DURATION_SECONDS}s.",
+                scene.canvas.duration
+            ),
+            fix_suggestion: format!(
+                "Set canvas.duration to at most {MAX_DURATION_SECONDS} seconds, or render the \
+                 scene in sections."
+            ),
+        });
+    }
+
+    // The product is what actually bounds the render, and either factor can be
+    // individually reasonable while the product is not.
+    if scene.canvas.duration.is_finite() && scene.canvas.duration > 0.0 && scene.canvas.fps > 0 {
+        let frames = (scene.canvas.duration as f64) * f64::from(scene.canvas.fps);
+        if frames > MAX_TOTAL_FRAMES as f64 {
+            errors.push(ValidationError {
+                code: "TOO_MANY_FRAMES".to_string(),
+                path: "$.canvas".to_string(),
+                message: format!(
+                    "duration {}s x fps {} is {frames:.0} frames, over the maximum of \
+                     {MAX_TOTAL_FRAMES}.",
+                    scene.canvas.duration, scene.canvas.fps
+                ),
+                fix_suggestion: format!(
+                    "Reduce canvas.duration or canvas.fps so their product is at most \
+                     {MAX_TOTAL_FRAMES} frames."
+                ),
+            });
+        }
+    }
+
+    // Check 7c: Per-object work that is repeated every frame.
+    for (id, obj) in &scene.objects {
+        validate_object_bounds(id, obj, &mut errors);
     }
 
     // Check 8: Large scene warning
@@ -292,28 +432,176 @@ fn check_easing(
     }
 }
 
-fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<Vec<String>> {
-    fn dfs(
-        id: &str,
-        objects: &HashMap<String, Object>,
-        visited: &mut HashSet<String>,
-        path: &mut Vec<String>,
-    ) -> Option<Vec<String>> {
-        if path.contains(&id.to_string()) {
-            let start = path.iter().position(|x| x == id).unwrap();
-            let mut cycle = path[start..].to_vec();
+/// Per-object limits on work the renderer repeats every frame.
+///
+/// Each of these was reachable from a request body of a few hundred bytes:
+/// an unbounded `sample_count` or `count` multiplies by the frame count, and
+/// a tick loop with a tiny or non-positive step multiplies by far more. The
+/// `Axes` case additionally produced `inf as i32`, which saturates to
+/// `i32::MAX` rather than failing.
+fn validate_object_bounds(id: &str, obj: &Object, errors: &mut Vec<ValidationError>) {
+    match obj {
+        Object::Plot(p) => {
+            if p.sample_count > MAX_PLOT_SAMPLES {
+                errors.push(ValidationError {
+                    code: "SAMPLE_COUNT_TOO_HIGH".to_string(),
+                    path: format!("$.objects.{id}.properties.sample_count"),
+                    message: format!(
+                        "sample_count {} exceeds the maximum of {MAX_PLOT_SAMPLES}. The function \
+                         is evaluated this many times per frame.",
+                        p.sample_count
+                    ),
+                    fix_suggestion: format!(
+                        "Reduce sample_count to at most {MAX_PLOT_SAMPLES}; a few hundred is \
+                         usually indistinguishable from more."
+                    ),
+                });
+            }
+            if p.function_str.len() > MAX_EXPRESSION_BYTES {
+                errors.push(ValidationError {
+                    code: "EXPRESSION_TOO_LONG".to_string(),
+                    path: format!("$.objects.{id}.properties.function_str"),
+                    message: format!(
+                        "function_str is {} bytes, over the maximum of {MAX_EXPRESSION_BYTES}. \
+                         Expressions are parsed by recursive descent.",
+                        p.function_str.len()
+                    ),
+                    fix_suggestion: "Simplify the expression, or precompute the curve and use a \
+                                     Path object instead."
+                        .to_string(),
+                });
+            }
+        }
+        Object::Particles(p) => {
+            if p.count > MAX_PARTICLE_COUNT {
+                errors.push(ValidationError {
+                    code: "PARTICLE_COUNT_TOO_HIGH".to_string(),
+                    path: format!("$.objects.{id}.properties.count"),
+                    message: format!(
+                        "count {} exceeds the maximum of {MAX_PARTICLE_COUNT}. Every particle is \
+                         simulated and drawn each frame.",
+                        p.count
+                    ),
+                    fix_suggestion: format!("Reduce count to at most {MAX_PARTICLE_COUNT}."),
+                });
+            }
+        }
+        Object::NumberLine(p) => {
+            check_tick_count(
+                id,
+                "start/end/step",
+                f64::from(p.start),
+                f64::from(p.end),
+                f64::from(p.step),
+                errors,
+            );
+        }
+        Object::Axes(p) => {
+            check_tick_count(
+                id,
+                "x_step",
+                f64::from(p.x_range[0]),
+                f64::from(p.x_range[1]),
+                f64::from(p.x_step),
+                errors,
+            );
+            check_tick_count(
+                id,
+                "y_step",
+                f64::from(p.y_range[0]),
+                f64::from(p.y_range[1]),
+                f64::from(p.y_step),
+                errors,
+            );
+        }
+        _ => {}
+    }
+}
+
+/// A tick loop walks `min..=max` in increments of `step`, stroking a path each
+/// time, on every frame. A non-positive or non-finite step never terminates
+/// (or saturates a cast); a tiny one terminates far too late.
+fn check_tick_count(
+    id: &str,
+    field: &str,
+    min: f64,
+    max: f64,
+    step: f64,
+    errors: &mut Vec<ValidationError>,
+) {
+    let path = format!("$.objects.{id}.properties.{field}");
+    if !step.is_finite() || step <= 0.0 {
+        errors.push(ValidationError {
+            code: "INVALID_STEP".to_string(),
+            path,
+            message: format!(
+                "{field} is {step}. Tick spacing must be a positive, finite number — a \
+                 non-positive step describes a loop that never ends."
+            ),
+            fix_suggestion: "Set the step to a positive number (e.g. 1.0).".to_string(),
+        });
+        return;
+    }
+    if !min.is_finite() || !max.is_finite() {
+        errors.push(ValidationError {
+            code: "INVALID_RANGE".to_string(),
+            path,
+            message: format!("Range [{min}, {max}] must be finite."),
+            fix_suggestion: "Set both range bounds to finite numbers.".to_string(),
+        });
+        return;
+    }
+    let ticks = (max - min).abs() / step;
+    if ticks > MAX_TICK_COUNT {
+        errors.push(ValidationError {
+            code: "TOO_MANY_TICKS".to_string(),
+            path,
+            message: format!(
+                "Range [{min}, {max}] with step {step} produces {ticks:.0} ticks, over the \
+                 maximum of {MAX_TICK_COUNT:.0}. Each tick is drawn every frame."
+            ),
+            fix_suggestion: format!(
+                "Increase the step, or narrow the range, so fewer than {MAX_TICK_COUNT:.0} ticks \
+                 are produced."
+            ),
+        });
+    }
+}
+
+/// What a group walk found: a reference cycle, or nesting too deep to walk.
+enum GroupWalk {
+    /// `g0 -> g1 -> ... -> g0`, reported so the message can name the loop.
+    Cycle(Vec<String>),
+    /// A chain longer than [`MAX_GROUP_DEPTH`]. Not a cycle — `visited` never
+    /// trips on a straight chain — but recursing it would overflow the stack,
+    /// which aborts the process rather than failing the request.
+    TooDeep(String),
+}
+
+fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<GroupWalk> {
+    fn dfs<'a>(
+        id: &'a str,
+        objects: &'a HashMap<String, Object>,
+        visited: &mut HashSet<&'a str>,
+        path: &mut Vec<&'a str>,
+    ) -> Option<GroupWalk> {
+        if let Some(start) = path.iter().position(|x| *x == id) {
+            let mut cycle: Vec<String> = path[start..].iter().map(|s| (*s).to_string()).collect();
             cycle.push(id.to_string());
-            return Some(cycle);
+            return Some(GroupWalk::Cycle(cycle));
+        }
+        if path.len() >= MAX_GROUP_DEPTH {
+            return Some(GroupWalk::TooDeep(id.to_string()));
         }
         if visited.contains(id) {
             return None;
         }
-        visited.insert(id.to_string());
+        visited.insert(id);
         if let Some(Object::Group(group)) = objects.get(id) {
-            path.push(id.to_string());
+            path.push(id);
             for child in &group.children {
-                if let Some(cycle) = dfs(child, objects, visited, path) {
-                    return Some(cycle);
+                if let Some(found) = dfs(child, objects, visited, path) {
+                    return Some(found);
                 }
             }
             path.pop();
@@ -324,8 +612,8 @@ fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<Vec<String>> 
     let mut visited = HashSet::new();
     for id in objects.keys() {
         let mut path = Vec::new();
-        if let Some(cycle) = dfs(id, objects, &mut visited, &mut path) {
-            return Some(cycle);
+        if let Some(found) = dfs(id, objects, &mut visited, &mut path) {
+            return Some(found);
         }
     }
     None

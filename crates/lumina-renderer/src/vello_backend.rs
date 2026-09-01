@@ -45,6 +45,17 @@ pub struct VelloRenderer {
     current_time: f32,
 }
 
+/// The parts of a scene walk that do not change as it descends.
+///
+/// Bundled so `draw_node` carries only the arguments that vary — node,
+/// transform, depth. The alternative was an eight-parameter recursive
+/// function where three parameters held the same value at every level.
+struct WalkCtx<'a> {
+    objects: &'a HashMap<String, Object>,
+    states: &'a HashMap<String, Value>,
+    canvas: (u32, u32),
+}
+
 impl VelloRenderer {
     /// Create a new VelloRenderer, blocking the current thread during GPU init.
     pub fn new() -> Result<Self, RendererError> {
@@ -198,27 +209,38 @@ impl VelloRenderer {
         // matrices are bit-identical).
         let root = crate::common::scene::camera_transform(camera, width, height);
 
+        let ctx = WalkCtx {
+            objects,
+            states,
+            canvas: (width, height),
+        };
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut scene, &id, objects, states, root, (width, height));
+            self.draw_node(&mut scene, &id, &ctx, root, 0);
         }
 
         scene
     }
 
+    /// Walk one node of the scene graph, recursing through groups.
+    ///
+    /// `depth` bounds the recursion for the same reason the CPU backend does:
+    /// a deep group chain would overflow the stack, which aborts the process.
     fn draw_node(
         &self,
         scene: &mut Scene,
         id: &str,
-        objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
+        ctx: &WalkCtx<'_>,
         parent: crate::common::scene::Mat2x3,
-        canvas: (u32, u32),
+        depth: usize,
     ) {
-        let obj = match objects.get(id) {
+        if depth > lumina_core::validation::MAX_GROUP_DEPTH {
+            return;
+        }
+        let obj = match ctx.objects.get(id) {
             Some(o) => o,
             None => return,
         };
-        let state = match states.get(id) {
+        let state = match ctx.states.get(id) {
             Some(s) => s,
             None => return,
         };
@@ -227,11 +249,20 @@ impl VelloRenderer {
             Object::Group(props) => {
                 let transform = crate::common::scene::group_transform(parent, state);
 
-                for child_id in crate::common::scene::sorted_children(&props.children, objects) {
-                    self.draw_node(scene, child_id, objects, states, transform, canvas);
+                for child_id in crate::common::scene::sorted_children(&props.children, ctx.objects)
+                {
+                    self.draw_node(scene, child_id, ctx, transform, depth + 1);
                 }
             }
-            _ => self.draw_leaf(scene, obj, state, parent, canvas, objects, states),
+            _ => self.draw_leaf(
+                scene,
+                obj,
+                state,
+                parent,
+                ctx.canvas,
+                ctx.objects,
+                ctx.states,
+            ),
         }
     }
 

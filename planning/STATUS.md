@@ -24,6 +24,30 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (later) — Wave 1: scenes are now bounded computations
+
+- `AAA-SEC-01/02/04` landed. Every limit sits in `lumina_core::validation`,
+  the one chokepoint server, CLI, and both SDKs already call, so none can be
+  bypassed by reaching the renderer another way.
+- Bounded: canvas dimension, fps, duration, **the product** `duration x fps`
+  (each factor can be reasonable while the product is not), `sample_count`,
+  `function_str` length, `Particles.count`, derived tick counts, and group
+  nesting depth. Non-positive and non-finite tick steps rejected outright —
+  `x_step: 0.0` produced `inf as i32`, saturating to `i32::MAX`.
+- Group depth mattered most: a **straight** chain trips no cycle check, and
+  8 MiB of JSON encodes ~150 000 levels. That overflowed the stack during
+  *validation*, aborting the process before any render limit applied. Both
+  renderers carry the limit independently since `lumina-renderer` is a public
+  API callable without validating first.
+- 12 adversarial fixtures added, each asserting a specific new error code.
+  Tests 117 → 129. The whole scene corpus — 9 examples, 16 parity fixtures —
+  still validates, so no false positives.
+- Cycle detection also stopped allocating a `String` per node visited
+  (`path.contains(&id.to_string())` was O(n²) allocations); Vello's scene walk
+  gained a `WalkCtx` so recursion carries only what varies.
+- New debt: TD-23, `ParticlesProps` emitter fields lack `#[serde(default)]`,
+  contradicting the documented schema convention. Found writing the fixtures.
+
 ## 2026-09-02 — **v0.4.0 released**; the AAA programme opens
 
 - The ten-PR stack landed. Merging it collapsed the base chain — `--delete-branch`
