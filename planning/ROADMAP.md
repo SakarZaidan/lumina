@@ -35,8 +35,8 @@ publishable and contributable.
   per crate (TD-15).
 - [ ] Release automation: adopt release-plz; first crates.io publish of the
   five library crates + CLI (ADR-0009, ADR-0011).
-- [ ] Examples portability: bundle an OFL-licensed font under
-  `examples/assets/`, stop hardcoding `/usr/share/fonts` (TD-16).
+- [x] Examples portability: bundle an OFL-licensed font under
+  `examples/assets/`, stop hardcoding `/usr/share/fonts` (TD-16, #10).
 
 **Non-goals:** performance work, server auth, typed schema.
 

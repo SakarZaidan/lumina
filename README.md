@@ -198,7 +198,7 @@ cargo build --release
   },
   "assets": {
     "fonts": [
-      { "id": "sans", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }
+      { "id": "sans", "path": "examples/assets/fonts/LiberationSans-Regular.ttf" }
     ]
   },
   "objects": {

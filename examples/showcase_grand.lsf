@@ -16,11 +16,11 @@
     "fonts": [
       {
         "id": "sans",
-        "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        "path": "examples/assets/fonts/LiberationSans-Regular.ttf"
       },
       {
         "id": "bold",
-        "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+        "path": "examples/assets/fonts/LiberationSans-Bold.ttf"
       }
     ],
     "images": [

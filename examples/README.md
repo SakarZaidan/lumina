@@ -37,23 +37,16 @@ point for producing LSF programmatically:
 python3 examples/gen_grand_showcase.py   # regenerates the .lsf in place
 ```
 
-## Font paths (portability note)
+## Fonts
 
-The scenes reference a system font by absolute path, e.g.:
+The scenes use the bundled [Liberation Sans](assets/fonts/) (SIL OFL 1.1 —
+see [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt)) via a repo-relative path:
 
 ```json
-"fonts": [{ "id": "main", "path": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" }]
+"fonts": [{ "id": "main", "path": "examples/assets/fonts/LiberationSans-Regular.ttf" }]
 ```
 
-That path exists on Debian/Ubuntu. On other systems, point it at any TTF you
-have:
-
-| OS | Try |
-|---|---|
-| Fedora | `/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf` |
-| macOS | `/System/Library/Fonts/Supplemental/Arial.ttf` (or any font in `~/Library/Fonts`) |
-| Windows | `C:\\Windows\\Fonts\\arial.ttf` |
-
-If a font fails to load, text objects simply don't draw — the render still
-succeeds. Bundling a portable OFL-licensed font with the examples is planned
-(`planning/TECH_DEBT.md` TD-16).
+Font paths are resolved against the current working directory, so run the CLI
+from the repository root (as in the command above). To use your own font,
+point `path` at any `.ttf` on your system. If a font fails to load, text
+objects simply don't draw — the render still succeeds.

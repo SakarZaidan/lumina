@@ -14,8 +14,8 @@ import json
 import math
 import os
 
-FONT_REG = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+FONT_REG = "examples/assets/fonts/LiberationSans-Regular.ttf"
+FONT_BOLD = "examples/assets/fonts/LiberationSans-Bold.ttf"
 LOGO = os.path.join(os.path.dirname(__file__), "assets", "lumina_node.svg")
 
 # Authoring resolution is 1920x1080. SCALE renders the scene at a lower output

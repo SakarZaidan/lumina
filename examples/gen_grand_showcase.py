@@ -18,8 +18,8 @@ import json
 import math
 import os
 
-FONT_REG = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+FONT_REG = "examples/assets/fonts/LiberationSans-Regular.ttf"
+FONT_BOLD = "examples/assets/fonts/LiberationSans-Bold.ttf"
 LOGO = os.path.join(os.path.dirname(__file__), "assets", "lumina_node.svg")
 
 SCALE = float(os.environ.get("LUMINA_SHOWCASE_SCALE", 2.0 / 3.0))  # 1.0=1080p, 2/3=720p
