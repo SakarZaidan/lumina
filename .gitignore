@@ -2,6 +2,7 @@
 .claude/
 /plan-v1.md
 /text.md
+/.zcode/
 
 # ── Rust build artifacts ──────────────────────────────────────────────────────
 /target/
