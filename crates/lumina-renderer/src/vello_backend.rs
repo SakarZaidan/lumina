@@ -192,7 +192,7 @@ impl VelloRenderer {
         height: u32,
         background: &str,
         camera: Option<&CameraState>,
-    ) -> Scene {
+    ) -> Result<Scene, RendererError> {
         let mut scene = Scene::new();
 
         // Fill background
@@ -215,10 +215,10 @@ impl VelloRenderer {
             canvas: (width, height),
         };
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut scene, &id, &ctx, root, 0);
+            self.draw_node(&mut scene, &id, &ctx, root, 0)?;
         }
 
-        scene
+        Ok(scene)
     }
 
     /// Walk one node of the scene graph, recursing through groups.
@@ -232,17 +232,20 @@ impl VelloRenderer {
         ctx: &WalkCtx<'_>,
         parent: crate::common::scene::Mat2x3,
         depth: usize,
-    ) {
+    ) -> Result<(), RendererError> {
         if depth > lumina_core::validation::MAX_GROUP_DEPTH {
-            return;
+            return Err(RendererError::Failed(format!(
+                "group nesting deeper than {} at '{id}'",
+                lumina_core::validation::MAX_GROUP_DEPTH
+            )));
         }
         let obj = match ctx.objects.get(id) {
             Some(o) => o,
-            None => return,
+            None => return Ok(()),
         };
         let state = match ctx.states.get(id) {
             Some(s) => s,
-            None => return,
+            None => return Ok(()),
         };
 
         match obj {
@@ -251,8 +254,9 @@ impl VelloRenderer {
 
                 for child_id in crate::common::scene::sorted_children(&props.children, ctx.objects)
                 {
-                    self.draw_node(scene, child_id, ctx, transform, depth + 1);
+                    self.draw_node(scene, child_id, ctx, transform, depth + 1)?;
                 }
+                Ok(())
             }
             _ => self.draw_leaf(
                 scene,
@@ -266,6 +270,14 @@ impl VelloRenderer {
         }
     }
 
+    /// Emit one leaf object.
+    ///
+    /// Returns `Err` on the same malformed input the CPU backend rejects.
+    /// The two backends must agree on failure as well as on pixels: when one
+    /// aborted the export and the other silently skipped the object, the same
+    /// scene produced different output depending on `--backend`, and the
+    /// pixel-diff suite could not see it — it only compares frames that both
+    /// backends produced.
     #[allow(clippy::too_many_arguments)]
     fn draw_leaf(
         &self,
@@ -276,7 +288,7 @@ impl VelloRenderer {
         canvas: (u32, u32),
         _objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
-    ) {
+    ) -> Result<(), RendererError> {
         let affine = mat.to_kurbo();
         match obj {
             Object::Circle(_) => {
@@ -284,7 +296,7 @@ impl VelloRenderer {
                 let cy = state["cy"].as_f64().unwrap_or(0.0);
                 let radius = state["radius"].as_f64().unwrap_or(0.0);
                 if radius <= 0.0 {
-                    return;
+                    return Ok(());
                 }
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
@@ -329,7 +341,7 @@ impl VelloRenderer {
                 let w = state["width"].as_f64().unwrap_or(0.0);
                 let h = state["height"].as_f64().unwrap_or(0.0);
                 if w <= 0.0 || h <= 0.0 {
-                    return;
+                    return Ok(());
                 }
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
@@ -425,12 +437,17 @@ impl VelloRenderer {
                 scene.stroke(&stroke, affine, stroke_color, None, &line);
             }
             Object::Arrow(_) => {
-                let from = state["from"].as_array();
-                let to = state["to"].as_array();
-                let (from, to) = match (from, to) {
-                    (Some(f), Some(t)) if f.len() >= 2 && t.len() >= 2 => (f, t),
-                    _ => return,
-                };
+                let from = state["from"].as_array().ok_or_else(|| {
+                    RendererError::Failed("Arrow 'from' property is missing or not an array".into())
+                })?;
+                let to = state["to"].as_array().ok_or_else(|| {
+                    RendererError::Failed("Arrow 'to' property is missing or not an array".into())
+                })?;
+                if from.len() < 2 || to.len() < 2 {
+                    return Err(RendererError::Failed(
+                        "Arrow 'from'/'to' arrays must have 2 elements".into(),
+                    ));
+                }
                 let fx = from[0].as_f64().unwrap_or(0.0);
                 let fy = from[1].as_f64().unwrap_or(0.0);
                 let tx = to[0].as_f64().unwrap_or(0.0);
@@ -470,19 +487,19 @@ impl VelloRenderer {
                 };
                 let (x0, y0) = match get_pt("p0") {
                     Some(p) => p,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let (x1, y1) = match get_pt("p1") {
                     Some(p) => p,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let (x2, y2) = match get_pt("p2") {
                     Some(p) => p,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let (x3, y3) = match get_pt("p3") {
                     Some(p) => p,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
@@ -513,7 +530,7 @@ impl VelloRenderer {
             Object::Polygon(_) => {
                 let points = match state["points"].as_array() {
                     Some(p) => p,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
@@ -539,7 +556,7 @@ impl VelloRenderer {
                 }
                 path.close_path();
                 if !min_x.is_finite() {
-                    return;
+                    return Ok(());
                 }
                 let bbox = (min_x, min_y, max_x - min_x, max_y - min_y);
 
@@ -629,7 +646,7 @@ impl VelloRenderer {
                     parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
                 let range = end - start;
                 if range <= 0.0 || step <= 0.0 {
-                    return;
+                    return Ok(());
                 }
 
                 let stroke = flat_stroke(2.0);
@@ -769,7 +786,7 @@ impl VelloRenderer {
 
                 let axes_s = match states.get(axes_id) {
                     Some(s) => s,
-                    None => return,
+                    None => return Ok(()),
                 };
                 let x = axes_s["x"].as_f64().unwrap_or(0.0);
                 let y = axes_s["y"].as_f64().unwrap_or(0.0);
@@ -897,7 +914,7 @@ impl VelloRenderer {
             Object::Image(_) | Object::SVG(_) => {
                 let asset_id = state["asset_id"].as_str().unwrap_or("");
                 if asset_id.is_empty() {
-                    return;
+                    return Ok(());
                 }
                 let x = state["x"].as_f64().unwrap_or(0.0);
                 let y = state["y"].as_f64().unwrap_or(0.0);
@@ -949,7 +966,7 @@ impl VelloRenderer {
             Object::Particles(_) => {
                 let count = state["count"].as_u64().unwrap_or(0) as u32;
                 if count == 0 {
-                    return;
+                    return Ok(());
                 }
                 let ex = state["emitter_x"].as_f64().unwrap_or(0.0) as f32;
                 let ey = state["emitter_y"].as_f64().unwrap_or(0.0) as f32;
@@ -983,6 +1000,7 @@ impl VelloRenderer {
             }
             Object::Group(_) => {} // handled in draw_node
         }
+        Ok(())
     }
 }
 
@@ -996,7 +1014,7 @@ impl Renderer for VelloRenderer {
         background: &str,
         camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError> {
-        let scene = self.build_scene(objects, states, width, height, background, camera);
+        let scene = self.build_scene(objects, states, width, height, background, camera)?;
 
         // Create render target texture (Rgba8Unorm with STORAGE_BINDING + COPY_SRC)
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
