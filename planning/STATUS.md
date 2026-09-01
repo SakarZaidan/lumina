@@ -23,6 +23,26 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-01 — First matrix run triaged; two latent bugs fixed
+
+- The 3-OS matrix and the wasm suite had never run before this PR, and both
+  failed on their first outing. Windows: DX12-WARP aborts the renderer test
+  process (exit 2173, two tests never reporting) instead of returning an error
+  the skip path can catch — probe now suppressed by `LUMINA_DISABLE_VELLO=1`,
+  registered as TD-20.
+- WASM: scenes were built with `serde_wasm_bindgen::to_value`, which emits a
+  JS `Map`; `Scene` reads every field as absent from one, so all three tests
+  died on `missing field version`. Tests now use `JSON.parse` — the path the
+  JS SDK actually takes (`new LuminaEngine(scene as object)`).
+- That exposed a real engine bug behind it: `hit_test` tested every object in
+  world space and let a `Group` answer for its own children, so **nothing
+  inside a group was ever clickable**. It now walks roots only, descends
+  through groups, and returns the deepest object. Group scale/rotation still
+  unapplied to the hit point (TD-21).
+- Local gate green: fmt, clippy `-D warnings`, 117 native tests under both CI
+  env configurations, 3 wasm tests, 16-fixture parity suite under
+  `LUMINA_REQUIRE_VELLO=1`.
+
 ## 2026-07-13 (later still) — Rustdoc fill (TD-15)
 
 - PR [#18](https://github.com/SakarZaidan/lumina/pull/18) (stacked on #17):
