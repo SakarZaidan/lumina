@@ -1613,7 +1613,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-bench"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "lumina-core",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1641,7 +1641,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "glam",
  "log",
@@ -1653,7 +1653,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-export"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "image",
@@ -1668,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-renderer"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "evalexpr",
  "glam",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-schema"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "glam",
  "schemars",
@@ -1698,7 +1698,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-server"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1719,7 +1719,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-text"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "fontdue",
  "glam",
@@ -1731,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "lumina-wasm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

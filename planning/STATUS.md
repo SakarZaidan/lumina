@@ -7,21 +7,42 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 
 | Area | | Notes |
 |---|---|---|
-| CI on `main` | 🟢 | 3-OS matrix + MSRV + wasm tests pending merge of #17 stack |
-| Tests | 🟢 | 92 + 3 wasm passing; zero flakes |
-| Coverage | 🟡 | not measured yet — tooling v0.4 |
-| Benchmarks | 🟡 | exist, manual only; not in CI (TD-14) |
-| Docs (book + rustdoc) | 🟢 | book live on Pages, current for v0.3.0 |
-| Examples | 🟢 | all render on any OS; OFL font bundled (TD-16 closed, #10) |
-| Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
-| Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite in CI (TD-01/TD-11 closed) |
-| Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
-| Dependencies | 🟢 | deny green; resvg/tiny-skia current; ttf-parser 0.21 only via fontdue (TD-17) |
+| CI on `main` | 🟢 | 10 jobs green on ubuntu/macos/windows + MSRV + wasm |
+| Tests | 🟢 | 117 native + 3 wasm passing; zero flakes |
+| Coverage | 🟡 | still not measured — retargeted to v0.5 (`AAA-TEST-06`) |
+| Benchmarks | 🟡 | exist, manual only; not in CI (TD-14 remainder, `AAA-TEST-07`) |
+| Docs (book + rustdoc) | 🟢 | book live on Pages; every public item documented, lint-enforced |
+| Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
+| Security | 🟡 | server unhardened pre-v0.5 by design (TD-09); five audited DoS vectors open (`AAA-SEC-01..05`) |
+| Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite gating in CI; Windows probe suppressed (TD-20) |
+| Release | 🟢 | v0.4.0 tagged and released |
+| Distribution | 🔴 | nothing published to crates.io, PyPI, or npm — the largest open gap (`AAA-REL-*`) |
+| Dependencies | 🟢 | deny green; 386 locked crates (mitex removed); rustybuzz tracked as TD-22 |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-02 — **v0.4.0 released**; the AAA programme opens
+
+- The ten-PR stack landed. Merging it collapsed the base chain — `--delete-branch`
+  removed each PR's parent, so several merged into their parent branch and the
+  odd-numbered ones auto-closed. Recovered by opening #22 from the surviving,
+  CI-green stack head; every individual commit is preserved, so the per-TD
+  trail and `git bisect` both still work. Lesson recorded: never
+  `--delete-branch` while merging a stack.
+- `main` went from 31 to 78 commits and now carries everything v0.4 promised:
+  backend parity, the 16-fixture pixel-diff suite, the server safety minimum,
+  the 3-OS matrix, and 416 documented public items.
+- Repository made findable at last: description, homepage, and 20 topics set;
+  Discussions on; the unused Wiki and Projects off; branch deletion on merge.
+- METRICS refreshed with a v0.4.0 column, and one honest correction: the
+  v0.3.0 "0 panicking calls in production" row was wrong. There are 2, both
+  provably guarded. `AAA-CQ-02` replaces the grep with a lint.
+- **`plan/`** opens the AAA programme: a master plan and fourteen dimension
+  subplans, each citing `file:line` evidence. `planning/ROADMAP.md` remains
+  the single schedule of record (ADR-0013).
 
 ## 2026-09-01 (later) — Fresh advisories triaged; mitex dropped
 
