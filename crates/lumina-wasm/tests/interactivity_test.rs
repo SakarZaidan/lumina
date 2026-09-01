@@ -5,8 +5,14 @@ use serde_json::json;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
+/// Build the scene the way a real caller does.
+///
+/// The JS SDK passes a plain object (`new LuminaEngine(scene as object)`), which
+/// is what `JSON.parse` produces. `serde_wasm_bindgen::to_value` would instead
+/// emit a JS `Map`, and `Scene` does not deserialize from one — every field
+/// reads as absent, so construction fails on `missing field \`version\``.
 fn to_js(v: serde_json::Value) -> JsValue {
-    serde_wasm_bindgen::to_value(&v).expect("scene to JsValue")
+    js_sys::JSON::parse(&v.to_string()).expect("scene JSON parses")
 }
 
 #[wasm_bindgen_test]
