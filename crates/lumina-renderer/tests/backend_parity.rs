@@ -368,3 +368,94 @@ fn parity_17_showcase_combined() {
     // and a camera move; text is present, so use the text budget.
     assert_parity("17_showcase_combined", TEXT_TOL);
 }
+
+// ── Behavioural parity ──────────────────────────────────────────────────────
+//
+// The pixel suite above compares frames that *both* backends produced. When
+// one backend errors and the other silently skips the object, there is no pair
+// of frames to compare and the divergence is invisible to it — which is how
+// the Arrow case survived: Skia aborted the whole export, Vello rendered the
+// frame without the object, and the same scene gave different output depending
+// on `--backend`.
+//
+// These tests assert the backends agree on *failure*, not on pixels.
+
+/// A scene whose Arrow is well-formed until a timeline keyframe overwrites
+/// `from` with a one-element array.
+///
+/// `ArrowProps.from` is `[f32; 2]`, so serde guarantees two elements at parse
+/// time. Timeline state is untyped `serde_json::Value` (TD-07), so a keyframe
+/// is the one route by which malformed geometry reaches a renderer.
+fn malformed_arrow_state() -> (
+    std::collections::HashMap<String, lumina_schema::Object>,
+    std::collections::HashMap<String, serde_json::Value>,
+) {
+    let scene: Scene = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+        "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0, "background": "#000000" },
+        "objects": {
+            "a": { "type": "Arrow", "properties": { "from": [8.0, 8.0], "to": [56.0, 56.0] } }
+        },
+        "timeline": []
+    }))
+    .expect("fixture scene must deserialise");
+
+    let graph = SceneGraph::from_scene(&scene);
+    let mut states = Timeline::from_scene(&scene).get_state_at(0.0);
+    // What a bad generator, or a hand-edited keyframe, produces.
+    if let Some(state) = states.get_mut("a") {
+        state["from"] = serde_json::json!([8.0]);
+    }
+    (graph.objects, states)
+}
+
+#[test]
+fn both_backends_reject_a_malformed_arrow() {
+    let (objects, states) = malformed_arrow_state();
+
+    let mut skia = SkiaRenderer::new();
+    let skia_result = skia.render_frame(&objects, &states, 64, 64, "#000000", None);
+    assert!(
+        skia_result.is_err(),
+        "the CPU backend must reject a malformed Arrow rather than drawing something"
+    );
+
+    let Some(mut vello) = vello_or_skip() else {
+        return;
+    };
+    let vello_result = vello.render_frame(&objects, &states, 64, 64, "#000000", None);
+    assert!(
+        vello_result.is_err(),
+        "the GPU backend must reject the same input the CPU backend rejects. Silently skipping \
+         the object makes the render depend on --backend, and the pixel suite cannot catch it."
+    );
+}
+
+#[test]
+fn both_backends_render_a_well_formed_arrow() {
+    // The guard above must not reject valid input on either backend.
+    let scene: Scene = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+        "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0, "background": "#000000" },
+        "objects": {
+            "a": { "type": "Arrow", "properties": { "from": [8.0, 8.0], "to": [56.0, 56.0] } }
+        },
+        "timeline": []
+    }))
+    .expect("fixture scene must deserialise");
+    let objects = SceneGraph::from_scene(&scene).objects;
+    let states = Timeline::from_scene(&scene).get_state_at(0.0);
+
+    let mut skia = SkiaRenderer::new();
+    assert!(skia
+        .render_frame(&objects, &states, 64, 64, "#000000", None)
+        .is_ok());
+
+    if let Some(mut vello) = vello_or_skip() {
+        assert!(vello
+            .render_frame(&objects, &states, 64, 64, "#000000", None)
+            .is_ok());
+    }
+}

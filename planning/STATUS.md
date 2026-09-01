@@ -24,6 +24,31 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (later still) — Wave 1: runtime and backend agreement
+
+- `AAA-SEC-03`: `/render` now hands its work to `spawn_blocking`. It used to
+  render every frame and then block on ffmpeg on a worker thread, so N
+  concurrent renders starved the runtime and `/health` stopped answering.
+- The regression test for it is **structural**, not timing-based, and that is
+  deliberate: a timing test was written first and **passed against the unfixed
+  handler**. Starving a runtime deterministically needs a render slow enough to
+  make the suite slow; anything faster is a coin flip. A test that passes
+  without the fix is worse than no test. The source assertion fails without the
+  fix and passes with it — verified both ways — and follows the same technique
+  as `duplication_gate.rs`.
+- `AAA-SEC-05`: Vello's `draw_leaf` now returns `Result` and rejects the same
+  malformed `Arrow` the CPU backend rejects. Previously Skia aborted the export
+  and Vello silently skipped the object, so the same scene produced different
+  output depending on `--backend`.
+- New test category: **behavioural parity**. The pixel suite compares frames
+  both backends produced, so when one errors and the other skips there is
+  nothing to compare — the divergence was invisible to it by construction.
+- `ArrowProps.from`/`to` are `[f32; 2]`, so serde guarantees two elements at
+  parse time. A timeline keyframe is the only route by which malformed geometry
+  reaches a renderer, because timeline state is untyped (TD-07). That is the
+  fixture the new test uses.
+- Tests 129 → 132.
+
 ## 2026-09-02 (later) — Wave 1: scenes are now bounded computations
 
 - `AAA-SEC-01/02/04` landed. Every limit sits in `lumina_core::validation`,

@@ -228,12 +228,68 @@ fn resolve_asset_path(requested: &str) -> Result<std::path::PathBuf, String> {
     }
 }
 
+/// What a blocking render produced, or why it could not.
+///
+/// The render runs on a blocking thread, so it cannot build an axum `Response`
+/// (which is not `Send` across every branch here). It returns this instead and
+/// the async handler maps it, which also keeps status-code policy in one place.
+enum RenderOutcome {
+    Done {
+        bytes: Vec<u8>,
+    },
+    /// The caller asked for something invalid — an asset path outside the root.
+    BadRequest(String),
+    /// Something failed on our side.
+    Failed(String),
+}
+
 async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
+    // Validation is cheap and bounded (see AAA-SEC-01), so it stays on the
+    // async path: an invalid scene is rejected without occupying a blocking
+    // thread at all.
     let validation = validate_scene_data(&payload.scene);
     if !validation.valid {
         return (StatusCode::UNPROCESSABLE_ENTITY, Json(validation)).into_response();
     }
 
+    let (ext, content_type) = match payload.format.as_str() {
+        "webm" => ("webm", "video/webm"),
+        "gif" => ("gif", "image/gif"),
+        _ => ("mp4", "video/mp4"),
+    };
+
+    // Everything past here is CPU-bound rendering followed by a blocking wait
+    // on ffmpeg. Running it directly on the async path let N concurrent
+    // renders (N = worker threads) starve the runtime, so /health and every
+    // other route stopped answering until they finished.
+    let outcome = tokio::task::spawn_blocking(move || render_blocking(payload, ext)).await;
+
+    match outcome {
+        Ok(RenderOutcome::Done { bytes }) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", content_type)
+            .body(axum::body::Body::from(bytes))
+            .unwrap_or_else(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Response build error: {e}"),
+                )
+                    .into_response()
+            }),
+        Ok(RenderOutcome::BadRequest(msg)) => (StatusCode::BAD_REQUEST, msg).into_response(),
+        Ok(RenderOutcome::Failed(msg)) => (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+        // The blocking task panicked or was cancelled. Nothing in it should
+        // panic, but a 500 is the honest answer if one ever does.
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Render task did not complete: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+/// Load assets, render, and encode. Runs on a blocking thread.
+fn render_blocking(payload: RenderRequest, ext: &str) -> RenderOutcome {
     let mut renderer = SkiaRenderer::new();
     // Load declared font/image assets from disk, restricted to the asset
     // root (LUMINA_ASSET_ROOT, default CWD): /render must not be a remote
@@ -242,7 +298,7 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     for font in &payload.scene.assets.fonts {
         let path = match resolve_asset_path(&font.path) {
             Ok(p) => p,
-            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+            Err(msg) => return RenderOutcome::BadRequest(msg),
         };
         match std::fs::read(&path) {
             Ok(data) => {
@@ -256,7 +312,7 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     for img in &payload.scene.assets.images {
         let path = match resolve_asset_path(&img.path) {
             Ok(p) => p,
-            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+            Err(msg) => return RenderOutcome::BadRequest(msg),
         };
         match std::fs::read(&path) {
             Ok(data) => {
@@ -271,19 +327,7 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 
     let temp_dir = match tempfile::tempdir() {
         Ok(d) => d,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Temp dir error: {}", e),
-            )
-                .into_response()
-        }
-    };
-    // Pick encoder + MIME type from the requested format (default mp4).
-    let (ext, content_type) = match payload.format.as_str() {
-        "webm" => ("webm", "video/webm"),
-        "gif" => ("gif", "image/gif"),
-        _ => ("mp4", "video/mp4"),
+        Err(e) => return RenderOutcome::Failed(format!("Temp dir error: {e}")),
     };
     let output_path = temp_dir.path().join(format!("output.{ext}"));
 
@@ -295,28 +339,10 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 
     match result {
         Ok(_) => match std::fs::read(&output_path) {
-            Ok(data) => Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", content_type)
-                .body(axum::body::Body::from(data))
-                .unwrap_or_else(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Response build error: {e}"),
-                    )
-                        .into_response()
-                }),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to read output: {}", e),
-            )
-                .into_response(),
+            Ok(bytes) => RenderOutcome::Done { bytes },
+            Err(e) => RenderOutcome::Failed(format!("Failed to read output: {e}")),
         },
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Rendering failed: {}", e),
-        )
-            .into_response(),
+        Err(e) => RenderOutcome::Failed(format!("Rendering failed: {e}")),
     }
 }
 
@@ -358,6 +384,47 @@ mod tests {
     use super::*;
     use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
     use std::collections::HashMap;
+
+    /// The render path must not occupy the async runtime.
+    ///
+    /// `render_scene` used to render every frame and then block on ffmpeg
+    /// directly on a worker thread. With as many concurrent renders as there
+    /// are workers, the runtime had nothing left to schedule and `/health` —
+    /// which does no work at all — stopped answering.
+    ///
+    /// This is asserted structurally rather than by timing. A timing test was
+    /// written first and rejected: it passed against the *unfixed* handler,
+    /// because starving a runtime deterministically needs a render slow enough
+    /// to make the suite slow, and anything faster is a coin flip. A test that
+    /// passes without the fix is worse than no test.
+    ///
+    /// The same technique guards backend deduplication in
+    /// `lumina-renderer/tests/duplication_gate.rs`.
+    #[test]
+    fn render_runs_off_the_async_runtime() {
+        let src = include_str!("lib.rs");
+        let handler = src
+            .split("async fn render_scene")
+            .nth(1)
+            .expect("render_scene must exist");
+        // Stop at the next item so we only inspect this handler's body.
+        let body = handler
+            .split("\nfn render_blocking")
+            .next()
+            .unwrap_or(handler);
+
+        assert!(
+            body.contains("spawn_blocking"),
+            "render_scene must hand its work to tokio::task::spawn_blocking. Rendering is \
+             CPU-bound and then blocks on ffmpeg; on the async path it starves every worker \
+             thread and the whole server stops responding."
+        );
+        assert!(
+            !body.contains("exporter.export_"),
+            "render_scene must not call an exporter directly — that work belongs on a blocking \
+             thread, in render_blocking."
+        );
+    }
 
     #[test]
     fn asset_paths_inside_root_resolve() {
