@@ -62,9 +62,14 @@ not a judgement, and it is reversible.
 
 ## Branch protection
 
-`main` is protected: required status checks, linear history, no force-pushes,
-no deletions, enforcement including administrators, and one required approving
-review.
+`main` is protected: required status checks, no force-pushes, no deletions,
+enforcement including administrators, and one required approving review.
+
+Linear history is deliberately *not* required. The project uses stacked pull
+requests for large workstreams, and the per-commit trail matters — `TECH_DEBT.md`
+closes items by linking the commit that fixed them, and `git bisect` has to
+work across a release. Squash-merging is the default for ordinary changes; a
+merge commit is available when preserving the individual commits is the point.
 
 That last rule is deliberate and it has a cost: while the project has a single
 maintainer, it means **the maintainer cannot merge their own work
