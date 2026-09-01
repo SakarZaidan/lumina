@@ -24,6 +24,8 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 | TD-17 | `ttf-parser` 0.21 unmaintained (RUSTSEC-2026-0192) yet parses untrusted font files; pinned via fontdue 0.9 / resvg 0.42 | Medium | Font-parsing bugs won't get upstream fixes | resvg done v0.4 ([#19](https://github.com/SakarZaidan/lumina/pull/19)); fontdue → v0.5 with TD-18 | SVG path clean (ttf-parser 0.25); fontdue 0.9.3 (latest) still pins 0.21 — close via fontdue release or rasterizer swap |
 | TD-18 | Text layout duplicated: Skia draws glyphs inline, Vello resamples a `raster.rs` string bitmap — glyph AA and low-opacity blending diverge (text parity fixture needs a wider tolerance) | Medium | Cross-backend text fidelity, esp. under camera zoom | v0.5 | Open |
 | TD-19 | `LineProps.dash` schema field implemented by neither backend (docs previously claimed CPU support) | Low | Dashed-line scenes silently render solid | v0.5 | Open |
+| TD-20 | Vello adapter probing aborts the process on Windows CI (DX12-WARP), so the graceful skip is never reached | Medium | Backend parity unverified on Windows | v0.5 | Open — probe suppressed via `LUMINA_DISABLE_VELLO=1` ([#17](https://github.com/SakarZaidan/lumina/pull/17)) |
+| TD-21 | WASM `hit_test` applies only a group's translation, not its scale or rotation | Low | Mis-hits inside scaled/rotated groups | v0.5 | Open — needs `lumina-renderer`'s crate-private `common::scene::group_transform` shared (RFC) |
 
 ## Notes per item
 
@@ -40,3 +42,9 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
   expose `lumina-server` to untrusted networks before v0.5.
 - **TD-13**: `pyproject.toml` 0.2.0→0.3.0 drift fixed in the 2026-07-08
   hygiene batch (see STATUS.md); tests/publishing remain open.
+- **TD-20/TD-21** were both surfaced by turning previously-unrun jobs on:
+  the 3-OS matrix and the `wasm-bindgen` suite had never executed before
+  #17. TD-20 is an environment defect, not a Lumina one — the probe is
+  suppressed rather than the tests deleted, so parity coverage on Linux is
+  unchanged and re-enabling it is a one-line revert once a Windows runner
+  offers an adapter that fails cleanly.
