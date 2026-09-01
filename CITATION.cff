@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "Lumina: a declarative animation engine"
+message: "If you use Lumina in academic work, please cite it as below."
+type: software
+authors:
+  - family-names: Hashim
+    given-names: Sakar
+    alias: SakarZaidan
+repository-code: "https://github.com/SakarZaidan/lumina"
+url: "https://sakarzaidan.github.io/lumina/"
+abstract: >-
+  Lumina is a declarative animation engine written in Rust. A scene is a
+  JSON document (the Lumina Scene Format) describing objects and a timeline
+  of keyframes; the engine evaluates that timeline at any point in time and
+  rasterises the result deterministically on a CPU backend (tiny-skia), a
+  GPU-capable backend (vello/wgpu), or in WebAssembly. The format is
+  schema-validated so that scenes can be generated and repaired
+  programmatically, including by language models.
+keywords:
+  - animation
+  - rendering
+  - rust
+  - declarative
+  - webassembly
+  - data-visualization
+license: MIT
+version: 0.4.0
+date-released: "2026-09-02"
