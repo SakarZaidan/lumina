@@ -11,14 +11,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+/// Why a patch operation could not be applied.
 #[derive(Debug, Error)]
 pub enum PatchError {
+    /// The referenced object id does not exist in the scene.
     #[error("object '{0}' not found")]
     ObjectNotFound(String),
+    /// The provided type/properties do not form a valid object.
     #[error("invalid object for '{0}': {1}")]
     InvalidObject(String, String),
+    /// No keyframe exists for the object at the given time.
     #[error("keyframe at t={1} not found for object '{0}'")]
     KeyframeNotFound(String, f32),
+    /// (De)serialization of an object or property failed.
     #[error("serialization error: {0}")]
     Serde(#[from] serde_json::Error),
 }
@@ -26,10 +31,14 @@ pub enum PatchError {
 /// A keyframe body (the per-op `object` provides the target id).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyframeSpec {
+    /// Time in seconds.
     pub time: f32,
+    /// Property values to key at this time.
     pub state: Value,
+    /// Easing toward this keyframe (default `linear`).
     #[serde(default = "default_easing")]
     pub easing: String,
+    /// Parameters for `cubic_bezier`/`spline` easings.
     #[serde(default)]
     pub easing_params: Option<Value>,
 }
@@ -38,60 +47,106 @@ fn default_easing() -> String {
     "linear".to_string()
 }
 
+/// One semantic edit, tagged by `"op"` in JSON.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op")]
 pub enum PatchOp {
+    /// Add a new object to the scene.
     #[serde(rename = "add_object")]
     AddObject {
+        /// Id for the new object (must be unique).
         id: String,
+        /// LSF object type name (e.g. `"Circle"`).
         #[serde(rename = "type")]
         object_type: String,
+        /// The object's `properties` block.
         properties: Value,
     },
+    /// Remove an object plus its timeline entries, events, and group
+    /// memberships.
     #[serde(rename = "remove_object")]
-    RemoveObject { id: String },
+    RemoveObject {
+        /// Id of the object to remove.
+        id: String,
+    },
+    /// Set one property on an object's initial state.
     #[serde(rename = "update_property")]
     UpdateProperty {
+        /// Target object id.
         object: String,
+        /// Property name.
         property: String,
+        /// New value.
         value: Value,
     },
+    /// Append a keyframe to an object's timeline.
     #[serde(rename = "add_keyframe")]
     AddKeyframe {
+        /// Target object id.
         object: String,
+        /// The keyframe to add.
         keyframe: KeyframeSpec,
     },
+    /// Remove the keyframe at an exact time.
     #[serde(rename = "remove_keyframe")]
-    RemoveKeyframe { object: String, time: f32 },
+    RemoveKeyframe {
+        /// Target object id.
+        object: String,
+        /// Keyframe time in seconds (exact match).
+        time: f32,
+    },
+    /// Replace the state of the keyframe at an exact time.
     #[serde(rename = "update_keyframe")]
     UpdateKeyframe {
+        /// Target object id.
         object: String,
+        /// Keyframe time in seconds (exact match).
         time: f32,
+        /// Replacement state.
         state: Value,
     },
+    /// Add an interactive event entry.
     #[serde(rename = "add_event")]
-    AddEvent { event: EventEntry },
+    AddEvent {
+        /// The event to append.
+        event: EventEntry,
+    },
+    /// Remove the event matching object + trigger.
     #[serde(rename = "remove_event")]
-    RemoveEvent { object: String, trigger: String },
+    RemoveEvent {
+        /// Target object id.
+        object: String,
+        /// Trigger name (e.g. `"click"`).
+        trigger: String,
+    },
+    /// Update any subset of canvas fields.
     #[serde(rename = "update_canvas")]
     UpdateCanvas {
+        /// New canvas width, if changing.
         #[serde(default)]
         width: Option<u32>,
+        /// New canvas height, if changing.
         #[serde(default)]
         height: Option<u32>,
+        /// New frame rate, if changing.
         #[serde(default)]
         fps: Option<u32>,
+        /// New duration in seconds, if changing.
         #[serde(default)]
         duration: Option<f32>,
+        /// New background color, if changing.
         #[serde(default)]
         background: Option<String>,
     },
 }
 
+/// An ordered list of semantic edits against a scene.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScenePatch {
+    /// Optional id of the scene this patch was authored against.
     #[serde(default)]
     pub base_scene_id: Option<String>,
+    /// Operations, applied in order.
     pub patches: Vec<PatchOp>,
 }
 

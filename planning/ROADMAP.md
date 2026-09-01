@@ -17,22 +17,22 @@ each release boundary against the repository as it then is. Debt IDs reference
 publishable and contributable.
 
 **Scope**
-- [ ] Extract `lumina-renderer/src/common/`: shared SVG-path parser, color
-  parser, scene-walk/z-sort helpers (TD-02) — prerequisite for everything below.
-- [ ] Vello parity: gradients, drop shadows, rounded rectangles, dashed lines
-  (TD-01).
-- [ ] Cross-backend pixel-diff golden harness with per-channel tolerance; runs
-  in CI on a curated scene set (TD-11). This is the acceptance gate for parity
+- [x] Extract `lumina-renderer/src/common/`: shared SVG-path parser, color
+  parser, scene-walk/z-sort helpers (TD-02, #12) — prerequisite for everything below.
+- [x] Vello parity: gradients, drop shadows, rounded rectangles, dashed lines
+  (TD-01, #13/#14).
+- [x] Cross-backend pixel-diff golden harness with per-channel tolerance; runs
+  in CI on a curated scene set (TD-11, #11/#14). This is the acceptance gate for parity
   and the safety net for all later refactors.
-- [ ] Unknown easing name → validation error instead of silent `linear`
-  (TD-08; mildly breaking — do it while the scene corpus is small).
-- [ ] Server safety minimum (TD-09 part 1): asset-root allowlist for
+- [x] Unknown easing name → validation error instead of silent `linear`
+  (TD-08, #15; mildly breaking — done while the scene corpus is small).
+- [x] Server safety minimum (TD-09 part 1, #16): asset-root allowlist for
   `/render`, remove `.unwrap()` on bind/serve/response, request body-size limit.
-- [ ] CI foundations (TD-14): `rust-version` in workspace + MSRV job,
+- [x] CI foundations (TD-14, #17): `rust-version` in workspace + MSRV job,
   ubuntu/macos/windows test matrix, concurrency-cancel, run
   `wasm-bindgen-test` suite.
-- [ ] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
-  per crate (TD-15).
+- [x] Rustdoc fill: `///` on all public items, `#![warn(missing_docs)]`
+  per crate (TD-15, #18).
 - [ ] Release automation: adopt release-plz; first crates.io publish of the
   five library crates + CLI (ADR-0009, ADR-0011).
 - [x] Examples portability: bundle an OFL-licensed font under
@@ -82,9 +82,9 @@ checkout in CI.
 - [ ] Typed property system replacing raw `serde_json::Value` flow (TD-07).
   Breaking schema change with a migration guide — must precede 1.0, and comes
   after parity so one validation layer serves both proven-equivalent backends.
-- [ ] LaTeX decision (TD-06): implement real mitex-based typesetting **or**
-  drop the dependency and document the Unicode-substitution approach honestly.
-  Recorded in DECISIONS.md either way.
+- [x] LaTeX decision (TD-06): `mitex` dropped, Unicode substitution documented
+  as what it is (ADR-0012). Real typesetting, if it lands, is greenfield work
+  with its own design — not a dependency waiting to be wired up.
 - [ ] Test-debt closure (TD-10): property tests (proptest) for
   interpolator/easing; unit suites for `lumina-text`, `lumina-schema`, CLI.
 - [ ] Publish Python SDK to PyPI (maturin CI) and JS SDK to npm; expose

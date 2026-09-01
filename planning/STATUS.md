@@ -7,21 +7,158 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 
 | Area | | Notes |
 |---|---|---|
-| CI on `main` | 🟢 | all 8 jobs green (release run `9c35474`) |
+| CI on `main` | 🟢 | 3-OS matrix + MSRV + wasm tests pending merge of #17 stack |
 | Tests | 🟢 | 92 + 3 wasm passing; zero flakes |
 | Coverage | 🟡 | not measured yet — tooling v0.4 |
 | Benchmarks | 🟡 | exist, manual only; not in CI (TD-14) |
 | Docs (book + rustdoc) | 🟢 | book live on Pages, current for v0.3.0 |
 | Examples | 🟢 | all render on any OS; OFL font bundled (TD-16 closed, #10) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09, SECURITY.md) |
-| Backend parity | 🟡 | vello gaps documented; fix is v0.4 flagship (TD-01) |
+| Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite in CI (TD-01/TD-11 closed) |
 | Release | 🟢 | v0.3.0 tagged + GitHub Release with assets |
-| Dependencies | 🟢 | deny green; dependabot active (5 PRs pending triage) |
+| Dependencies | 🟢 | deny green; resvg/tiny-skia current; ttf-parser 0.21 only via fontdue (TD-17) |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-01 (later) — Fresh advisories triaged; mitex dropped
+
+- Seven idle weeks produced two new RUSTSEC hits, both caught only because a
+  PR happened to run — the case for a scheduled audit rather than a
+  push-triggered one.
+- RUSTSEC-2026-0235 reached the workspace through exactly one path, and that
+  path was `mitex` — declared since v0.1, imported by nothing (TD-06). Removed
+  rather than ignored: the vulnerability is gone, not suppressed, and the
+  locked tree fell **428 → 386 crates**. Decision recorded as ADR-0012;
+  TD-06 closed.
+- RUSTSEC-2026-0206 (`rustybuzz`, via usvg/resvg 0.47) has no upgrade to take —
+  resvg 0.47 is current. Ignored with reasoning and registered as TD-22, since
+  it shapes text inside untrusted SVG assets.
+- Also dropped a stale ignore: RUSTSEC-2025-0057 (fxhash) no longer matches
+  any crate in the tree.
+- `cargo deny check`: advisories ok, bans ok, licenses ok, sources ok.
+
+## 2026-09-01 — First matrix run triaged; two latent bugs fixed
+
+- The 3-OS matrix and the wasm suite had never run before this PR, and both
+  failed on their first outing. Windows: DX12-WARP aborts the renderer test
+  process (exit 2173, two tests never reporting) instead of returning an error
+  the skip path can catch — probe now suppressed by `LUMINA_DISABLE_VELLO=1`,
+  registered as TD-20.
+- WASM: scenes were built with `serde_wasm_bindgen::to_value`, which emits a
+  JS `Map`; `Scene` reads every field as absent from one, so all three tests
+  died on `missing field version`. Tests now use `JSON.parse` — the path the
+  JS SDK actually takes (`new LuminaEngine(scene as object)`).
+- That exposed a real engine bug behind it: `hit_test` tested every object in
+  world space and let a `Group` answer for its own children, so **nothing
+  inside a group was ever clickable**. It now walks roots only, descends
+  through groups, and returns the deepest object. Group scale/rotation still
+  unapplied to the hit point (TD-21).
+- Local gate green: fmt, clippy `-D warnings`, 117 native tests under both CI
+  env configurations, 3 wasm tests, 16-fixture parity suite under
+  `LUMINA_REQUIRE_VELLO=1`.
+
+## 2026-07-13 (evening) — Dep bumps; v0.4 code work complete
+
+- PR [#19](https://github.com/SakarZaidan/lumina/pull/19) (stacked on #18):
+  resvg 0.47 + tiny-skia 0.12 — untrusted-SVG path off ttf-parser 0.21;
+  fontdue (latest release) still pins it → TD-17 retargeted to v0.5 with
+  TD-18. Parity suite = regression net; all green incl. wasm + deny.
+- **v0.4 roadmap code items all done** (7 TD closed, 2 partial-by-design).
+  Open PR stack: #10→#11→#12→#13→#14→#15→#16→#17→#18→#19, merge in order.
+- Remaining before v0.4.0 release: merge stack, owner enables release-plz
+  tokens (ADR-0011), CHANGELOG retitle, tag, METRICS refresh.
+
+## 2026-07-13 (later still) — Rustdoc fill (TD-15)
+
+- PR [#18](https://github.com/SakarZaidan/lumina/pull/18) (stacked on #17):
+  416 undocumented public items filled across all six library crates;
+  `#![warn(missing_docs)]` per crate + CI `-D warnings` = enforcement.
+- lumina-schema fields now state units/semantics — docs.rs becomes a
+  real authoring reference. Per-crate commits, dependency order.
+- v0.4 code work remaining: dep bumps (TD-17). Then release prep.
+
+## 2026-07-13 (later) — CI foundations (TD-14)
+
+- PR [#17](https://github.com/SakarZaidan/lumina/pull/17) (stacked on #16):
+  3-OS test matrix (require-Vello Linux-only for now), MSRV 1.88 job,
+  concurrency-cancel, wasm-bindgen tests now actually run (Node).
+- First-ever macOS/Windows runs — watch this PR's matrix legs for
+  platform surprises; fixes land on the same branch.
+- TD-14 remainder: criterion-in-CI (v0.5), release automation (owner).
+
+## 2026-07-13 — Server safety minimum (TD-09 part 1)
+
+- PR [#16](https://github.com/SakarZaidan/lumina/pull/16) (stacked on #15):
+  `/render` asset paths confined to `LUMINA_ASSET_ROOT` (canonicalize →
+  prefix check; was an arbitrary-file read), 8 MiB body cap (413),
+  bind/serve/response no longer panic. SECURITY.md updated.
+- Verified live with curl: escape → 400, 9 MB body → 413.
+- v0.4 remaining: CI matrix (TD-14), rustdoc (TD-15), dep bumps (TD-17);
+  release-plz blocked on owner.
+
+## 2026-07-12 (night, latest) — Easing strictness; **WS-02 complete**
+
+- PR [#15](https://github.com/SakarZaidan/lumina/pull/15) (stacked on #14):
+  UNKNOWN_EASING validation error with did-you-mean suggestion; registry
+  `EASING_NAMES` + drift-guard test; validation moved to
+  `lumina_core::validation` (server re-exports, CLI + SDKs share it).
+- CLI validates before every render; new `--check` flag (exit 1 on
+  errors). Whole scene corpus passes; typo'd easing verified rejected.
+- **WS-02 Done** — all four acceptance criteria met. v0.4 remaining:
+  server safety (TD-09p1), CI matrix (TD-14), rustdoc (TD-15), dep bumps
+  (TD-17); release-plz blocked on owner tokens.
+- PR stack open for review/merge in order: #10 → #11 → #12 → #13 → #14 → #15.
+
+## 2026-07-12 (night, later) — Vello shadows; TD-01 + TD-11 closed
+
+- PR [#14](https://github.com/SakarZaidan/lumina/pull/14) (stacked on #13):
+  GPU drop shadows composite the shared blurred silhouette (identical
+  bytes to CPU) as a peniko::Image under an opacity layer. No vello/wgpu
+  upgrade needed — WS-02 risk resolved negative.
+- Fixture set now 16 scenes (adds shadows, plot/axes, SVG asset, combined
+  showcase); suite caught + fixed a second real bug: vello axes ticks
+  drawn at grid width (1.0) instead of axis width (2.0).
+- **Backend parity table complete** — every feature row ✅ on both
+  backends. WS-02 scope 1–3 done; only easing strictness (TD-08) remains.
+
+## 2026-07-12 (night) — Vello gradients, rounded rects, dash (TD-01 pt 1)
+
+- PR [#13](https://github.com/SakarZaidan/lumina/pull/13) (stacked on #12):
+  GPU backend renders gradient fills+strokes (peniko brushes, shared bbox
+  geometry), rx/ry rounded rects (shared quad-arc paths), and
+  draw_fraction via kurbo dashes. Fixes gradients silently rendering
+  solid white on vello.
+- Fixtures 05/06/08/09 added; 12-fixture parity suite green.
+- Book parity table updated; found + registered TD-19: `LineProps.dash`
+  implemented by neither backend (docs had claimed CPU support).
+- Remaining TD-01 gap: drop shadows → next PR closes TD-01 + TD-11.
+
+## 2026-07-12 (later still) — Renderer common/ extraction (TD-02)
+
+- PR [#12](https://github.com/SakarZaidan/lumina/pull/12) (stacked on #11):
+  `lumina-renderer/src/common/` now owns color, SVG-path (`PathData`),
+  z-order/root-sort, group+camera transforms (`Mat2x3`, f32, bit-identical
+  per backend), shadow blur pipeline, fill/gradient resolution, dash.
+- One extraction per commit; parity harness + full suite green after each.
+- WS-02 scope 1 done; grep gate (`tests/duplication_gate.rs`) enforces it.
+- Next: Vello gradients/rounded/dash (TD-01 pt 1) consuming common/.
+
+## 2026-07-12 (later) — Pixel-diff parity harness live (TD-11)
+
+- PR [#11](https://github.com/SakarZaidan/lumina/pull/11) (stacked on #10):
+  cross-backend harness renders 8 fixtures on Skia + Vello, AA-aware
+  comparator (3×3 neighborhood rescue + mean-delta tint check), failure
+  artifacts to `target/parity-failures/` and CI upload.
+- First real catch, fixed in-PR: Vello stroked with kurbo's round caps/joins
+  vs Skia's butt/miter — all GPU line ends and sharp corners diverged.
+- CI test job now installs lavapipe and sets `LUMINA_REQUIRE_VELLO=1`
+  (missing adapter = failure, not silent skip).
+- New debt TD-18: duplicated text layout paths (Skia inline vs raster.rs
+  bitmap); text fixture carries a wider tolerance until unified (v0.5).
+- WS-02 → In progress. Next: `common/` extraction (TD-02).
 
 ## 2026-07-12 — v0.4 kickoff: bundled OFL font (TD-16)
 

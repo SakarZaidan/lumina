@@ -1,6 +1,6 @@
 # WS-02 — Renderer Backend Parity (v0.4 flagship)
 
-**Status:** Not started · **Priority:** P0 for v0.4 · **Effort:** multi-session
+**Status:** **Done** — scope 1–4 shipped in [#11](https://github.com/SakarZaidan/lumina/pull/11)–[#15](https://github.com/SakarZaidan/lumina/pull/15); all four acceptance criteria met · **Priority:** P0 for v0.4 · **Effort:** multi-session
 **Linked debt:** TD-01, TD-02, TD-11 (cluster), TD-08
 
 ## Goal
@@ -10,7 +10,7 @@ pixels within tolerance, verified in CI — and stay that way.
 
 ## Scope
 
-1. **Extract `crates/lumina-renderer/src/common/`** (do this first — TD-02):
+1. ✅ **Extract `crates/lumina-renderer/src/common/`** (done — TD-02, [#12](https://github.com/SakarZaidan/lumina/pull/12)):
    - `svg_path.rs`: single SVG-path parser emitting a backend-neutral path
      representation, adapted to `tiny_skia::Path` and `kurbo::BezPath`
      (replaces `parse_svg_path` in skia_backend.rs and
@@ -19,16 +19,16 @@ pixels within tolerance, verified in CI — and stay that way.
      `parse_vello_color`).
    - Scene-walk helpers: z-index sort, root detection, group-transform
      recursion currently duplicated per backend.
-2. **Vello parity features** (TD-01): linear/radial gradients, drop shadows
-   (match Skia's 3-pass box blur visually), rounded rectangles, dashed lines
-   incl. `draw_fraction`.
-3. **Pixel-diff harness** (TD-11): render a curated scene set (one scene per
+2. ✅ **Vello parity features** (done — TD-01, [#13](https://github.com/SakarZaidan/lumina/pull/13)/[#14](https://github.com/SakarZaidan/lumina/pull/14)): linear/radial gradients, drop shadows
+   (the shared 3-pass box blur, composited as an image), rounded rectangles,
+   `draw_fraction` dashing. Explicit `dash` arrays deferred as TD-19.
+3. ✅ **Pixel-diff harness** (done — TD-11, [#11](https://github.com/SakarZaidan/lumina/pull/11)/[#14](https://github.com/SakarZaidan/lumina/pull/14), 16 fixtures): render a curated scene set (one scene per
    feature: each object type, gradients, shadows, rounded, dash, camera,
    groups, particles) on both backends; assert per-channel diff within
    tolerance; run in CI (CPU fallback adapter). Failures dump both images as
    artifacts.
-4. **Easing strictness** (TD-08): unknown easing → schema-validation error
-   with `fix_suggestion` (nearest-name), not silent `linear`.
+4. ✅ **Easing strictness** (done — TD-08, [#15](https://github.com/SakarZaidan/lumina/pull/15)): unknown easing → validation error
+   with `fix_suggestion` (nearest-name via edit distance), not silent `linear`.
 
 ## Non-goals
 

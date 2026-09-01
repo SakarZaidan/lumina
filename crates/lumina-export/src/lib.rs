@@ -10,6 +10,8 @@
 //! There is no in-process encoder: video export requires ffmpeg to be
 //! installed, and fails with a descriptive error when it is missing.
 
+#![warn(missing_docs)]
+
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgba};
 use lumina_core::{SceneGraph, Timeline};
@@ -19,15 +21,20 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// Drives a [`Renderer`] frame by frame to produce image sequences or
+/// video files (video encoding is delegated to an external `ffmpeg`).
 pub struct Exporter<R: Renderer> {
     renderer: R,
 }
 
 impl<R: Renderer> Exporter<R> {
+    /// Wrap a renderer for export.
     pub fn new(renderer: R) -> Self {
         Self { renderer }
     }
 
+    /// Render every frame of `scene` as `frame_NNNN.png` files in
+    /// `output_dir` (created if missing).
     pub fn export_png_sequence(&mut self, scene: &Scene, output_dir: &Path) -> Result<()> {
         let scene_graph = SceneGraph::from_scene(scene);
         let timeline = Timeline::from_scene(scene);

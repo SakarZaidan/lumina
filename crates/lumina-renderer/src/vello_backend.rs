@@ -12,8 +12,10 @@ use image::AnimationDecoder;
 // Use vello's re-exported wgpu (v0.20) — workspace wgpu is v22, types are incompatible
 use vello::wgpu;
 use vello::{
-    kurbo::{Affine, BezPath, Circle, Line, Rect, Stroke as KurboStroke, Vec2},
-    peniko::{BlendMode, Blob, Color, Compose, Fill, Format, Image, Mix},
+    kurbo::{Affine, BezPath, Cap, Circle, Join, Line, Rect, Stroke as KurboStroke, Vec2},
+    peniko::{
+        BlendMode, Blob, Brush, Color, ColorStop, Compose, Fill, Format, Gradient, Image, Mix,
+    },
     AaConfig, AaSupport, RenderParams, RendererOptions, Scene,
 };
 
@@ -29,6 +31,10 @@ enum VelloAsset {
     Svg(Box<resvg::usvg::Tree>),
 }
 
+/// GPU renderer over `vello`/`wgpu`, running headless with the CPU
+/// fallback adapter forced so it works in CI and containers. Feature
+/// parity with [`crate::skia_backend::SkiaRenderer`] is enforced by the
+/// pixel-diff parity suite.
 pub struct VelloRenderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -46,6 +52,16 @@ impl VelloRenderer {
     }
 
     async fn new_async() -> Result<Self, RendererError> {
+        // Escape hatch for environments where adapter probing is not merely
+        // unavailable but unsafe: the Windows DX12-WARP fallback aborts the
+        // process instead of reporting failure, so a graceful `Err` is never
+        // reached (TD-20). Set `LUMINA_DISABLE_VELLO=1` to skip probing.
+        if std::env::var("LUMINA_DISABLE_VELLO").as_deref() == Ok("1") {
+            return Err(RendererError::Failed(
+                "vello backend disabled by LUMINA_DISABLE_VELLO=1".to_string(),
+            ));
+        }
+
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
@@ -178,37 +194,12 @@ impl VelloRenderer {
             &Rect::new(0.0, 0.0, width as f64, height as f64),
         );
 
-        // Camera root transform
-        let root_affine = if let Some(cam) = camera {
-            let cx = width as f64 / 2.0;
-            let cy = height as f64 / 2.0;
-            Affine::translate(Vec2::new(cx + cam.x as f64, cy + cam.y as f64))
-                * Affine::scale(cam.zoom as f64)
-                * Affine::translate(Vec2::new(-cx, -cy))
-        } else {
-            Affine::IDENTITY
-        };
+        // Camera root transform (shared with the CPU backend so the
+        // matrices are bit-identical).
+        let root = crate::common::scene::camera_transform(camera, width, height);
 
-        // Determine which objects are group children (exclude from root render pass)
-        let mut child_ids = std::collections::HashSet::new();
-        for obj in objects.values() {
-            if let Object::Group(g) = obj {
-                for cid in &g.children {
-                    child_ids.insert(cid.clone());
-                }
-            }
-        }
-
-        // Sort root objects by z-index
-        let mut roots: Vec<(&str, i32)> = objects
-            .iter()
-            .filter(|(id, _)| !child_ids.contains(*id))
-            .map(|(id, obj)| (id.as_str(), z_index_of(obj)))
-            .collect();
-        roots.sort_by_key(|(_, z)| *z);
-
-        for (id, _) in roots {
-            self.draw_node(&mut scene, id, objects, states, root_affine);
+        for id in crate::common::scene::sorted_root_ids(objects) {
+            self.draw_node(&mut scene, &id, objects, states, root, (width, height));
         }
 
         scene
@@ -220,7 +211,8 @@ impl VelloRenderer {
         id: &str,
         objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
-        parent_affine: Affine,
+        parent: crate::common::scene::Mat2x3,
+        canvas: (u32, u32),
     ) {
         let obj = match objects.get(id) {
             Some(o) => o,
@@ -233,43 +225,28 @@ impl VelloRenderer {
 
         match obj {
             Object::Group(props) => {
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let scale = state["scale"].as_f64().unwrap_or(1.0);
-                let rotation_deg = state["rotation"].as_f64().unwrap_or(0.0);
+                let transform = crate::common::scene::group_transform(parent, state);
 
-                let mut affine = parent_affine * Affine::translate(Vec2::new(x, y));
-                if scale != 1.0 {
-                    affine *= Affine::scale(scale);
-                }
-                if rotation_deg != 0.0 {
-                    affine *= Affine::rotate(rotation_deg.to_radians());
-                }
-
-                let mut children: Vec<(&str, i32)> = props
-                    .children
-                    .iter()
-                    .map(|cid| (cid.as_str(), objects.get(cid).map(z_index_of).unwrap_or(0)))
-                    .collect();
-                children.sort_by_key(|(_, z)| *z);
-
-                for (child_id, _) in children {
-                    self.draw_node(scene, child_id, objects, states, affine);
+                for child_id in crate::common::scene::sorted_children(&props.children, objects) {
+                    self.draw_node(scene, child_id, objects, states, transform, canvas);
                 }
             }
-            _ => self.draw_leaf(scene, obj, state, parent_affine, objects, states),
+            _ => self.draw_leaf(scene, obj, state, parent, canvas, objects, states),
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_leaf(
         &self,
         scene: &mut Scene,
         obj: &Object,
         state: &Value,
-        affine: Affine,
+        mat: crate::common::scene::Mat2x3,
+        canvas: (u32, u32),
         _objects: &HashMap<String, Object>,
         states: &HashMap<String, Value>,
     ) {
+        let affine = mat.to_kurbo();
         match obj {
             Object::Circle(_) => {
                 let cx = state["cx"].as_f64().unwrap_or(0.0);
@@ -281,14 +258,38 @@ impl VelloRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
                 let circle = Circle::new((cx, cy), radius);
-                let fill_color =
-                    parse_vello_color(state["fill"].as_str().unwrap_or("#FFFFFF"), opacity);
-                scene.fill(Fill::NonZero, affine, fill_color, None, &circle);
+                let bbox = (
+                    (cx - radius) as f32,
+                    (cy - radius) as f32,
+                    (radius * 2.0) as f32,
+                    (radius * 2.0) as f32,
+                );
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let mut pb = tiny_skia::PathBuilder::new();
+                    pb.push_circle(cx as f32, cy as f32, radius as f32);
+                    if let Some(path) = pb.finish() {
+                        draw_shadow_image(scene, canvas, &path, mat, &spec);
+                    }
+                }
+                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                scene.fill(
+                    Fill::NonZero,
+                    affine,
+                    &brush_from_fill(&fill, bbox),
+                    None,
+                    &circle,
+                );
 
-                if let Some(stroke_hex) = state["stroke"].as_str() {
+                if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                    let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &circle);
+                    scene.stroke(
+                        &flat_stroke(sw),
+                        affine,
+                        &brush_from_fill(&stroke, bbox),
+                        None,
+                        &circle,
+                    );
                 }
             }
             Object::Rectangle(_) => {
@@ -301,15 +302,73 @@ impl VelloRenderer {
                 }
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
-                let rect = Rect::new(x, y, x + w, y + h);
-                let fill_color =
-                    parse_vello_color(state["fill"].as_str().unwrap_or("#FFFFFF"), opacity);
-                scene.fill(Fill::NonZero, affine, fill_color, None, &rect);
+                let rx = state["rx"].as_f64().unwrap_or(0.0) as f32;
+                let ry_raw = state["ry"].as_f64().unwrap_or(0.0) as f32;
+                let ry = if ry_raw > 0.0 { ry_raw } else { rx };
+                let bbox = (x as f32, y as f32, w as f32, h as f32);
+                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                let stroke = crate::common::fill::parse_stroke(state, opacity);
+                let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
 
-                if let Some(stroke_hex) = state["stroke"].as_str() {
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                    let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &rect);
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let tiny_path = if rx > 0.0 {
+                        crate::common::path::to_tiny_path(&crate::common::path::rounded_rect(
+                            x as f32, y as f32, w as f32, h as f32, rx, ry,
+                        ))
+                    } else {
+                        tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).and_then(
+                            |r| {
+                                let mut pb = tiny_skia::PathBuilder::new();
+                                pb.push_rect(r);
+                                pb.finish()
+                            },
+                        )
+                    };
+                    if let Some(path) = tiny_path {
+                        draw_shadow_image(scene, canvas, &path, mat, &spec);
+                    }
+                }
+                if rx > 0.0 {
+                    // Rounded corners: same quadratic-arc geometry as the CPU backend.
+                    let path =
+                        crate::common::path::to_kurbo_path(&crate::common::path::rounded_rect(
+                            x as f32, y as f32, w as f32, h as f32, rx, ry,
+                        ));
+                    scene.fill(
+                        Fill::NonZero,
+                        affine,
+                        &brush_from_fill(&fill, bbox),
+                        None,
+                        &path,
+                    );
+                    if let Some(s) = &stroke {
+                        scene.stroke(
+                            &flat_stroke(sw),
+                            affine,
+                            &brush_from_fill(s, bbox),
+                            None,
+                            &path,
+                        );
+                    }
+                } else {
+                    let rect = Rect::new(x, y, x + w, y + h);
+                    scene.fill(
+                        Fill::NonZero,
+                        affine,
+                        &brush_from_fill(&fill, bbox),
+                        None,
+                        &rect,
+                    );
+                    if let Some(s) = &stroke {
+                        scene.stroke(
+                            &flat_stroke(sw),
+                            affine,
+                            &brush_from_fill(s, bbox),
+                            None,
+                            &rect,
+                        );
+                    }
                 }
             }
             Object::Line(_) => {
@@ -322,12 +381,17 @@ impl VelloRenderer {
                 let stroke_color =
                     parse_vello_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
 
-                let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0) as f32;
-                let tx = x1 + (x2 - x1) * draw_fraction as f64;
-                let ty = y1 + (y2 - y1) * draw_fraction as f64;
-
-                let line = Line::new((x1, y1), (tx, ty));
-                scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &line);
+                let line = Line::new((x1, y1), (x2, y2));
+                let mut stroke = flat_stroke(sw);
+                if let Some(frac) = state["draw_fraction"].as_f64() {
+                    // Same partial-reveal dash the CPU backend uses.
+                    let dx = (x2 - x1) as f32;
+                    let dy = (y2 - y1) as f32;
+                    let length = (dx * dx + dy * dy).sqrt().max(0.001);
+                    let dashes = crate::common::stroke::draw_fraction_dash(frac as f32, length);
+                    stroke = stroke.with_dashes(0.0, dashes.iter().map(|d| *d as f64));
+                }
+                scene.stroke(&stroke, affine, stroke_color, None, &line);
             }
             Object::Arrow(_) => {
                 let from = state["from"].as_array();
@@ -346,7 +410,7 @@ impl VelloRenderer {
                     parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
 
                 let line = Line::new((fx, fy), (tx, ty));
-                scene.stroke(&KurboStroke::new(sw), affine, color, None, &line);
+                scene.stroke(&flat_stroke(sw), affine, color, None, &line);
 
                 // Arrowhead
                 let dx = tx - fx;
@@ -366,7 +430,7 @@ impl VelloRenderer {
                     tx - head_len * (angle + head_angle).cos(),
                     ty - head_len * (angle + head_angle).sin(),
                 ));
-                scene.stroke(&KurboStroke::new(sw), affine, color, None, &head);
+                scene.stroke(&flat_stroke(sw), affine, color, None, &head);
             }
             Object::BezierCurve(_) => {
                 let get_pt = |key: &str| -> Option<(f64, f64)> {
@@ -413,7 +477,7 @@ impl VelloRenderer {
                 let mut path = BezPath::new();
                 path.move_to((x0, y0));
                 path.curve_to((ax, ay), (dx, dy), (fx, fy));
-                scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
             }
             Object::Polygon(_) => {
                 let points = match state["points"].as_array() {
@@ -423,6 +487,8 @@ impl VelloRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
                 let mut path = BezPath::new();
+                let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
+                let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
                 for (i, p) in points.iter().enumerate() {
                     let arr = match p.as_array() {
                         Some(a) => a,
@@ -430,6 +496,10 @@ impl VelloRenderer {
                     };
                     let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    min_x = min_x.min(x as f32);
+                    min_y = min_y.min(y as f32);
+                    max_x = max_x.max(x as f32);
+                    max_y = max_y.max(y as f32);
                     if i == 0 {
                         path.move_to((x, y));
                     } else {
@@ -437,30 +507,82 @@ impl VelloRenderer {
                     }
                 }
                 path.close_path();
+                if !min_x.is_finite() {
+                    return;
+                }
+                let bbox = (min_x, min_y, max_x - min_x, max_y - min_y);
 
-                let fill_color =
-                    parse_vello_color(state["fill"].as_str().unwrap_or("#FFFFFF"), opacity);
-                scene.fill(Fill::NonZero, affine, fill_color, None, &path);
+                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    let mut pb = tiny_skia::PathBuilder::new();
+                    for (i, p) in points.iter().enumerate() {
+                        let arr = match p.as_array() {
+                            Some(a) => a,
+                            None => continue,
+                        };
+                        let px = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                        let py = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                        if i == 0 {
+                            pb.move_to(px, py);
+                        } else {
+                            pb.line_to(px, py);
+                        }
+                    }
+                    pb.close();
+                    if let Some(tiny_path) = pb.finish() {
+                        draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
+                    }
+                }
+                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                scene.fill(
+                    Fill::NonZero,
+                    affine,
+                    &brush_from_fill(&fill, bbox),
+                    None,
+                    &path,
+                );
 
-                if let Some(stroke_hex) = state["stroke"].as_str() {
+                if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                    let stroke_color = parse_vello_color(stroke_hex, opacity);
-                    scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                    scene.stroke(
+                        &flat_stroke(sw),
+                        affine,
+                        &brush_from_fill(&stroke, bbox),
+                        None,
+                        &path,
+                    );
                 }
             }
             Object::Path(_) => {
                 let d = state["d"].as_str().unwrap_or("");
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
-                if let Some(path) = parse_svg_path_kurbo(d) {
-                    if let Some(fill_hex) = state["fill"].as_str() {
-                        let fill_color = parse_vello_color(fill_hex, opacity);
-                        scene.fill(Fill::NonZero, affine, fill_color, None, &path);
+                if let Some(data) = crate::common::path::parse_svg_path(d) {
+                    let path = crate::common::path::to_kurbo_path(&data);
+                    let bbox = crate::common::path::bbox(&data).unwrap_or((0.0, 0.0, 0.0, 0.0));
+                    if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                        if let Some(tiny_path) = crate::common::path::to_tiny_path(&data) {
+                            draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
+                        }
                     }
-                    if let Some(stroke_hex) = state["stroke"].as_str() {
+                    if let Some(fill) = crate::common::fill::parse_fill(&state["fill"], opacity) {
+                        scene.fill(
+                            Fill::NonZero,
+                            affine,
+                            &brush_from_fill(&fill, bbox),
+                            None,
+                            &path,
+                        );
+                    }
+                    if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
                         let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                        let stroke_color = parse_vello_color(stroke_hex, opacity);
-                        scene.stroke(&KurboStroke::new(sw), affine, stroke_color, None, &path);
+                        scene.stroke(
+                            &flat_stroke(sw),
+                            affine,
+                            &brush_from_fill(&stroke, bbox),
+                            None,
+                            &path,
+                        );
                     }
                 }
             }
@@ -479,7 +601,7 @@ impl VelloRenderer {
                     return;
                 }
 
-                let stroke = KurboStroke::new(2.0);
+                let stroke = flat_stroke(2.0);
                 let main = Line::new((x, y), (x + length, y));
                 scene.stroke(&stroke, affine, color, None, &main);
 
@@ -525,8 +647,10 @@ impl VelloRenderer {
                 let ox = x + (0.0 - x_min) * scale;
                 let oy = y - (0.0 - y_min) * scale;
 
-                let axis_stroke = KurboStroke::new(2.0);
-                let tick_stroke = KurboStroke::new(1.0);
+                // Ticks use the axis stroke width (2.0) exactly like the CPU
+                // backend; only grid lines are thin.
+                let axis_stroke = flat_stroke(2.0);
+                let grid_stroke = flat_stroke(1.0);
                 let grid_color =
                     Color::rgba8(color.r, color.g, color.b, ((color.a as f32) * 0.2) as u8);
 
@@ -556,7 +680,7 @@ impl VelloRenderer {
                     }
                     let px = ox + tx * scale;
                     scene.stroke(
-                        &tick_stroke,
+                        &axis_stroke,
                         affine,
                         color,
                         None,
@@ -564,7 +688,7 @@ impl VelloRenderer {
                     );
                     if draw_grid && (tx - 0.0).abs() > 1e-4 {
                         scene.stroke(
-                            &tick_stroke,
+                            &grid_stroke,
                             affine,
                             grid_color,
                             None,
@@ -582,7 +706,7 @@ impl VelloRenderer {
                     }
                     let py = oy - ty * scale;
                     scene.stroke(
-                        &tick_stroke,
+                        &axis_stroke,
                         affine,
                         color,
                         None,
@@ -590,7 +714,7 @@ impl VelloRenderer {
                     );
                     if draw_grid && (ty - 0.0).abs() > 1e-4 {
                         scene.stroke(
-                            &tick_stroke,
+                            &grid_stroke,
                             affine,
                             grid_color,
                             None,
@@ -1029,6 +1153,76 @@ fn rgba_to_image(rgba: Vec<u8>, width: u32, height: u32) -> Image {
     Image::new(Blob::from(rgba), Format::Rgba8, width, height)
 }
 
+/// Stroke matching tiny-skia's `Stroke::default()`: butt caps, miter joins
+/// (limit 4). kurbo defaults to round caps/joins, which visibly diverges
+/// from the CPU backend at line ends and sharp corners.
+fn flat_stroke(width: f64) -> KurboStroke {
+    KurboStroke::new(width)
+        .with_caps(Cap::Butt)
+        .with_join(Join::Miter)
+        .with_miter_limit(4.0)
+}
+
+/// Adapt a shared `FillSpec` to a peniko brush, deriving gradient geometry
+/// from the same bbox numbers as the CPU backend (`common::fill`).
+fn brush_from_fill(fill: &crate::common::fill::FillSpec, bbox: (f32, f32, f32, f32)) -> Brush {
+    use crate::common::fill::FillSpec;
+    match fill {
+        FillSpec::Solid(c) => Brush::Solid(crate::common::color::to_peniko(*c)),
+        FillSpec::Linear { stops, angle_deg } => {
+            let (start, end) = crate::common::fill::linear_geometry(bbox, *angle_deg);
+            Brush::Gradient(
+                Gradient::new_linear(
+                    (start.0 as f64, start.1 as f64),
+                    (end.0 as f64, end.1 as f64),
+                )
+                .with_stops(peniko_stops(stops).as_slice()),
+            )
+        }
+        FillSpec::Radial { stops, radius_frac } => {
+            let (center, r) = crate::common::fill::radial_geometry(bbox, *radius_frac);
+            Brush::Gradient(
+                Gradient::new_radial((center.0 as f64, center.1 as f64), r)
+                    .with_stops(peniko_stops(stops).as_slice()),
+            )
+        }
+    }
+}
+
+fn peniko_stops(stops: &[(f32, [u8; 4])]) -> Vec<ColorStop> {
+    stops
+        .iter()
+        .map(|(p, c)| ColorStop::from((*p, crate::common::color::to_peniko(*c))))
+        .collect()
+}
+
+/// Composite a drop shadow into the scene: rasterize the shared blurred
+/// silhouette (identical bytes to the CPU backend) and draw it as a
+/// full-canvas image under an opacity layer.
+fn draw_shadow_image(
+    scene: &mut Scene,
+    canvas: (u32, u32),
+    path: &tiny_skia::Path,
+    mat: crate::common::scene::Mat2x3,
+    spec: &crate::common::shadow::ShadowSpec,
+) {
+    let pm =
+        match crate::common::shadow::shadow_pixmap(canvas.0, canvas.1, path, mat.to_tiny(), spec) {
+            Some(p) => p,
+            None => return,
+        };
+    let img = rgba_to_image(raster::pixmap_to_straight_rgba(&pm), canvas.0, canvas.1);
+    let full = Rect::new(0.0, 0.0, canvas.0 as f64, canvas.1 as f64);
+    scene.push_layer(
+        BlendMode::new(Mix::Normal, Compose::SrcOver),
+        spec.opacity.clamp(0.0, 1.0),
+        Affine::IDENTITY,
+        &full,
+    );
+    scene.draw_image(&img, Affine::IDENTITY);
+    scene.pop_layer();
+}
+
 /// Heuristic: does this byte slice look like an SVG document?
 fn looks_like_svg(data: &[u8]) -> bool {
     let head = &data[..data.len().min(512)];
@@ -1037,173 +1231,6 @@ fn looks_like_svg(data: &[u8]) -> bool {
     trimmed.starts_with("<?xml") || trimmed.starts_with("<svg") || s.contains("<svg")
 }
 
-fn z_index_of(obj: &Object) -> i32 {
-    match obj {
-        Object::Circle(p) => p.z_index,
-        Object::Rectangle(p) => p.z_index,
-        Object::Polygon(p) => p.z_index,
-        Object::Path(p) => p.z_index,
-        Object::Line(p) => p.z_index,
-        Object::Arrow(p) => p.z_index,
-        Object::Text(p) => p.z_index,
-        Object::LaTeX(p) => p.z_index,
-        Object::Group(p) => p.z_index,
-        Object::Image(p) => p.z_index,
-        Object::SVG(p) => p.z_index,
-        Object::NumberLine(p) => p.z_index,
-        Object::Axes(p) => p.z_index,
-        Object::Plot(p) => p.z_index,
-        Object::BezierCurve(p) => p.z_index,
-        Object::MathML(p) => p.z_index,
-        Object::Particles(p) => p.z_index,
-    }
-}
-
 fn parse_vello_color(hex: &str, opacity: f32) -> Color {
-    let hex = hex.trim_start_matches('#');
-    let (r, g, b, a_factor) = match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            (r, g, b, 1.0_f32)
-        }
-        8 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(255) as f32 / 255.0;
-            (r, g, b, a)
-        }
-        3 => {
-            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(255);
-            (r, g, b, 1.0_f32)
-        }
-        _ => (255, 255, 255, 1.0_f32),
-    };
-    Color::rgba8(r, g, b, ((opacity * a_factor) * 255.0) as u8)
-}
-
-fn parse_svg_path_kurbo(d: &str) -> Option<BezPath> {
-    let mut path = BezPath::new();
-    let mut normalized = String::with_capacity(d.len() * 2);
-    for ch in d.chars() {
-        if ch.is_ascii_alphabetic() {
-            normalized.push(' ');
-            normalized.push(ch);
-            normalized.push(' ');
-        } else if ch == ',' {
-            normalized.push(' ');
-        } else {
-            normalized.push(ch);
-        }
-    }
-
-    let tokens: Vec<&str> = normalized.split_whitespace().collect();
-    let mut i = 0;
-    let mut cur_x = 0.0_f64;
-    let mut cur_y = 0.0_f64;
-    let mut has_content = false;
-
-    macro_rules! next_f64 {
-        () => {{
-            i += 1;
-            tokens.get(i - 1).and_then(|s| s.parse::<f64>().ok())?
-        }};
-    }
-
-    while i < tokens.len() {
-        let cmd = tokens[i];
-        i += 1;
-        match cmd {
-            "M" => {
-                let x = next_f64!();
-                let y = next_f64!();
-                path.move_to((x, y));
-                cur_x = x;
-                cur_y = y;
-                has_content = true;
-            }
-            "m" => {
-                let dx = next_f64!();
-                let dy = next_f64!();
-                path.move_to((cur_x + dx, cur_y + dy));
-                cur_x += dx;
-                cur_y += dy;
-                has_content = true;
-            }
-            "L" => {
-                let x = next_f64!();
-                let y = next_f64!();
-                path.line_to((x, y));
-                cur_x = x;
-                cur_y = y;
-            }
-            "l" => {
-                let dx = next_f64!();
-                let dy = next_f64!();
-                path.line_to((cur_x + dx, cur_y + dy));
-                cur_x += dx;
-                cur_y += dy;
-            }
-            "H" => {
-                let x = next_f64!();
-                path.line_to((x, cur_y));
-                cur_x = x;
-            }
-            "h" => {
-                let dx = next_f64!();
-                path.line_to((cur_x + dx, cur_y));
-                cur_x += dx;
-            }
-            "V" => {
-                let y = next_f64!();
-                path.line_to((cur_x, y));
-                cur_y = y;
-            }
-            "v" => {
-                let dy = next_f64!();
-                path.line_to((cur_x, cur_y + dy));
-                cur_y += dy;
-            }
-            "C" => {
-                let x1 = next_f64!();
-                let y1 = next_f64!();
-                let x2 = next_f64!();
-                let y2 = next_f64!();
-                let x = next_f64!();
-                let y = next_f64!();
-                path.curve_to((x1, y1), (x2, y2), (x, y));
-                cur_x = x;
-                cur_y = y;
-            }
-            "c" => {
-                let dx1 = next_f64!();
-                let dy1 = next_f64!();
-                let dx2 = next_f64!();
-                let dy2 = next_f64!();
-                let dx = next_f64!();
-                let dy = next_f64!();
-                path.curve_to(
-                    (cur_x + dx1, cur_y + dy1),
-                    (cur_x + dx2, cur_y + dy2),
-                    (cur_x + dx, cur_y + dy),
-                );
-                cur_x += dx;
-                cur_y += dy;
-            }
-            "Z" | "z" => {
-                path.close_path();
-            }
-            _ => {}
-        }
-    }
-
-    if has_content {
-        Some(path)
-    } else {
-        None
-    }
+    crate::common::color::to_peniko(crate::common::color::parse_rgba8(hex, opacity))
 }

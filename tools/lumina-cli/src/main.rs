@@ -50,6 +50,10 @@ struct Args {
     /// Print per-frame timing at the end of a render
     #[arg(long)]
     verbose: bool,
+
+    /// Validate the scene and exit without rendering (exit code 1 on errors)
+    #[arg(long)]
+    check: bool,
 }
 
 fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
@@ -59,6 +63,29 @@ fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
         // Surface line/col in parse errors for better DX
         anyhow::anyhow!("Scene parse error in {:?}: {}", path, e)
     })
+}
+
+/// Run semantic validation, print every finding, and fail on errors.
+/// Warnings (duplicate keyframes, missing easing params, …) never block.
+fn validate_scene(scene: &Scene, path: &PathBuf) -> anyhow::Result<()> {
+    let result = lumina_core::validation::validate_scene_data(scene);
+    for w in &result.warnings {
+        eprintln!("[warn]  {} at {}: {}", w.code, w.path, w.message);
+    }
+    for e in &result.errors {
+        eprintln!(
+            "[error] {} at {}: {}\n        fix: {}",
+            e.code, e.path, e.message, e.fix_suggestion
+        );
+    }
+    if !result.valid {
+        anyhow::bail!(
+            "{:?} failed validation with {} error(s)",
+            path,
+            result.errors.len()
+        );
+    }
+    Ok(())
 }
 
 fn render_once(args: &Args, scene: &Scene) -> anyhow::Result<Vec<Duration>> {
@@ -158,6 +185,11 @@ fn main() -> anyhow::Result<()> {
         run_watch(&args)
     } else {
         let scene = load_scene(&args.scene)?;
+        validate_scene(&scene, &args.scene)?;
+        if args.check {
+            println!("[lumina] {:?} is valid.", args.scene);
+            return Ok(());
+        }
         log::info!(
             "Rendering '{}' with {} backend…",
             scene.meta.title,
@@ -193,6 +225,10 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
                 return;
             }
         };
+        if let Err(e) = validate_scene(&scene, path) {
+            eprintln!("[watch] {}", e);
+            return;
+        }
         // Render mid-point frame to a single PNG
         let mid = scene.canvas.duration / 2.0;
         match render_preview(&scene, &preview_out, mid, &args.backend) {

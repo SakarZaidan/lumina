@@ -9,10 +9,15 @@
 //! - `POST /patch` (RFC-6902) and `POST /scene_patch` (semantic ops)
 //! - `POST /render` — renders the posted scene and returns MP4/WebM/GIF bytes
 //!
-//! **Security note:** this server is not yet hardened for untrusted networks
-//! (no authentication, permissive CORS, no rate or body-size limits — see
-//! `SECURITY.md` and planning/TECH_DEBT.md TD-09). Run it locally or behind
-//! a trusted reverse proxy.
+//! **Security note:** requests are capped at 8 MiB, `/render` asset paths
+//! are restricted to `LUMINA_ASSET_ROOT` (default: the working directory),
+//! and bind/serve failures return errors instead of panicking. The server
+//! is still not hardened for untrusted networks — no authentication, rate
+//! limiting, or CORS allowlist until v0.5 (see `SECURITY.md` and
+//! planning/TECH_DEBT.md TD-09). Run it locally or behind a trusted
+//! reverse proxy.
+
+#![warn(missing_docs)]
 
 use axum::{
     extract::Json,
@@ -24,17 +29,19 @@ use axum::{
 use lumina_export::Exporter;
 use lumina_renderer::skia_backend::SkiaRenderer;
 use lumina_renderer::Renderer;
-use lumina_schema::{Object, Scene};
+use lumina_schema::Scene;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
 // ── Request / Response types ──────────────────────────────────────────────────
 
+/// Body of `POST /render`: the scene plus the requested container format.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RenderRequest {
+    /// The scene to render.
     pub scene: Scene,
+    /// Output container: `"mp4"` (default), `"webm"`, or `"gif"`.
     #[serde(default = "default_format")]
     pub format: String,
 }
@@ -43,15 +50,21 @@ fn default_format() -> String {
     "mp4".to_string()
 }
 
+/// Body of `POST /patch`: a scene document plus RFC-6902 JSON Patch ops.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PatchRequest {
+    /// The scene as a raw JSON document (patched before typing).
     pub scene: serde_json::Value,
+    /// RFC 6902 operations to apply, in order.
     pub patch: Vec<serde_json::Value>,
 }
 
+/// Response of the patch endpoints: the updated scene and its validation.
 #[derive(Debug, Serialize, Clone)]
 pub struct PatchResponse {
+    /// The scene after the patch was applied.
     pub scene: serde_json::Value,
+    /// Validation results for the patched scene.
     pub validation: ValidationResponse,
 }
 
@@ -59,229 +72,19 @@ pub struct PatchResponse {
 /// (add_object, add_keyframe, update_canvas, …) applied via `lumina_core`.
 #[derive(Debug, Deserialize)]
 pub struct ScenePatchRequest {
+    /// The scene to patch.
     pub scene: Scene,
+    /// Semantic operations to apply, in order.
     pub patch: lumina_core::ScenePatch,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationResponse {
-    pub valid: bool,
-    pub errors: Vec<ValidationError>,
-    pub warnings: Vec<ValidationWarning>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationError {
-    pub code: String,
-    pub path: String,
-    pub message: String,
-    pub fix_suggestion: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct ValidationWarning {
-    pub code: String,
-    pub path: String,
-    pub message: String,
-}
-
 // ── Semantic validation ───────────────────────────────────────────────────────
-
-/// Perform semantic validation of a parsed Scene.
-/// Returns errors (render-blocking) and warnings (non-blocking).
-pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
-    let mut errors = Vec::new();
-    let mut warnings = Vec::new();
-
-    let object_ids: HashSet<&str> = scene.objects.keys().map(|s| s.as_str()).collect();
-
-    // Check 1: Timeline entries must reference declared object IDs
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if !object_ids.contains(entry.object.as_str()) {
-            let suggestion = object_ids
-                .iter()
-                .find(|id| id.starts_with(&entry.object[..entry.object.len().min(3)]))
-                .map(|s| format!("Did you mean '{}'?", s))
-                .unwrap_or_else(|| "Check the 'objects' block for valid IDs.".to_string());
-
-            errors.push(ValidationError {
-                code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.timeline[{}].object", i),
-                message: format!(
-                    "Timeline entry {} references object '{}', which is not in 'objects'.",
-                    i, entry.object
-                ),
-                fix_suggestion: suggestion,
-            });
-        }
-    }
-
-    // Check 2: Event entries must reference declared object IDs
-    for (i, event) in scene.events.iter().enumerate() {
-        if !object_ids.contains(event.object.as_str()) {
-            errors.push(ValidationError {
-                code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.events[{}].object", i),
-                message: format!(
-                    "Event {} references object '{}', which is not declared.",
-                    i, event.object
-                ),
-                fix_suggestion: format!(
-                    "Add '{}' to the 'objects' block or correct the event's object field.",
-                    event.object
-                ),
-            });
-        }
-    }
-
-    // Check 3: Group children must reference declared object IDs
-    for (obj_id, obj) in &scene.objects {
-        if let Object::Group(group) = obj {
-            for child_id in &group.children {
-                if !object_ids.contains(child_id.as_str()) {
-                    errors.push(ValidationError {
-                        code: "UNKNOWN_CHILD_ID".to_string(),
-                        path: format!("$.objects.{}.properties.children", obj_id),
-                        message: format!(
-                            "Group '{}' references child '{}', which is not declared.",
-                            obj_id, child_id
-                        ),
-                        fix_suggestion: format!(
-                            "Add '{}' to the 'objects' block or remove it from group '{}'.",
-                            child_id, obj_id
-                        ),
-                    });
-                }
-            }
-        }
-    }
-
-    // Check 4: Circular group references
-    if let Some(cycle) = detect_group_cycle(&scene.objects) {
-        errors.push(ValidationError {
-            code: "CIRCULAR_GROUP_REFERENCE".to_string(),
-            path: "$.objects".to_string(),
-            message: format!(
-                "Circular group reference: {}. Groups cannot contain themselves.",
-                cycle.join(" → ")
-            ),
-            fix_suggestion: "Remove the circular dependency from the group's children list."
-                .to_string(),
-        });
-    }
-
-    // Check 5: Keyframes beyond canvas duration (warning)
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if entry.time > scene.canvas.duration {
-            warnings.push(ValidationWarning {
-                code: "KEYFRAME_BEYOND_DURATION".to_string(),
-                path: format!("$.timeline[{}].time", i),
-                message: format!(
-                    "Keyframe {} has time={:.2}s but canvas duration is {:.2}s. It will never play.",
-                    i, entry.time, scene.canvas.duration
-                ),
-            });
-        }
-    }
-
-    // Check 6: Duplicate keyframes (same object + property + time) — warning
-    let mut seen: HashMap<(String, String, String), usize> = HashMap::new();
-    for (i, entry) in scene.timeline.iter().enumerate() {
-        if let serde_json::Value::Object(state) = &entry.state {
-            for prop_name in state.keys() {
-                let key = (
-                    entry.object.clone(),
-                    prop_name.clone(),
-                    format!("{:.6}", entry.time),
-                );
-                if let Some(first_idx) = seen.get(&key) {
-                    warnings.push(ValidationWarning {
-                        code: "DUPLICATE_KEYFRAME".to_string(),
-                        path: format!("$.timeline[{}]", i),
-                        message: format!(
-                            "Duplicate keyframe for '{}' property '{}' at t={:.2}s (first at index {}). Last declaration wins.",
-                            entry.object, prop_name, entry.time, first_idx
-                        ),
-                    });
-                } else {
-                    seen.insert(key, i);
-                }
-            }
-        }
-    }
-
-    // Check 7: Canvas dimensions must be positive
-    if scene.canvas.width == 0 || scene.canvas.height == 0 {
-        errors.push(ValidationError {
-            code: "INVALID_CANVAS_SIZE".to_string(),
-            path: "$.canvas".to_string(),
-            message: format!(
-                "Canvas size {}x{} is invalid. Both dimensions must be > 0.",
-                scene.canvas.width, scene.canvas.height
-            ),
-            fix_suggestion:
-                "Set canvas.width and canvas.height to positive integers (e.g. 1280, 720)."
-                    .to_string(),
-        });
-    }
-
-    // Check 8: Large scene warning
-    if scene.objects.len() > 500 {
-        warnings.push(ValidationWarning {
-            code: "LARGE_SCENE".to_string(),
-            path: "$.objects".to_string(),
-            message: format!(
-                "Scene has {} objects. Consider grouping related objects to improve performance.",
-                scene.objects.len()
-            ),
-        });
-    }
-
-    ValidationResponse {
-        valid: errors.is_empty(),
-        errors,
-        warnings,
-    }
-}
-
-fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<Vec<String>> {
-    fn dfs(
-        id: &str,
-        objects: &HashMap<String, Object>,
-        visited: &mut HashSet<String>,
-        path: &mut Vec<String>,
-    ) -> Option<Vec<String>> {
-        if path.contains(&id.to_string()) {
-            let start = path.iter().position(|x| x == id).unwrap();
-            let mut cycle = path[start..].to_vec();
-            cycle.push(id.to_string());
-            return Some(cycle);
-        }
-        if visited.contains(id) {
-            return None;
-        }
-        visited.insert(id.to_string());
-        if let Some(Object::Group(group)) = objects.get(id) {
-            path.push(id.to_string());
-            for child in &group.children {
-                if let Some(cycle) = dfs(child, objects, visited, path) {
-                    return Some(cycle);
-                }
-            }
-            path.pop();
-        }
-        None
-    }
-
-    let mut visited = HashSet::new();
-    for id in objects.keys() {
-        let mut path = Vec::new();
-        if let Some(cycle) = dfs(id, objects, &mut visited, &mut path) {
-            return Some(cycle);
-        }
-    }
-    None
-}
+//
+// Validation logic lives in lumina-core (shared by server, CLI and SDKs);
+// re-exported here so the server's public API is unchanged.
+pub use lumina_core::validation::{
+    validate_scene_data, ValidationError, ValidationResponse, ValidationWarning,
+};
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
@@ -397,6 +200,34 @@ async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
     .into_response()
 }
 
+/// Resolve a scene-declared asset path against the allowed asset root.
+///
+/// The root is `LUMINA_ASSET_ROOT` (default: the server's working
+/// directory). Canonicalization resolves `..` and symlinks before the
+/// prefix check, so traversal cannot escape the root. Returns the resolved
+/// path or a client-safe error message (no filesystem details).
+fn resolve_asset_path(requested: &str) -> Result<std::path::PathBuf, String> {
+    let root = std::env::var_os("LUMINA_ASSET_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let root = root
+        .canonicalize()
+        .map_err(|_| "asset root is not accessible".to_string())?;
+    let candidate = if std::path::Path::new(requested).is_absolute() {
+        std::path::PathBuf::from(requested)
+    } else {
+        root.join(requested)
+    };
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|_| format!("asset '{requested}' not found under the asset root"))?;
+    if resolved.starts_with(&root) {
+        Ok(resolved)
+    } else {
+        Err(format!("asset '{requested}' is outside the asset root"))
+    }
+}
+
 async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     let validation = validate_scene_data(&payload.scene);
     if !validation.valid {
@@ -404,27 +235,36 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     }
 
     let mut renderer = SkiaRenderer::new();
-    // Load declared font/image assets from disk. Asset paths may be unreachable
-    // in a sandboxed server context, so we log and skip on error rather than
-    // failing the whole render.
+    // Load declared font/image assets from disk, restricted to the asset
+    // root (LUMINA_ASSET_ROOT, default CWD): /render must not be a remote
+    // arbitrary-file read. Paths escaping the root fail the request;
+    // in-root but unreadable/undecodable assets are logged and skipped.
     for font in &payload.scene.assets.fonts {
-        match std::fs::read(&font.path) {
+        let path = match resolve_asset_path(&font.path) {
+            Ok(p) => p,
+            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+        };
+        match std::fs::read(&path) {
             Ok(data) => {
                 if let Err(e) = renderer.load_font(&font.id, &data) {
                     log::warn!("Skipping font '{}': {:?}", font.id, e);
                 }
             }
-            Err(e) => log::warn!("Cannot read font '{}' at {:?}: {}", font.id, font.path, e),
+            Err(e) => log::warn!("Cannot read font '{}' at {:?}: {}", font.id, path, e),
         }
     }
     for img in &payload.scene.assets.images {
-        match std::fs::read(&img.path) {
+        let path = match resolve_asset_path(&img.path) {
+            Ok(p) => p,
+            Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+        };
+        match std::fs::read(&path) {
             Ok(data) => {
                 if let Err(e) = renderer.load_image(&img.id, &data) {
                     log::warn!("Skipping image '{}': {:?}", img.id, e);
                 }
             }
-            Err(e) => log::warn!("Cannot read image '{}' at {:?}: {}", img.id, img.path, e),
+            Err(e) => log::warn!("Cannot read image '{}' at {:?}: {}", img.id, path, e),
         }
     }
     let mut exporter = Exporter::new(renderer);
@@ -459,7 +299,13 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
                 .status(StatusCode::OK)
                 .header("Content-Type", content_type)
                 .body(axum::body::Body::from(data))
-                .unwrap(),
+                .unwrap_or_else(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Response build error: {e}"),
+                    )
+                        .into_response()
+                }),
             Err(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to read output: {}", e),
@@ -476,6 +322,12 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 
 // ── Router + server entry point ───────────────────────────────────────────────
 
+/// Maximum accepted request body: scenes are JSON of at most a few MB;
+/// anything larger is rejected up front (413) instead of being buffered.
+const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
+/// The full route table (health, schema, objects, validate, patch,
+/// scene_patch, render) with the body-size and CORS layers applied.
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health_check))
@@ -485,15 +337,18 @@ pub fn build_router() -> Router {
         .route("/patch", post(patch_scene))
         .route("/scene_patch", post(scene_patch))
         .route("/render", post(render_scene))
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(CorsLayer::permissive())
 }
 
-pub async fn run_server() {
+/// Bind and serve until shutdown. Returns instead of panicking when the
+/// port is taken or the listener dies, so embedders can report the error.
+pub async fn run_server() -> Result<(), std::io::Error> {
     let app = build_router();
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     log::info!("Lumina Server listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -501,7 +356,21 @@ pub async fn run_server() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, TimelineEntry};
+    use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
+    use std::collections::HashMap;
+
+    #[test]
+    fn asset_paths_inside_root_resolve() {
+        // CWD is the crate root during tests; Cargo.toml is a real in-root file.
+        assert!(resolve_asset_path("Cargo.toml").is_ok());
+    }
+
+    #[test]
+    fn asset_paths_escaping_root_are_rejected() {
+        assert!(resolve_asset_path("../../etc/passwd").is_err());
+        assert!(resolve_asset_path("/etc/passwd").is_err());
+        assert!(resolve_asset_path("../lumina-core/Cargo.toml").is_err());
+    }
 
     fn minimal_scene() -> Scene {
         Scene {

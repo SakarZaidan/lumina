@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "meta": { "title": "Parity: drop shadows", "author": "parity-harness", "created_at": "2026-07-12T00:00:00Z" },
+  "canvas": { "width": 256, "height": 256, "fps": 30, "duration": 2.0, "background": "#E9ECEF" },
+  "assets": {},
+  "objects": {
+    "card": {
+      "type": "Rectangle",
+      "properties": { "x": 30, "y": 30, "width": 90, "height": 70, "fill": "#4C6EF5", "z_index": 1,
+        "shadow": { "color": "#000000", "blur": 8, "dx": 5, "dy": 5, "opacity": 0.5 } }
+    },
+    "rounded": {
+      "type": "Rectangle",
+      "properties": { "x": 150, "y": 30, "width": 80, "height": 70, "rx": 14, "fill": "#40C057", "z_index": 2,
+        "shadow": { "color": "#212529", "blur": 12, "dx": 0, "dy": 8, "opacity": 0.6 } }
+    },
+    "ball": {
+      "type": "Circle",
+      "properties": { "cx": 75, "cy": 175, "radius": 38, "fill": "#E64980", "z_index": 3,
+        "shadow": { "color": "#5F3DC4", "blur": 15, "dx": -6, "dy": 6, "opacity": 0.7 } }
+    },
+    "blob": {
+      "type": "Path",
+      "properties": { "d": "M 160 150 C 200 130 240 160 230 200 C 222 235 170 240 155 210 C 143 185 140 160 160 150 Z",
+        "fill": "#FAB005", "z_index": 4,
+        "shadow": { "color": "#000000", "blur": 6, "dx": 4, "dy": 4, "opacity": 0.45 } }
+    }
+  },
+  "timeline": [
+    { "time": 0.0, "object": "ball", "state": { "cx": 75 }, "easing": "linear" },
+    { "time": 2.0, "object": "ball", "state": { "cx": 110 }, "easing": "ease_in_out_quad" }
+  ]
+}

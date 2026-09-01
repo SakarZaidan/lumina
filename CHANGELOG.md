@@ -10,13 +10,69 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md).
 
+### Changed
+- **Unknown easing names are now validation errors** (`UNKNOWN_EASING`, with a
+  did-you-mean suggestion) instead of silently animating as `linear`; the CLI
+  validates every scene before rendering and gains `--check`. Mildly breaking
+  for scenes with typo'd easings — every name in
+  `lumina_core::easing::EASING_NAMES` is accepted (TD-08, [#15]).
+- **Scene validation moved to `lumina-core`** (`lumina_core::validation`);
+  `lumina-server` re-exports it unchanged, and the CLI/SDKs share the same
+  rules ([#15]).
+- **Shared renderer `common/` module** — color parsing, SVG-path parsing
+  (backend-neutral `PathData`), z-ordering, group/camera transform math
+  (bit-identical `Mat2x3` on both backends), the drop-shadow blur pipeline,
+  fill/gradient resolution, and dash geometry now have exactly one
+  implementation consumed by both backends; a grep-gate test keeps it that
+  way (TD-02, [#12]).
+
 ### Added
+- **Vello drop shadows** — the GPU backend composites the same blurred
+  silhouette bytes as the CPU backend via the shared blur pipeline; full
+  visual feature parity between backends, verified by a 16-scene parity
+  suite in CI (TD-01/TD-11 closed, [#14]). Also fixes axes tick marks
+  rendering thinner on the GPU backend.
+- **Vello gradients, rounded rectangles, and `draw_fraction` dash** — the GPU
+  backend now renders linear/radial gradient fills *and strokes*, honors
+  `rx`/`ry` corner radii, and reveals lines via the same dash pattern as the
+  CPU backend, all through shared `common/` geometry. Fixes gradient fills
+  silently rendering solid white on `--backend vello` (TD-01 part 1, [#13]).
+- **Cross-backend pixel-diff harness** — every fixture scene in
+  `crates/lumina-renderer/tests/fixtures/` renders on both the Skia (CPU) and
+  Vello (GPU) backends and must agree within an AA-aware per-pixel tolerance;
+  failures dump both frames plus a diff heat map, uploaded as CI artifacts.
+  CI now requires a wgpu adapter (lavapipe) so Vello tests can never silently
+  skip (TD-11, [#11]).
 - **Bundled example font** — Liberation Sans 2.1.5 (Regular + Bold, SIL OFL 1.1)
   under `examples/assets/fonts/`; all example scenes, generator scripts, and
   docs now use repo-relative font paths, so examples render text on macOS and
   Windows too (TD-16, [#10]).
 
+### Documentation
+- Every public item across the six library crates is documented (416 items
+  filled); `#![warn(missing_docs)]` + CI `-D warnings` make undocumented
+  public API a build failure (TD-15, [#18]).
+
+### CI
+- Tests now run on ubuntu/macos/windows; new MSRV (1.88) check job;
+  concurrent pushes cancel superseded runs; the wasm-bindgen test suite
+  actually executes (it previously never ran in CI) (TD-14, [#17]).
+
+### Dependencies
+- resvg 0.42 → 0.47 and tiny-skia 0.11 → 0.12: the untrusted-SVG parsing
+  path moves off unmaintained ttf-parser 0.21 (RUSTSEC-2026-0192); the sole
+  remaining 0.21 consumer is fontdue (latest release), tracked in TD-17
+  ([#19]).
+
+### Security
+- `lumina-server` v0.4 safety minimum: `/render` asset paths are confined to
+  `LUMINA_ASSET_ROOT` (was: arbitrary-file read), request bodies capped at
+  8 MiB, and bind/serve/response no longer panic (TD-09 part 1, [#16]).
+
 ### Fixed
+- The Vello backend stroked shapes with round caps/joins (kurbo defaults)
+  while the Skia backend uses butt caps and miter joins — GPU renders grew
+  round nubs at line ends and rounded sharp corners ([#11]).
 - `hello.lsf`, `circle_bounce.lsf`, and `pythagorean.lsf` declared no font
   asset, so their Text objects silently never rendered; they now use the
   bundled font ([#10]).
@@ -167,6 +223,15 @@ _The items below landed after 0.2.0 and were never released separately;
 - **Demo** — `examples/unit_circle.lsf` (52 s, 1080p, 30 fps).
 
 [#10]: https://github.com/SakarZaidan/lumina/pull/10
+[#11]: https://github.com/SakarZaidan/lumina/pull/11
+[#12]: https://github.com/SakarZaidan/lumina/pull/12
+[#13]: https://github.com/SakarZaidan/lumina/pull/13
+[#14]: https://github.com/SakarZaidan/lumina/pull/14
+[#15]: https://github.com/SakarZaidan/lumina/pull/15
+[#16]: https://github.com/SakarZaidan/lumina/pull/16
+[#17]: https://github.com/SakarZaidan/lumina/pull/17
+[#18]: https://github.com/SakarZaidan/lumina/pull/18
+[#19]: https://github.com/SakarZaidan/lumina/pull/19
 [Unreleased]: https://github.com/SakarZaidan/lumina/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/SakarZaidan/lumina/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SakarZaidan/lumina/compare/v0.1.0...v0.2.0

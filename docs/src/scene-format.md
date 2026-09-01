@@ -73,8 +73,12 @@ monotone-cubic (Fritsch–Carlson) segments — guaranteed overshoot-free:
   "easing_params": { "keypoints": [[0.0, 0.0], [0.3, 0.9], [0.7, 0.4], [1.0, 1.0]] } }
 ```
 
-> Note: an unrecognized easing name currently falls back to `linear`
-> silently; making this a validation error is planned for v0.4.
+> Since v0.4, an unrecognized easing name is a **validation error**
+> (`UNKNOWN_EASING`) with a did-you-mean suggestion — the CLI refuses to
+> render such a scene (`lumina-cli --check` validates without rendering),
+> and `POST /validate` reports it. `cubic_bezier`/`spline` without
+> `easing_params` produce a `MISSING_EASING_PARAMS` warning and fall back
+> to the CSS `ease` curve / `linear` respectively.
 
 ## Groups & transforms
 

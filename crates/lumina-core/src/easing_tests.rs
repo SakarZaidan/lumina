@@ -154,8 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_easing_falls_back_to_linear() {
-        // get_easing_fn returns linear for unknown names (by design)
+    fn test_unknown_easing_runtime_fallback_is_linear() {
+        // Validation rejects unknown names (UNKNOWN_EASING); the runtime
+        // fallback stays linear as defense-in-depth for unvalidated callers.
         let f = get_easing_fn("this_does_not_exist");
         for i in 0..=5 {
             let t = i as f32 / 5.0;
@@ -164,6 +165,44 @@ mod tests {
                 "unknown easing should behave like linear at t={t}"
             );
         }
+    }
+
+    #[test]
+    fn test_every_registered_easing_name_is_accepted() {
+        use crate::easing::{eval_easing, EASING_NAMES};
+        use serde_json::json;
+        // Drift guard: every registered name must reach a real easing, not
+        // the unknown-name linear fallback. Since that fallback IS linear,
+        // each non-linear name must differ from linear somewhere.
+        for name in EASING_NAMES {
+            if *name == "linear" {
+                continue;
+            }
+            let params = match *name {
+                "cubic_bezier" => Some(json!([0.42, 0.0, 0.58, 1.0])),
+                "spline" => Some(json!({"keypoints": [[0.0, 0.0], [0.3, 0.8], [1.0, 1.0]]})),
+                _ => None,
+            };
+            let differs = (1..20).any(|i| {
+                let t = i as f32 / 20.0;
+                (eval_easing(name, params.as_ref(), t) - t).abs() > 1e-4
+            });
+            assert!(
+                differs,
+                "easing '{name}' evaluated identically to linear — \
+                 is it missing from get_easing_fn's match?"
+            );
+        }
+    }
+
+    #[test]
+    fn test_suggest_easing_finds_near_misses() {
+        use crate::easing::{is_valid_easing, suggest_easing};
+        assert_eq!(suggest_easing("ease_in_ou"), Some("ease_in_out"));
+        assert_eq!(suggest_easing("liner"), Some("linear"));
+        assert_eq!(suggest_easing("totally_unrelated_zzz"), None);
+        assert!(is_valid_easing("smooth"));
+        assert!(!is_valid_easing("smoooth_operator"));
     }
 
     #[test]

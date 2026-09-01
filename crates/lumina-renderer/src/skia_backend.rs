@@ -41,6 +41,8 @@ impl AxesContext {
     }
 }
 
+/// CPU reference renderer over `tiny-skia`. Full feature coverage; the
+/// GPU backend is held to this one's output by the parity suite.
 pub struct SkiaRenderer {
     text_engine: TextEngine,
     images: HashMap<String, DecodedAsset>,
@@ -50,6 +52,7 @@ pub struct SkiaRenderer {
 }
 
 impl SkiaRenderer {
+    /// A renderer with no assets loaded.
     pub fn new() -> Self {
         Self {
             text_engine: TextEngine::new(),
@@ -109,48 +112,6 @@ impl SkiaRenderer {
         resvg::render(tree, Transform::from_scale(sx, sy), &mut pm.as_mut());
         self.svg_cache.borrow_mut().insert(key, pm.clone());
         Some(pm)
-    }
-
-    fn z_index(obj: &Object) -> i32 {
-        match obj {
-            Object::Circle(p) => p.z_index,
-            Object::Rectangle(p) => p.z_index,
-            Object::Polygon(p) => p.z_index,
-            Object::Path(p) => p.z_index,
-            Object::Line(p) => p.z_index,
-            Object::Arrow(p) => p.z_index,
-            Object::Text(p) => p.z_index,
-            Object::LaTeX(p) => p.z_index,
-            Object::Group(p) => p.z_index,
-            Object::Image(p) => p.z_index,
-            Object::SVG(p) => p.z_index,
-            Object::NumberLine(p) => p.z_index,
-            Object::Axes(p) => p.z_index,
-            Object::Plot(p) => p.z_index,
-            Object::BezierCurve(p) => p.z_index,
-            Object::MathML(p) => p.z_index,
-            Object::Particles(p) => p.z_index,
-        }
-    }
-
-    fn get_root_objects_sorted(&self, objects: &HashMap<String, Object>) -> Vec<String> {
-        let mut child_ids = std::collections::HashSet::new();
-        for obj in objects.values() {
-            if let Object::Group(group) = obj {
-                for child_id in &group.children {
-                    child_ids.insert(child_id.clone());
-                }
-            }
-        }
-
-        let mut roots: Vec<(String, i32)> = objects
-            .iter()
-            .filter(|(id, _)| !child_ids.contains(*id))
-            .map(|(id, obj)| (id.clone(), Self::z_index(obj)))
-            .collect();
-
-        roots.sort_by_key(|(_, z)| *z);
-        roots.into_iter().map(|(id, _)| id).collect()
     }
 
     fn resolve_axes_context(
@@ -278,34 +239,14 @@ impl SkiaRenderer {
 
         match obj {
             Object::Group(props) => {
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let scale = state["scale"].as_f64().unwrap_or(1.0) as f32;
-                // rotation is stored in degrees (user-facing unit)
-                let rotation_deg = state["rotation"].as_f64().unwrap_or(0.0) as f32;
+                let transform = crate::common::scene::group_transform(
+                    crate::common::scene::Mat2x3::from_tiny(parent_transform),
+                    state,
+                )
+                .to_tiny();
 
-                let mut transform = parent_transform;
-                transform = transform.pre_translate(x, y);
-                if scale != 1.0 {
-                    transform = transform.pre_scale(scale, scale);
-                }
-                if rotation_deg != 0.0 {
-                    transform = transform.pre_rotate(rotation_deg);
-                }
-
-                // Sort children by z_index before drawing
-                let mut children: Vec<(String, i32)> = props
-                    .children
-                    .iter()
-                    .map(|cid| {
-                        let z = objects.get(cid).map(Self::z_index).unwrap_or(0);
-                        (cid.clone(), z)
-                    })
-                    .collect();
-                children.sort_by_key(|(_, z)| *z);
-
-                for (child_id, _) in children {
-                    self.draw_node(pixmap, &child_id, objects, states, transform)?;
+                for child_id in crate::common::scene::sorted_children(&props.children, objects) {
+                    self.draw_node(pixmap, child_id, objects, states, transform)?;
                 }
             }
             _ => {
@@ -336,11 +277,13 @@ impl SkiaRenderer {
                 let mut pb = PathBuilder::new();
                 pb.push_circle(cx, cy, radius);
                 if let Some(path) = pb.finish() {
-                    let fill = parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                        .unwrap_or_else(|| {
+                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
+                        });
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -365,11 +308,11 @@ impl SkiaRenderer {
                 let rx = state["rx"].as_f64().unwrap_or(0.0) as f32;
                 let ry_raw = state["ry"].as_f64().unwrap_or(0.0) as f32;
                 let ry = if ry_raw > 0.0 { ry_raw } else { rx };
-                let fill = parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                let stroke = parse_stroke(state, opacity);
+                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                let stroke = crate::common::fill::parse_stroke(state, opacity);
                 let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let shadow = parse_shadow(state);
+                let shadow = crate::common::shadow::parse_shadow(state);
 
                 if rx > 0.0 || shadow.is_some() {
                     // Rounded and/or shadowed rectangles go through the path renderer.
@@ -444,11 +387,13 @@ impl SkiaRenderer {
                 pb.close();
 
                 if let Some(path) = pb.finish() {
-                    let fill = parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| FillStyle::Solid(parse_color("#FFFFFF", opacity)));
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
+                        .unwrap_or_else(|| {
+                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
+                        });
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -465,10 +410,10 @@ impl SkiaRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
                 if let Some(path) = parse_svg_path(d) {
-                    let fill = parse_fill(&state["fill"], opacity);
-                    let stroke = parse_stroke(state, opacity);
+                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity);
+                    let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = parse_shadow(state);
+                    let shadow = crate::common::shadow::parse_shadow(state);
                     paint_shape(
                         pixmap,
                         &path,
@@ -501,11 +446,13 @@ impl SkiaRenderer {
                     let mut stroke = Stroke::default();
                     stroke.width = stroke_width;
                     if let Some(frac) = draw_fraction {
-                        let frac = frac.clamp(0.0, 1.0);
                         let dx = x2 - x1;
                         let dy = y2 - y1;
                         let length = (dx * dx + dy * dy).sqrt().max(0.001);
-                        stroke.dash = StrokeDash::new(vec![length * frac, length * 2.0], 0.0);
+                        stroke.dash = StrokeDash::new(
+                            crate::common::stroke::draw_fraction_dash(frac, length),
+                            0.0,
+                        );
                     }
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
@@ -1044,18 +991,10 @@ impl Renderer for SkiaRenderer {
 
         pixmap.fill(parse_color(background, 1.0));
 
-        let root_transform = if let Some(cam) = camera {
-            let cx = width as f32 / 2.0;
-            let cy = height as f32 / 2.0;
-            Transform::from_translate(cx + cam.x, cy + cam.y)
-                .pre_concat(Transform::from_scale(cam.zoom, cam.zoom))
-                .pre_concat(Transform::from_translate(-cx, -cy))
-        } else {
-            Transform::identity()
-        };
+        let root_transform =
+            crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
-        let roots = self.get_root_objects_sorted(objects);
-        for id in roots {
+        for id in crate::common::scene::sorted_root_ids(objects) {
             self.draw_node(&mut pixmap, &id, objects, states, root_transform)?;
         }
 
@@ -1579,236 +1518,50 @@ fn draw_particles(
     }
 }
 
-// Parse SVG path data string into a tiny-skia Path.
-// Supports: M/m (move), L/l (line), H/h (horizontal), V/v (vertical),
-//           C/c (cubic bezier), Z/z (close).
+/// Parse SVG path data into a tiny-skia `Path` via the shared parser.
 fn parse_svg_path(d: &str) -> Option<Path> {
-    let mut pb = PathBuilder::new();
-
-    // Normalize: insert spaces around command letters, replace commas with spaces
-    let mut normalized = String::with_capacity(d.len() * 2);
-    for ch in d.chars() {
-        if ch.is_ascii_alphabetic() {
-            normalized.push(' ');
-            normalized.push(ch);
-            normalized.push(' ');
-        } else if ch == ',' {
-            normalized.push(' ');
-        } else {
-            normalized.push(ch);
-        }
-    }
-
-    let tokens: Vec<&str> = normalized.split_whitespace().collect();
-    let mut i = 0;
-    let mut cur_x = 0.0_f32;
-    let mut cur_y = 0.0_f32;
-
-    macro_rules! parse_f32 {
-        ($idx:expr) => {
-            tokens.get($idx).and_then(|s| s.parse::<f32>().ok())?
-        };
-    }
-
-    while i < tokens.len() {
-        match tokens[i] {
-            "M" => {
-                let x = parse_f32!(i + 1);
-                let y = parse_f32!(i + 2);
-                pb.move_to(x, y);
-                cur_x = x;
-                cur_y = y;
-                i += 3;
-            }
-            "m" => {
-                let dx = parse_f32!(i + 1);
-                let dy = parse_f32!(i + 2);
-                pb.move_to(cur_x + dx, cur_y + dy);
-                cur_x += dx;
-                cur_y += dy;
-                i += 3;
-            }
-            "L" => {
-                let x = parse_f32!(i + 1);
-                let y = parse_f32!(i + 2);
-                pb.line_to(x, y);
-                cur_x = x;
-                cur_y = y;
-                i += 3;
-            }
-            "l" => {
-                let dx = parse_f32!(i + 1);
-                let dy = parse_f32!(i + 2);
-                pb.line_to(cur_x + dx, cur_y + dy);
-                cur_x += dx;
-                cur_y += dy;
-                i += 3;
-            }
-            "H" => {
-                let x = parse_f32!(i + 1);
-                pb.line_to(x, cur_y);
-                cur_x = x;
-                i += 2;
-            }
-            "h" => {
-                let dx = parse_f32!(i + 1);
-                pb.line_to(cur_x + dx, cur_y);
-                cur_x += dx;
-                i += 2;
-            }
-            "V" => {
-                let y = parse_f32!(i + 1);
-                pb.line_to(cur_x, y);
-                cur_y = y;
-                i += 2;
-            }
-            "v" => {
-                let dy = parse_f32!(i + 1);
-                pb.line_to(cur_x, cur_y + dy);
-                cur_y += dy;
-                i += 2;
-            }
-            "C" => {
-                let x1 = parse_f32!(i + 1);
-                let y1 = parse_f32!(i + 2);
-                let x2 = parse_f32!(i + 3);
-                let y2 = parse_f32!(i + 4);
-                let x = parse_f32!(i + 5);
-                let y = parse_f32!(i + 6);
-                pb.cubic_to(x1, y1, x2, y2, x, y);
-                cur_x = x;
-                cur_y = y;
-                i += 7;
-            }
-            "c" => {
-                let dx1 = parse_f32!(i + 1);
-                let dy1 = parse_f32!(i + 2);
-                let dx2 = parse_f32!(i + 3);
-                let dy2 = parse_f32!(i + 4);
-                let dx = parse_f32!(i + 5);
-                let dy = parse_f32!(i + 6);
-                pb.cubic_to(
-                    cur_x + dx1,
-                    cur_y + dy1,
-                    cur_x + dx2,
-                    cur_y + dy2,
-                    cur_x + dx,
-                    cur_y + dy,
-                );
-                cur_x += dx;
-                cur_y += dy;
-                i += 7;
-            }
-            "Z" | "z" => {
-                pb.close();
-                i += 1;
-            }
-            _ => {
-                i += 1;
-            }
-        }
-    }
-
-    pb.finish()
+    crate::common::path::to_tiny_path(&crate::common::path::parse_svg_path(d)?)
 }
 
-/// A resolved fill/stroke source ready to apply to a tiny-skia `Paint`.
-enum FillStyle {
-    Solid(Color),
-    Linear {
-        stops: Vec<(f32, Color)>,
-        angle_deg: f32,
-    },
-    Radial {
-        stops: Vec<(f32, Color)>,
-        radius_frac: f32,
-    },
-}
-
-/// Parse a JSON value (hex string or gradient object) into a `FillStyle`.
-fn parse_fill(v: &Value, opacity: f32) -> Option<FillStyle> {
-    match v {
-        Value::String(s) => Some(FillStyle::Solid(parse_color(s, opacity))),
-        Value::Object(map) => {
-            let kind = map.get("type").and_then(|t| t.as_str()).unwrap_or("linear");
-            let stops = parse_stops(map.get("stops"), opacity)?;
-            match kind {
-                "radial" => {
-                    let radius_frac =
-                        map.get("radius").and_then(|r| r.as_f64()).unwrap_or(0.5) as f32;
-                    Some(FillStyle::Radial { stops, radius_frac })
-                }
-                _ => {
-                    let angle_deg = map.get("angle").and_then(|a| a.as_f64()).unwrap_or(0.0) as f32;
-                    Some(FillStyle::Linear { stops, angle_deg })
-                }
-            }
-        }
-        _ => None,
-    }
-}
-
-/// Stroke is optional: absent or null means "no stroke".
-fn parse_stroke(state: &Value, opacity: f32) -> Option<FillStyle> {
-    match state.get("stroke") {
-        Some(v) if !v.is_null() => parse_fill(v, opacity),
-        _ => None,
-    }
-}
-
-fn parse_stops(v: Option<&Value>, opacity: f32) -> Option<Vec<(f32, Color)>> {
-    let arr = v?.as_array()?;
-    let mut out = Vec::with_capacity(arr.len());
-    for s in arr {
-        let pair = s.as_array()?;
-        let pos = pair.first()?.as_f64()? as f32;
-        let hex = pair.get(1)?.as_str()?;
-        out.push((pos.clamp(0.0, 1.0), parse_color(hex, opacity)));
-    }
-    if out.len() < 2 {
-        return None;
-    }
-    Some(out)
-}
-
-/// Apply a `FillStyle` to a paint, deriving gradient geometry from the shape
-/// bounding box.
-fn apply_fill(paint: &mut Paint, fill: &FillStyle, bbox: Rect) {
+/// Apply a `FillSpec` to a paint, deriving gradient geometry from the shape
+/// bounding box via the shared helpers.
+fn apply_fill(paint: &mut Paint, fill: &crate::common::fill::FillSpec, bbox: Rect) {
+    use crate::common::fill::FillSpec;
+    let bb = (bbox.x(), bbox.y(), bbox.width(), bbox.height());
     match fill {
-        FillStyle::Solid(c) => {
-            paint.set_color(*c);
+        FillSpec::Solid(c) => {
+            paint.set_color(crate::common::color::to_tiny(*c));
         }
-        FillStyle::Linear { stops, angle_deg } => {
+        FillSpec::Linear { stops, angle_deg } => {
             let gstops: Vec<GradientStop> = stops
                 .iter()
-                .map(|(p, c)| GradientStop::new(*p, *c))
+                .map(|(p, c)| GradientStop::new(*p, crate::common::color::to_tiny(*c)))
                 .collect();
-            let cx = bbox.x() + bbox.width() / 2.0;
-            let cy = bbox.y() + bbox.height() / 2.0;
-            let r = bbox.width().max(bbox.height()) / 2.0;
-            let rad = angle_deg.to_radians();
-            let (dx, dy) = (rad.cos(), rad.sin());
-            let start = Point::from_xy(cx - dx * r, cy - dy * r);
-            let end = Point::from_xy(cx + dx * r, cy + dy * r);
-            if let Some(shader) =
-                LinearGradient::new(start, end, gstops, SpreadMode::Pad, Transform::identity())
-            {
+            let (start, end) = crate::common::fill::linear_geometry(bb, *angle_deg);
+            if let Some(shader) = LinearGradient::new(
+                Point::from_xy(start.0, start.1),
+                Point::from_xy(end.0, end.1),
+                gstops,
+                SpreadMode::Pad,
+                Transform::identity(),
+            ) {
                 paint.shader = shader;
             }
         }
-        FillStyle::Radial { stops, radius_frac } => {
+        FillSpec::Radial { stops, radius_frac } => {
             let gstops: Vec<GradientStop> = stops
                 .iter()
-                .map(|(p, c)| GradientStop::new(*p, *c))
+                .map(|(p, c)| GradientStop::new(*p, crate::common::color::to_tiny(*c)))
                 .collect();
-            let cx = bbox.x() + bbox.width() / 2.0;
-            let cy = bbox.y() + bbox.height() / 2.0;
-            let r = (bbox.width().max(bbox.height()) / 2.0) * radius_frac.max(0.01);
-            let center = Point::from_xy(cx, cy);
+            let (center, r) = crate::common::fill::radial_geometry(bb, *radius_frac);
+            let center = Point::from_xy(center.0, center.1);
+            // tiny-skia 0.12 two-circle form; (center, 0) → (center, r) is
+            // the classic single-circle radial the schema describes.
             if let Some(shader) = RadialGradient::new(
                 center,
+                0.0,
                 center,
-                r.max(0.01),
+                r,
                 gstops,
                 SpreadMode::Pad,
                 Transform::identity(),
@@ -1819,129 +1572,9 @@ fn apply_fill(paint: &mut Paint, fill: &FillStyle, bbox: Rect) {
     }
 }
 
-/// A resolved drop-shadow specification.
-struct ShadowSpec {
-    color: Color,
-    blur: f32,
-    dx: f32,
-    dy: f32,
-    opacity: f32,
-}
-
-fn parse_shadow(state: &Value) -> Option<ShadowSpec> {
-    let map = match state.get("shadow") {
-        Some(Value::Object(m)) => m,
-        _ => return None,
-    };
-    let color_hex = map
-        .get("color")
-        .and_then(|c| c.as_str())
-        .unwrap_or("#000000");
-    Some(ShadowSpec {
-        color: parse_color(color_hex, 1.0),
-        blur: map.get("blur").and_then(|b| b.as_f64()).unwrap_or(0.0) as f32,
-        dx: map.get("dx").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        dy: map.get("dy").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        opacity: map.get("opacity").and_then(|o| o.as_f64()).unwrap_or(1.0) as f32,
-    })
-}
-
-/// Render a blurred, offset silhouette of `path` beneath a shape.
-fn draw_shadow(dst: &mut Pixmap, path: &Path, transform: Transform, shadow: &ShadowSpec) {
-    let mut off = match Pixmap::new(dst.width(), dst.height()) {
-        Some(p) => p,
-        None => return,
-    };
-    let mut paint = Paint::default();
-    paint.set_color(shadow.color);
-    paint.anti_alias = true;
-    let t = Transform::from_translate(shadow.dx, shadow.dy).pre_concat(transform);
-    off.fill_path(path, &paint, FillRule::Winding, t, None);
-    let r = shadow.blur.clamp(0.0, 50.0).round() as usize;
-    box_blur(&mut off, r);
-    let pp = PixmapPaint {
-        opacity: shadow.opacity.clamp(0.0, 1.0),
-        blend_mode: BlendMode::SourceOver,
-        quality: FilterQuality::Nearest,
-    };
-    dst.draw_pixmap(0, 0, off.as_ref(), &pp, Transform::identity(), None);
-}
-
-/// Separable 3-pass box blur (≈ Gaussian) over premultiplied RGBA bytes.
-fn box_blur(pm: &mut Pixmap, radius: usize) {
-    if radius == 0 {
-        return;
-    }
-    let w = pm.width() as usize;
-    let h = pm.height() as usize;
-    if w == 0 || h == 0 {
-        return;
-    }
-    let data = pm.data_mut();
-    let mut tmp = vec![0u8; data.len()];
-    for _ in 0..3 {
-        blur_pass_h(data, &mut tmp, w, h, radius);
-        blur_pass_v(&tmp, data, w, h, radius);
-    }
-}
-
-fn blur_pass_h(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize) {
-    let win = (2 * r + 1) as u32;
-    for y in 0..h {
-        let base = y * w;
-        for c in 0..4 {
-            let get = |x: usize| src[(base + x.min(w - 1)) * 4 + c] as u32;
-            let mut sum: u32 = 0;
-            for i in 0..=2 * r {
-                sum += get(i.saturating_sub(r));
-            }
-            for x in 0..w {
-                dst[(base + x) * 4 + c] = (sum / win) as u8;
-                let add_idx = (x + r + 1).min(w - 1);
-                let sub_idx = x.saturating_sub(r);
-                sum += get(add_idx);
-                sum -= get(sub_idx);
-            }
-        }
-    }
-}
-
-fn blur_pass_v(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize) {
-    let win = (2 * r + 1) as u32;
-    for x in 0..w {
-        for c in 0..4 {
-            let get = |y: usize| src[(y.min(h - 1) * w + x) * 4 + c] as u32;
-            let mut sum: u32 = 0;
-            for i in 0..=2 * r {
-                sum += get(i.saturating_sub(r));
-            }
-            for y in 0..h {
-                dst[(y * w + x) * 4 + c] = (sum / win) as u8;
-                let add_idx = (y + r + 1).min(h - 1);
-                let sub_idx = y.saturating_sub(r);
-                sum += get(add_idx);
-                sum -= get(sub_idx);
-            }
-        }
-    }
-}
-
-/// Build a rounded-rectangle path using quadratic corner arcs.
+/// Build a rounded-rectangle path via the shared quadratic-arc geometry.
 fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> Option<Path> {
-    let rx = rx.min(w / 2.0).max(0.0);
-    let ry = ry.min(h / 2.0).max(0.0);
-    let mut pb = PathBuilder::new();
-    pb.move_to(x + rx, y);
-    pb.line_to(x + w - rx, y);
-    pb.quad_to(x + w, y, x + w, y + ry);
-    pb.line_to(x + w, y + h - ry);
-    pb.quad_to(x + w, y + h, x + w - rx, y + h);
-    pb.line_to(x + rx, y + h);
-    pb.quad_to(x, y + h, x, y + h - ry);
-    pb.line_to(x, y + ry);
-    pb.quad_to(x, y, x + rx, y);
-    pb.close();
-    pb.finish()
+    crate::common::path::to_tiny_path(&crate::common::path::rounded_rect(x, y, w, h, rx, ry))
 }
 
 /// Paint a closed path: optional shadow, then fill, then stroke.
@@ -1949,14 +1582,14 @@ fn paint_shape(
     pixmap: &mut Pixmap,
     path: &Path,
     transform: Transform,
-    fill: Option<&FillStyle>,
-    stroke: Option<&FillStyle>,
+    fill: Option<&crate::common::fill::FillSpec>,
+    stroke: Option<&crate::common::fill::FillSpec>,
     stroke_width: f32,
-    shadow: Option<&ShadowSpec>,
+    shadow: Option<&crate::common::shadow::ShadowSpec>,
 ) {
     let bbox = path.bounds();
     if let Some(sh) = shadow {
-        draw_shadow(pixmap, path, transform, sh);
+        crate::common::shadow::draw_shadow(pixmap, path, transform, sh);
     }
     if let Some(f) = fill {
         let mut paint = Paint::default();
@@ -1975,28 +1608,5 @@ fn paint_shape(
 }
 
 pub(crate) fn parse_color(hex: &str, opacity: f32) -> Color {
-    let hex = hex.trim_start_matches('#');
-    match hex.len() {
-        6 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (opacity * 255.0) as u8)
-        }
-        8 => {
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-            let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (a as f32 * opacity) as u8)
-        }
-        3 => {
-            // Short form: #RGB → #RRGGBB
-            let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(255);
-            let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(255);
-            let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(255);
-            Color::from_rgba8(r, g, b, (opacity * 255.0) as u8)
-        }
-        _ => Color::WHITE,
-    }
+    crate::common::color::to_tiny(crate::common::color::parse_rgba8(hex, opacity))
 }

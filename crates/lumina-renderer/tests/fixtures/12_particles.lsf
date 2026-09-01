@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "meta": { "title": "Parity: particles", "author": "parity-harness", "created_at": "2026-07-12T00:00:00Z" },
+  "canvas": { "width": 256, "height": 256, "fps": 30, "duration": 2.0, "background": "#0B1020" },
+  "assets": {},
+  "objects": {
+    "burst": {
+      "type": "Particles",
+      "properties": { "count": 48, "emitter_x": 128, "emitter_y": 128, "lifetime": 1.5, "speed": 60, "spread": 360, "size": 4, "color": "#FFD43B", "z_index": 1 }
+    },
+    "jet": {
+      "type": "Particles",
+      "properties": { "count": 24, "emitter_x": 40, "emitter_y": 220, "lifetime": 1.0, "speed": 90, "spread": 30, "size": 3, "color": "#74C0FC", "z_index": 2 }
+    }
+  },
+  "timeline": []
+}

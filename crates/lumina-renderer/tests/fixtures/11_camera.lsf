@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "meta": { "title": "Parity: camera pan and zoom", "author": "parity-harness", "created_at": "2026-07-12T00:00:00Z" },
+  "canvas": { "width": 256, "height": 256, "fps": 30, "duration": 2.0, "background": "#101018" },
+  "assets": {},
+  "objects": {
+    "anchor": {
+      "type": "Rectangle",
+      "properties": { "x": 108, "y": 108, "width": 40, "height": 40, "fill": "#4DABF7", "z_index": 1 }
+    },
+    "east": {
+      "type": "Circle",
+      "properties": { "cx": 220, "cy": 128, "radius": 16, "fill": "#F783AC", "z_index": 2 }
+    },
+    "south": {
+      "type": "Polygon",
+      "properties": { "points": [[128, 200], [148, 240], [108, 240]], "fill": "#69DB7C", "z_index": 3 }
+    }
+  },
+  "timeline": [],
+  "camera": {
+    "timeline": [
+      { "time": 0.0, "state": { "x": 0, "y": 0, "zoom": 1.0 }, "easing": "linear" },
+      { "time": 2.0, "state": { "x": 40, "y": -20, "zoom": 1.6 }, "easing": "ease_in_out_cubic" }
+    ]
+  }
+}

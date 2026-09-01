@@ -16,16 +16,26 @@
 //! - [`events`] — [`EventBus`], playback state, and interactive actions.
 //! - [`scene_patch`] — semantic patch operations (`add_object`,
 //!   `add_keyframe`, …) for programmatic scene editing.
+//! - [`validation`] — semantic scene validation with machine-actionable
+//!   `fix_suggestion`s (shared by the server, CLI and SDKs).
 //!
 //! Rendering lives downstream in `lumina-renderer`; this crate never touches
 //! pixels.
 
+#![warn(missing_docs)]
+
+/// Named easing functions plus the canonical name registry.
 pub mod easing;
+/// Interactive event dispatch and playback state.
 pub mod events;
+/// JSON-value interpolation (numbers, arrays, LAB-space colors).
 pub mod interpolator;
+/// Scene graph: object map with root/child resolution.
 pub mod scene;
 pub mod scene_patch;
+/// Keyframe tracks and scene-state evaluation at any time.
 pub mod timeline;
+pub mod validation;
 
 #[cfg(test)]
 mod easing_tests;
@@ -39,6 +49,8 @@ mod scene_patch_tests;
 mod stress_tests;
 #[cfg(test)]
 mod timeline_tests;
+#[cfg(test)]
+mod validation_tests;
 
 pub use events::{EmittedEvent, Event, EventBus, EventOutcome, PlaybackState};
 pub use scene::SceneGraph;

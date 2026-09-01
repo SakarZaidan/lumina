@@ -75,21 +75,72 @@ impl LuminaEngine {
     pub fn hit_test(&self, x: f32, y: f32, time: f32) -> Option<String> {
         let states = self.timeline.get_state_at(time);
 
-        let mut sorted_ids: Vec<_> = self.scene_graph.objects.keys().collect();
-        sorted_ids.sort_by(|a, b| {
-            let za = self.get_z_index(a);
-            let zb = self.get_z_index(b);
-            zb.cmp(&za) // higher z on top → tested first
-        });
-
-        for id in sorted_ids {
-            if let Some(state) = states.get(id) {
-                if self.is_point_in_object(id, x, y, state, &states) {
-                    return Some(id.clone());
-                }
+        // Objects claimed as a group's child are reached only through their
+        // parent. Their properties are in group-local coordinates, so testing
+        // them against a world-space point would both miss the child and let
+        // the group shadow it.
+        let mut claimed: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for obj in self.scene_graph.objects.values() {
+            if let Object::Group(props) = obj {
+                claimed.extend(props.children.iter().map(String::as_str));
             }
         }
-        None
+
+        let mut roots: Vec<&String> = self
+            .scene_graph
+            .objects
+            .keys()
+            .filter(|id| !claimed.contains(id.as_str()))
+            .collect();
+        // Higher z on top → tested first.
+        roots.sort_by(|a, b| self.get_z_index(b).cmp(&self.get_z_index(a)));
+
+        roots
+            .into_iter()
+            .find_map(|id| self.hit_in_object(id, x, y, &states, 0))
+    }
+
+    /// The id of the deepest object covering (`px`, `py`), or `None`.
+    ///
+    /// Groups have no geometry of their own: they transform the point into
+    /// group-local space and report whichever child is hit, so an event can
+    /// be bound to an object *inside* a group rather than to the group.
+    ///
+    /// `depth` bounds recursion so a scene whose groups reference each other
+    /// cannot overflow the stack. Such a scene is rejected by
+    /// `validate_scene_data` (CIRCULAR_GROUP_REFERENCE), but the WASM engine
+    /// accepts unvalidated input from its JavaScript host.
+    fn hit_in_object(
+        &self,
+        id: &str,
+        px: f32,
+        py: f32,
+        states: &std::collections::HashMap<String, serde_json::Value>,
+        depth: u32,
+    ) -> Option<String> {
+        const MAX_GROUP_DEPTH: u32 = 64;
+        if depth > MAX_GROUP_DEPTH {
+            return None;
+        }
+        let state = states.get(id)?;
+        match self.scene_graph.get_object(id) {
+            Some(Object::Group(props)) => {
+                let gx = state["x"].as_f64().unwrap_or(0.0) as f32;
+                let gy = state["y"].as_f64().unwrap_or(0.0) as f32;
+                // Translation only; group scale and rotation are not applied
+                // to the hit point yet (TD-21) — the renderer's shared
+                // `group_transform` is crate-private to `lumina-renderer`.
+                let (local_x, local_y) = (px - gx, py - gy);
+                let mut kids: Vec<&String> = props.children.iter().collect();
+                kids.sort_by(|a, b| self.get_z_index(b).cmp(&self.get_z_index(a)));
+                kids.into_iter()
+                    .find_map(|cid| self.hit_in_object(cid, local_x, local_y, states, depth + 1))
+            }
+            Some(_) => self
+                .is_point_in_object(id, px, py, state, states)
+                .then(|| id.to_string()),
+            None => None,
+        }
     }
 
     fn get_z_index(&self, id: &str) -> i32 {
@@ -316,20 +367,9 @@ impl LuminaEngine {
             }
 
             // ── Group — check whether any child is hit ───────────────────────
-            Some(Object::Group(props)) => {
-                let gx = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let gy = state["y"].as_f64().unwrap_or(0.0) as f32;
-                // Transform point into local space (ignoring scale/rotation for simplicity)
-                let local_x = px - gx;
-                let local_y = py - gy;
-                props.children.iter().any(|cid| {
-                    if let Some(child_state) = all_states.get(cid) {
-                        self.is_point_in_object(cid, local_x, local_y, child_state, all_states)
-                    } else {
-                        false
-                    }
-                })
-            }
+            // Groups are resolved by `hit_in_object`, which descends into the
+            // children and reports the child's id rather than the group's.
+            Some(Object::Group(_)) => false,
 
             // ── Path — bounding box via d-string extents ─────────────────────
             Some(Object::Path(_)) => {
