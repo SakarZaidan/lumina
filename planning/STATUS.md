@@ -24,6 +24,35 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (end, final) — Wave 3 done: three items dropped, one RFC rejected
+
+Wave 3 finishes with more items *not* done than done, and each refusal has a
+number behind it.
+
+- **`AAA-P-12`** done: particles reserve capacity. One line, per emitter per
+  frame.
+- **`AAA-P-07`** dropped. No scene uses `spline` and no benchmark exercises it,
+  so there is nothing to measure and principle #5 forbids optimising on a
+  hypothesis.
+- **`AAA-P-08`** dropped after measuring. A new `latex_render` group put a
+  LaTeX object at ~60 µs per frame including its glyphs; on a realistic
+  one-formula scene that is **0.5% of export**. Not worth a cache and its
+  invalidation risk. The benchmark stays so the decision can be revisited.
+- **`AAA-P-10`/`AAA-P-11`** deferred, not skipped (#72). There is no Vello
+  benchmark, so there is no baseline. Assuming the CPU result transfers would
+  be the same guessing that measuring disproved twice this wave.
+- **RFC-0001 (`render_into`) rejected — by its own measurement.** The proposal
+  was written from a real number: the output copy is 0.394 ms at 1080p, ~70% of
+  the fixed per-frame cost once the buffer is reused. Implementing it made
+  export **slower** (9.82 s → 10.52 s).
+  The reason was already in the RFC's Alternatives section, arguing against a
+  borrowed slice: "the borrow would have to end before the next `render_frame`,
+  which is exactly what a pipeline cannot promise." That applies to the
+  proposal too, and was missed. Every current caller needs *owned* bytes — the
+  export channel, `ImageBuffer::from_raw`, and the JavaScript boundary.
+  Kept as a written "no", which is what `planning/RFCS/README.md` asks for. The
+  first RFC in the repository, and it is a rejection.
+
 ## 2026-09-02 (end) — Wave 3 closes: export pipelined, TD-05 shut
 
 - Export: MP4 **12.86 s → 9.82 s** (−24%), PNG **4.54 s → 3.04 s** (−33%) on a

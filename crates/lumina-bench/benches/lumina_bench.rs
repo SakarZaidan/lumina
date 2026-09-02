@@ -356,6 +356,59 @@ fn bench_scene_walk(c: &mut Criterion) {
     group.finish();
 }
 
+/// LaTeX rendering: `latex_to_unicode` runs ~70 chained `String::replace`
+/// passes over input that never changes, per object, per frame (`AAA-P-08`).
+/// Nothing in the suite measured it, so nothing could say whether memoising it
+/// was worth the cache.
+fn bench_latex_render(c: &mut Criterion) {
+    use lumina_schema::LaTeXProps;
+
+    let mut group = c.benchmark_group("latex_render");
+    group.sample_size(20);
+
+    for n in [1usize, 20] {
+        let mut objects = HashMap::new();
+        for i in 0..n {
+            objects.insert(
+                format!("l{i}"),
+                Object::LaTeX(LaTeXProps {
+                    expression:
+                        r"\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6} \quad \alpha\beta\gamma"
+                            .into(),
+                    x: 40.0,
+                    y: 40.0 + (i % 30) as f32 * 30.0,
+                    font_size: 28.0,
+                    color: "#E8E8F0".into(),
+                    z_index: i as i32,
+                    opacity: 1.0,
+                    draw_fraction: None,
+                    align: "left".into(),
+                    letter_spacing: 0.0,
+                }),
+            );
+        }
+        let mut scene = make_scene(0);
+        scene.objects = objects;
+        scene.timeline = Vec::new();
+
+        let graph = SceneGraph::from_scene(&scene);
+        let states = Timeline::from_scene(&scene).get_state_at(0.0);
+        let mut renderer = SkiaRenderer::new();
+        load_bench_font(&mut renderer);
+
+        group.bench_function(BenchmarkId::from_parameter(format!("{n}formulas")), |b| {
+            b.iter(|| {
+                black_box(
+                    renderer
+                        .render_frame(&graph.objects, &states, 1920, 1080, "#0F0F1A", None)
+                        .expect("render"),
+                )
+            })
+        });
+    }
+    group.finish();
+}
+
 fn bench_easing_dispatch(c: &mut Criterion) {
     use lumina_core::easing::{eval_easing, get_easing_fn};
 
@@ -391,5 +444,6 @@ criterion_group!(
     bench_plot_render,
     bench_frame_sequence,
     bench_scene_walk,
+    bench_latex_render,
 );
 criterion_main!(benches);

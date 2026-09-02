@@ -73,18 +73,18 @@ priority until something measured it.
 
 | ID | Item | Where | Expected |
 |---|---|---|---|
-| `AAA-P-02` | Reuse the frame buffer across frames; `render_into(&mut [u8])` on the trait | `renderer/src/lib.rs:39`, `skia_backend.rs:988,1001` | **Measured largest win.** Allocating an 8.3 MB `Pixmap` per frame costs **5.3 ms**; reusing one costs **0.57 ms**. The allocator returns the block to the OS, so every frame faults in fresh pages. ~87% of render time for an ordinary scene, on *every* scene |
+| `AAA-P-02` | Reuse the frame buffer across frames (`render_into` **rejected** — RFC-0001) | `renderer/src/lib.rs:39`, `skia_backend.rs:988,1001` | **Measured largest win.** Allocating an 8.3 MB `Pixmap` per frame costs **5.3 ms**; reusing one costs **0.57 ms**. The allocator returns the block to the OS, so every frame faults in fresh pages. ~87% of render time for an ordinary scene, on *every* scene |
 | `AAA-P-01` | Glyph atlas keyed `(char, font_id, size)`; index `font_for_char` instead of walking | `lumina-text`, `raster.rs:44,65` | 2–3 ms on text-heavy scenes |
 | `AAA-P-03` | Frame-parallel export with `rayon` (TD-05) | `export/src/lib.rs:36-77,89-113` | Near-linear in cores for PNG sequences |
 | `AAA-P-04` | Timeline state caching; stop cloning unchanged properties (TD-03) | `timeline.rs:105-124` | Scales with object count |
 | `AAA-P-05` | `partition_point` for keyframe and camera lookup | `timeline.rs:193,158` | O(log K) per property |
 | `AAA-P-06` | Compute root ordering once per render, not per frame | `common/scene.rs:34,55` | Removes 3 allocations/frame/group |
-| `AAA-P-07` | Solve spline tangents in `Timeline::from_scene` | `easing.rs:58-65` | Removes 3 allocations per property per frame |
-| `AAA-P-08` | Memoise `latex_to_unicode` per object | `skia_backend.rs:1134` | ~70 string passes → 1 |
+| ~~`AAA-P-07`~~ | ~~Solve spline tangents in `Timeline::from_scene`~~ | `easing.rs:58-65` | **Dropped.** No scene in the repository uses `spline`, and no benchmark exercises it, so there is no measurement to justify the change. Principle #5 forbids optimising on a hypothesis |
+| ~~`AAA-P-08`~~ | ~~Memoise `latex_to_unicode` per object~~ | `skia_backend.rs:1134` | **Dropped after measuring.** A LaTeX object costs ~60 µs per frame *including* its glyphs. On a realistic scene with one formula that is **0.5% of export wall-time** — not worth a cache and its invalidation risk. `latex_render` benchmarks it so the decision can be revisited if the number changes |
 | `AAA-P-09` | `build_operator_tree` once per plot; hoist the context (TD-04) | `skia_backend.rs:843` | 720 000 parses → 1 |
-| `AAA-P-10` | Retain GPU texture and staging buffer across frames | `vello_backend.rs:961,1004` | Removes 2 GPU allocations/frame |
+| `AAA-P-10` | Retain GPU texture and staging buffer across frames | `vello_backend.rs:961,1004` | **Deferred, not skipped.** The CPU result does not transfer — wgpu may pool internally — and there is no Vello benchmark to measure against. Needs its own baseline first |
 | `AAA-P-11` | Prefer a hardware adapter; `force_fallback_adapter` only under the CI env | `vello_backend.rs:66,84` | Makes the GPU claim true |
-| `AAA-P-12` | `Vec::with_capacity` for particles | `raster.rs:143` | Count is known up front |
+| `AAA-P-12` | `Vec::with_capacity` for particles | `raster.rs:143` | Count is known up front. **Done** |
 
 ## Benchmarks to add
 
