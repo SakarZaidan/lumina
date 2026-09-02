@@ -49,10 +49,13 @@ comparable.
   grep with a `clippy::unwrap_used` deny outside tests, which will force both
   to be rewritten or explicitly allowed with a justification.
 
-  The `unsafe` count is genuinely 0, but the grep now returns a false positive
-  from the word appearing in a comment — which is the argument for
-  `AAA-SEC-07` (`#![forbid(unsafe_code)]`): a compiler guarantee instead of a
-  text search.
+  The `unsafe` count is genuinely 0, but the grep returned a false positive
+  from the word appearing in a comment — which was the argument for
+  `AAA-SEC-07`. **Since v0.4.1 this row is no longer measured by grep at all:**
+  every crate root carries `#![forbid(unsafe_code)]`, so the value is a
+  compiler guarantee. `forbid` cannot be silenced by an `allow` further down,
+  so introducing `unsafe` requires deleting that line in a diff a reviewer
+  sees.
 - **Public API**: `grep -rEh '^\s*pub (fn|struct|enum|trait|type|const)'` —
   approximate; replace with `cargo public-api` when adopted.
 - **Compile times / binary size**: single machine (owner's WSL2 box), after

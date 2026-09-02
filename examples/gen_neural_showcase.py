@@ -16,7 +16,10 @@ import os
 
 FONT_REG = "examples/assets/fonts/LiberationSans-Regular.ttf"
 FONT_BOLD = "examples/assets/fonts/LiberationSans-Bold.ttf"
-LOGO = os.path.join(os.path.dirname(__file__), "assets", "lumina_node.svg")
+# Repo-relative, like FONT_REG/FONT_BOLD above. os.path.dirname(__file__)
+# resolves to an absolute path, which then gets baked into the committed
+# .lsf and only works on the machine that generated it.
+LOGO = "examples/assets/lumina_node.svg"
 
 # Authoring resolution is 1920x1080. SCALE renders the scene at a lower output
 # resolution while preserving the exact layout (every pixel-space value is scaled

@@ -1,0 +1,9 @@
+# rustfmt defaults, pinned explicitly.
+#
+# The project relies on `cargo fmt --all --check` as a merge gate, so an
+# unstated default is a latent failure: a new stable rustfmt that changes a
+# default would turn a green repository red without anyone touching it.
+edition = "2021"
+max_width = 100
+use_small_heuristics = "Default"
+newline_style = "Unix"

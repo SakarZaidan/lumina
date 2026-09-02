@@ -56,7 +56,7 @@ mod tests {
     fn test_linear_is_identity() {
         for i in 0..=10 {
             let t = i as f32 / 10.0;
-            assert!(approx_eq(linear(t), t), "linear({}) should equal {}", t, t);
+            assert!(approx_eq(linear(t), t), "linear({t}) should equal {t}");
         }
     }
 

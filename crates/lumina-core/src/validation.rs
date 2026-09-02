@@ -95,12 +95,12 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             let suggestion = object_ids
                 .iter()
                 .find(|id| id.starts_with(&entry.object[..entry.object.len().min(3)]))
-                .map(|s| format!("Did you mean '{}'?", s))
+                .map(|s| format!("Did you mean '{s}'?"))
                 .unwrap_or_else(|| "Check the 'objects' block for valid IDs.".to_string());
 
             errors.push(ValidationError {
                 code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.timeline[{}].object", i),
+                path: format!("$.timeline[{i}].object"),
                 message: format!(
                     "Timeline entry {} references object '{}', which is not in 'objects'.",
                     i, entry.object
@@ -115,7 +115,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         if !object_ids.contains(event.object.as_str()) {
             errors.push(ValidationError {
                 code: "UNKNOWN_OBJECT_ID".to_string(),
-                path: format!("$.events[{}].object", i),
+                path: format!("$.events[{i}].object"),
                 message: format!(
                     "Event {} references object '{}', which is not declared.",
                     i, event.object
@@ -135,14 +135,12 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 if !object_ids.contains(child_id.as_str()) {
                     errors.push(ValidationError {
                         code: "UNKNOWN_CHILD_ID".to_string(),
-                        path: format!("$.objects.{}.properties.children", obj_id),
+                        path: format!("$.objects.{obj_id}.properties.children"),
                         message: format!(
-                            "Group '{}' references child '{}', which is not declared.",
-                            obj_id, child_id
+                            "Group '{obj_id}' references child '{child_id}', which is not declared."
                         ),
                         fix_suggestion: format!(
-                            "Add '{}' to the 'objects' block or remove it from group '{}'.",
-                            child_id, obj_id
+                            "Add '{child_id}' to the 'objects' block or remove it from group '{obj_id}'."
                         ),
                     });
                 }
@@ -185,7 +183,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         if entry.time > scene.canvas.duration {
             warnings.push(ValidationWarning {
                 code: "KEYFRAME_BEYOND_DURATION".to_string(),
-                path: format!("$.timeline[{}].time", i),
+                path: format!("$.timeline[{i}].time"),
                 message: format!(
                     "Keyframe {} has time={:.2}s but canvas duration is {:.2}s. It will never play.",
                     i, entry.time, scene.canvas.duration
@@ -207,7 +205,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 if let Some(first_idx) = seen.get(&key) {
                     warnings.push(ValidationWarning {
                         code: "DUPLICATE_KEYFRAME".to_string(),
-                        path: format!("$.timeline[{}]", i),
+                        path: format!("$.timeline[{i}]"),
                         message: format!(
                             "Duplicate keyframe for '{}' property '{}' at t={:.2}s (first at index {}). Last declaration wins.",
                             entry.object, prop_name, entry.time, first_idx
@@ -341,7 +339,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         check_easing(
             &entry.easing,
             entry.easing_params.as_ref(),
-            format!("$.timeline[{}].easing", i),
+            format!("$.timeline[{i}].easing"),
             &mut errors,
             &mut warnings,
         );
@@ -351,7 +349,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             check_easing(
                 easing,
                 None,
-                format!("$.events[{}].action.easing", i),
+                format!("$.events[{i}].action.easing"),
                 &mut errors,
                 &mut warnings,
             );
@@ -362,7 +360,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             check_easing(
                 &entry.easing,
                 None,
-                format!("$.camera.timeline[{}].easing", i),
+                format!("$.camera.timeline[{i}].easing"),
                 &mut errors,
                 &mut warnings,
             );
@@ -388,13 +386,13 @@ fn check_easing(
 ) {
     if !is_valid_easing(name) {
         let fix_suggestion = match suggest_easing(name) {
-            Some(candidate) => format!("Did you mean '{}'?", candidate),
+            Some(candidate) => format!("Did you mean '{candidate}'?"),
             None => "See lumina_core::easing::EASING_NAMES for the accepted names.".to_string(),
         };
         errors.push(ValidationError {
             code: "UNKNOWN_EASING".to_string(),
             path,
-            message: format!("Unknown easing '{}'.", name),
+            message: format!("Unknown easing '{name}'."),
             fix_suggestion,
         });
         return;

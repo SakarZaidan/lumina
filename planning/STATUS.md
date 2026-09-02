@@ -24,6 +24,51 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (evening) — Wave 1 complete: the lint floor and one gate command
+
+- `#![forbid(unsafe_code)]` on all nine crate roots. The zero-unsafe metric
+  stops being a grep — which had started returning a false positive from the
+  word in a comment — and becomes a compiler guarantee that cannot be silenced
+  by an `allow` further down.
+- `[workspace.lints]` replaces `#![warn(missing_docs)]` copy-pasted into six
+  crates. Adds `unwrap_used`/`expect_used`/`panic`, `unreachable_pub`,
+  `rust_2018_idioms`, and a handful of clarity lints.
+- That surfaced ~130 warnings. `clippy.toml` (`allow-*-in-tests`) accounted for
+  most legitimately; `cargo clippy --fix` took the 45 uninlined format args and
+  19 doc-backtick items; the rest were fixed by hand. Two suppressions remain,
+  both local and justified in a comment, per principle #7.
+- One real improvement fell out: `latex_to_unicode` mapped each character
+  twice — once to test, once to unwrap. It now collects into `Option<Vec<_>>`,
+  mapping once and short-circuiting, so the unwrap is gone.
+- `cargo xtask ci` replaces the five-command gate. Defined once in Rust, so it
+  cannot drift from CI the way a command list in a README does. `--fast` skips
+  the slow steps; missing optional tools are reported as skipped, not failed.
+- **CI now checks every example renders** (`cargo xtask examples`). Principle
+  #12 has always said a broken example is a broken build; nothing checked it.
+  It caught one immediately: `showcase_grand.lsf` and
+  `showcase_neural_network.lsf` carried the **absolute path**
+  `/home/horux/projects/lumina/examples/assets/lumina_node.svg`, baked in by
+  `os.path.dirname(__file__)` in their generators. The two flagship showcase
+  scenes had only ever rendered on one machine. Generators and scenes both
+  fixed.
+- The check draws one frame per scene rather than encoding whole videos: the
+  showcase is 4 500 frames, and a gate slow enough to be skipped is not a gate.
+  A single frame still proves the scene parses, validates, resolves every
+  asset, and draws every object. `--full` encodes properly for a release check.
+- That needed a new CLI flag, `--preview [SECONDS]`, and fixing what it was
+  built on: preview rendering swallowed asset failures with
+  `if let Ok(data) = … { let _ = … }`, so a missing font produced a frame with
+  no text and no message — while the full render path hard-errored on the same
+  input. One loader now serves both (`AAA-DX-08`).
+- The wasm job also went red: `[workspace.lints]` reached `lumina-wasm` for the
+  first time and found **8 undocumented public items** on the browser-facing
+  API, including `LuminaEngine` itself. Documented; the underlying exclusion of
+  that crate from workspace commands is TD-24.
+- `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `.editorconfig` pinned.
+  This matters because CI sets `RUSTFLAGS: -D warnings` globally: without a
+  pinned toolchain, a new stable release introducing a lint turns the build red
+  on a repository nobody has touched.
+
 ## 2026-09-02 (later still) — Wave 1: runtime and backend agreement
 
 - `AAA-SEC-03`: `/render` now hands its work to `spawn_blocking`. It used to

@@ -16,6 +16,12 @@
 //! shadows, rounded rectangles and dashes are added as the corresponding
 //! Vello features land (TD-01).
 
+// Integration tests are not `#[cfg(test)]` items, so `allow-unwrap-in-tests`
+// in clippy.toml does not reach them. Panicking on setup failure is correct
+// here: a fixture that cannot be loaded must fail the test loudly, not be
+// silently skipped.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use lumina_core::{SceneGraph, Timeline};
 use lumina_renderer::skia_backend::SkiaRenderer;
 use lumina_renderer::vello_backend::VelloRenderer;

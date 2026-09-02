@@ -57,7 +57,7 @@ struct WalkCtx<'a> {
 }
 
 impl VelloRenderer {
-    /// Create a new VelloRenderer, blocking the current thread during GPU init.
+    /// Create a new `VelloRenderer`, blocking the current thread during GPU init.
     pub fn new() -> Result<Self, RendererError> {
         pollster::block_on(Self::new_async())
     }

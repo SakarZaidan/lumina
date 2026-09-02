@@ -1,3 +1,13 @@
+//! Criterion benchmarks for the hot paths: timeline evaluation, a single
+//! Skia frame at 1080p, and easing dispatch.
+//!
+//! Run with `cargo bench -p lumina-bench`.
+
+// Benchmarks are not `#[cfg(test)]` items, so clippy.toml's allow-in-tests
+// does not reach them. Setup failure here should panic, not be handled.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(missing_docs)]
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use lumina_core::{SceneGraph, Timeline};
 use lumina_renderer::{skia_backend::SkiaRenderer, Renderer};
@@ -11,7 +21,7 @@ fn make_scene(n_objects: usize) -> Scene {
     let mut timeline = Vec::new();
 
     for i in 0..n_objects {
-        let id = format!("c{}", i);
+        let id = format!("c{i}");
         objects.insert(
             id.clone(),
             Object::Circle(CircleProps {

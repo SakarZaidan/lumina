@@ -54,6 +54,10 @@ mod tests {
         SkiaRenderer::new()
     }
 
+    // Taken by value so call sites can build maps inline and hand them over;
+    // borrowing here would add `&` to sixteen call sites for no benefit in a
+    // helper that owns nothing afterwards.
+    #[allow(clippy::needless_pass_by_value)]
     fn render(
         renderer: &mut SkiaRenderer,
         objects: HashMap<String, Object>,

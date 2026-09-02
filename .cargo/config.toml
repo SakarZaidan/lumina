@@ -1,0 +1,6 @@
+# `cargo xtask` runs the repository's automation crate. This is the standard
+# xtask pattern: a real crate in the workspace, invoked through an alias, so
+# the gate is written in Rust and checked by the same compiler as everything
+# else rather than living in a shell script nobody tests.
+[alias]
+xtask = "run --package xtask --"

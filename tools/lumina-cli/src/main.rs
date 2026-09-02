@@ -1,6 +1,6 @@
 //! Command-line renderer for Lumina scenes.
 //!
-//! Loads an LSF scene file and renders it to a PNG frame sequence, MP4, WebM,
+//! Loads an LSF scene file and renders it to a PNG frame sequence, MP4, `WebM`,
 //! or GIF on either the CPU (`skia`) or GPU (`vello`) backend:
 //!
 //! ```text
@@ -11,6 +11,14 @@
 //!
 //! Video formats require `ffmpeg` on PATH (see `lumina-export`).
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
+
+use anyhow::Context;
 use clap::Parser;
 use lumina_export::Exporter;
 use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
@@ -51,17 +59,25 @@ struct Args {
     #[arg(long)]
     verbose: bool,
 
+    /// Render a single frame to PNG instead of the full animation.
+    ///
+    /// Takes an optional time in seconds; defaults to the midpoint. Useful for
+    /// checking a scene loads and draws without paying for every frame — which
+    /// is how CI verifies every example still renders.
+    #[arg(long, value_name = "SECONDS", num_args = 0..=1, default_missing_value = "")]
+    preview: Option<String>,
+
     /// Validate the scene and exit without rendering (exit code 1 on errors)
     #[arg(long)]
     check: bool,
 }
 
 fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("Cannot read {:?}: {}", path, e))?;
+    let text =
+        std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!("Cannot read {path:?}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| {
         // Surface line/col in parse errors for better DX
-        anyhow::anyhow!("Scene parse error in {:?}: {}", path, e)
+        anyhow::anyhow!("Scene parse error in {path:?}: {e}")
     })
 }
 
@@ -104,7 +120,7 @@ fn render_once(args: &Args, scene: &Scene) -> anyhow::Result<Vec<Duration>> {
             let mut exporter = Exporter::new(renderer);
             do_export(&mut exporter, scene, args)?
         }
-        other => anyhow::bail!("Unknown backend '{}'. Valid: skia, vello", other),
+        other => anyhow::bail!("Unknown backend '{other}'. Valid: skia, vello"),
     };
     Ok(timings)
 }
@@ -120,7 +136,7 @@ fn load_fonts<R: Renderer>(renderer: &mut R, scene: &Scene) -> anyhow::Result<()
             .map_err(|e| anyhow::anyhow!("Cannot read font {:?}: {}", font_asset.path, e))?;
         renderer
             .load_font(&font_asset.id, &data)
-            .map_err(|e| anyhow::anyhow!("Font load error: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("Font load error: {e:?}"))?;
     }
     Ok(())
 }
@@ -136,7 +152,7 @@ fn load_images<R: Renderer>(renderer: &mut R, scene: &Scene) -> anyhow::Result<(
             .map_err(|e| anyhow::anyhow!("Cannot read image {:?}: {}", image_asset.path, e))?;
         renderer
             .load_image(&image_asset.id, &data)
-            .map_err(|e| anyhow::anyhow!("Image load error: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("Image load error: {e:?}"))?;
     }
     Ok(())
 }
@@ -172,7 +188,7 @@ fn do_export<R: Renderer>(
             exporter.export_png_sequence(scene, &args.output)?;
             timings.push(t0.elapsed());
         }
-        other => anyhow::bail!("Unknown format '{}'. Valid: png, mp4, webm, gif", other),
+        other => anyhow::bail!("Unknown format '{other}'. Valid: png, mp4, webm, gif"),
     }
     Ok(timings)
 }
@@ -188,6 +204,21 @@ fn main() -> anyhow::Result<()> {
         validate_scene(&scene, &args.scene)?;
         if args.check {
             println!("[lumina] {:?} is valid.", args.scene);
+            return Ok(());
+        }
+        if let Some(spec) = &args.preview {
+            let time = if spec.is_empty() {
+                scene.canvas.duration / 2.0
+            } else {
+                spec.parse::<f32>().map_err(|_| {
+                    anyhow::anyhow!("--preview expects a time in seconds, got '{spec}'")
+                })?
+            };
+            render_preview(&scene, &args.output, time, &args.backend)?;
+            println!(
+                "[lumina] preview of {:?} at t={time:.2}s written to {:?}",
+                args.scene, args.output
+            );
             return Ok(());
         }
         log::info!(
@@ -221,12 +252,12 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
         let scene = match load_scene(path) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("[watch] parse error: {}", e);
+                eprintln!("[watch] parse error: {e}");
                 return;
             }
         };
         if let Err(e) = validate_scene(&scene, path) {
-            eprintln!("[watch] {}", e);
+            eprintln!("[watch] {e}");
             return;
         }
         // Render mid-point frame to a single PNG
@@ -237,7 +268,7 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
                 t0.elapsed(),
                 preview_out
             ),
-            Err(e) => eprintln!("[watch] render error: {}", e),
+            Err(e) => eprintln!("[watch] render error: {e}"),
         }
     };
 
@@ -262,6 +293,34 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Load every font and image the scene declares, failing on the first problem.
+///
+/// Preview rendering used to do this with `if let Ok(data) = … { let _ = … }`,
+/// so a missing or corrupt asset produced a frame with no text and **no
+/// message** — while the full render path hard-errored on exactly the same
+/// input. Two behaviours for one fault, and the quiet one is the default in
+/// watch mode, where a typo'd path looks like a styling problem.
+fn load_declared_assets<R: lumina_renderer::Renderer>(
+    renderer: &mut R,
+    scene: &Scene,
+) -> anyhow::Result<()> {
+    for fa in &scene.assets.fonts {
+        let data = std::fs::read(&fa.path)
+            .with_context(|| format!("cannot read font '{}' at {}", fa.id, fa.path))?;
+        renderer
+            .load_font(&fa.id, &data)
+            .map_err(|e| anyhow::anyhow!("cannot load font '{}': {e:?}", fa.id))?;
+    }
+    for ia in &scene.assets.images {
+        let data = std::fs::read(&ia.path)
+            .with_context(|| format!("cannot read image '{}' at {}", ia.id, ia.path))?;
+        renderer
+            .load_image(&ia.id, &data)
+            .map_err(|e| anyhow::anyhow!("cannot load image '{}': {e:?}", ia.id))?;
+    }
+    Ok(())
+}
+
 fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> anyhow::Result<()> {
     use image::{ImageBuffer, Rgba};
     use lumina_core::{SceneGraph, Timeline};
@@ -275,16 +334,7 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
     let frame = match backend {
         "vello" => {
             let mut r = VelloRenderer::new()?;
-            for fa in &scene.assets.fonts {
-                if let Ok(data) = std::fs::read(&fa.path) {
-                    let _ = lumina_renderer::Renderer::load_font(&mut r, &fa.id, &data);
-                }
-            }
-            for ia in &scene.assets.images {
-                if let Ok(data) = std::fs::read(&ia.path) {
-                    let _ = lumina_renderer::Renderer::load_image(&mut r, &ia.id, &data);
-                }
-            }
+            load_declared_assets(&mut r, scene)?;
             lumina_renderer::Renderer::set_time(&mut r, time);
             lumina_renderer::Renderer::render_frame(
                 &mut r,
@@ -295,20 +345,11 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
                 &scene.canvas.background,
                 camera,
             )
-            .map_err(|e| anyhow::anyhow!("{:?}", e))?
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
         }
         _ => {
             let mut r = SkiaRenderer::new();
-            for fa in &scene.assets.fonts {
-                if let Ok(data) = std::fs::read(&fa.path) {
-                    let _ = lumina_renderer::Renderer::load_font(&mut r, &fa.id, &data);
-                }
-            }
-            for ia in &scene.assets.images {
-                if let Ok(data) = std::fs::read(&ia.path) {
-                    let _ = lumina_renderer::Renderer::load_image(&mut r, &ia.id, &data);
-                }
-            }
+            load_declared_assets(&mut r, scene)?;
             lumina_renderer::Renderer::set_time(&mut r, time);
             lumina_renderer::Renderer::render_frame(
                 &mut r,
@@ -319,7 +360,7 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
                 &scene.canvas.background,
                 camera,
             )
-            .map_err(|e| anyhow::anyhow!("{:?}", e))?
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
         }
     };
 
