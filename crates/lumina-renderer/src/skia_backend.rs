@@ -680,8 +680,8 @@ impl SkiaRenderer {
 
                 // Tick marks
                 let tick_h = 8.0;
-                let mut t = start;
-                while t <= end + 1e-4 {
+                for i in 0..crate::common::ticks::count(start, end, step) {
+                    let t = crate::common::ticks::at(start, step, i);
                     let px = x + (t - start) / range * length;
                     let mut pb = PathBuilder::new();
                     pb.move_to(px, y - tick_h);
@@ -689,7 +689,6 @@ impl SkiaRenderer {
                     if let Some(path) = pb.finish() {
                         pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                     }
-                    t += step;
                 }
             }
             Object::Axes(_) => {
@@ -757,9 +756,9 @@ impl SkiaRenderer {
                 let tick_h = 5.0_f32;
 
                 // X ticks and vertical grid lines
-                let x_count = ((x_max - x_min) / x_step).ceil() as i32;
-                for i in 0..=x_count {
-                    let tx = x_min + i as f32 * x_step;
+                let x_count = crate::common::ticks::count(x_min, x_max, x_step);
+                for i in 0..x_count {
+                    let tx = crate::common::ticks::at(x_min, x_step, i);
                     if tx > x_max + 1e-4 {
                         break;
                     }
@@ -781,9 +780,9 @@ impl SkiaRenderer {
                 }
 
                 // Y ticks and horizontal grid lines
-                let y_count = ((y_max - y_min) / y_step).ceil() as i32;
-                for i in 0..=y_count {
-                    let ty = y_min + i as f32 * y_step;
+                let y_count = crate::common::ticks::count(y_min, y_max, y_step);
+                for i in 0..y_count {
+                    let ty = crate::common::ticks::at(y_min, y_step, i);
                     if ty > y_max + 1e-4 {
                         break;
                     }
@@ -812,67 +811,42 @@ impl SkiaRenderer {
                 let stroke_width = state["stroke_width"].as_f64().unwrap_or(2.0) as f32;
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let total_samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
+                let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
                 let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
-                let samples = if let Some(frac) = draw_fraction {
-                    ((total_samples as f32 * frac.clamp(0.0, 1.0)) as usize).max(1)
-                } else {
-                    total_samples
-                };
 
                 let Some(ctx) = self.resolve_axes_context(axes_id, states) else {
                     return Ok(());
                 };
 
-                // Normalize bare math function names to evalexpr's math:: namespace
-                // Only if not already namespaced (avoids double-prefixing)
-                let normalized;
-                let function_str: &str = if function_str.contains("math::") {
-                    function_str
+                // draw_fraction reveals the curve by narrowing the domain, not
+                // by sampling it more coarsely — the old code scaled the sample
+                // count, so the curve visibly changed resolution as it drew.
+                let x_end = if let Some(frac) = draw_fraction {
+                    f64::from(ctx.x_min)
+                        + (f64::from(ctx.x_max) - f64::from(ctx.x_min))
+                            * f64::from(frac.clamp(0.0, 1.0))
                 } else {
-                    normalized = function_str
-                        .replace("sin(", "math::sin(")
-                        .replace("cos(", "math::cos(")
-                        .replace("tan(", "math::tan(")
-                        .replace("sqrt(", "math::sqrt(")
-                        .replace("abs(", "math::abs(")
-                        .replace("exp(", "math::exp(")
-                        .replace("ln(", "math::ln(");
-                    &normalized
+                    f64::from(ctx.x_max)
                 };
 
-                // When draw_fraction is set, clamp x_max to show only that portion of the domain
-                let x_end = if let Some(frac) = draw_fraction {
-                    ctx.x_min + (ctx.x_max - ctx.x_min) * frac.clamp(0.0, 1.0)
-                } else {
-                    ctx.x_max
-                };
+                let segments = crate::common::plot::sample(
+                    function_str,
+                    f64::from(ctx.x_min),
+                    x_end,
+                    f64::from(ctx.y_min),
+                    f64::from(ctx.y_max),
+                    samples,
+                );
 
                 let mut pb = PathBuilder::new();
-                let mut started = false;
-                for i in 0..=samples {
-                    let mx = ctx.x_min + (i as f32 / samples as f32) * (x_end - ctx.x_min);
-                    let eval_ctx = evalexpr::context_map! { "x" => mx as f64 };
-                    let my = match eval_ctx
-                        .and_then(|c| evalexpr::eval_number_with_context(function_str, &c))
-                    {
-                        Ok(v) => v as f32,
-                        Err(_) => {
-                            started = false;
-                            continue;
+                for segment in &segments {
+                    for (i, (mx, my)) in segment.iter().enumerate() {
+                        let (sx, sy) = ctx.to_screen(*mx as f32, *my as f32);
+                        if i == 0 {
+                            pb.move_to(sx, sy);
+                        } else {
+                            pb.line_to(sx, sy);
                         }
-                    };
-                    let y_margin = (ctx.y_max - ctx.y_min).abs();
-                    if !my.is_finite() || my < ctx.y_min - y_margin || my > ctx.y_max + y_margin {
-                        started = false;
-                        continue;
-                    }
-                    let (sx, sy) = ctx.to_screen(mx, my);
-                    if !started {
-                        pb.move_to(sx, sy);
-                        started = true;
-                    } else {
-                        pb.line_to(sx, sy);
                     }
                 }
                 if let Some(path) = pb.finish() {

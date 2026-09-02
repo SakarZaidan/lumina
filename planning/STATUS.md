@@ -24,6 +24,35 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, latest) — Wave 2: plot sampling shared and adaptive
+
+- Plot sampling moved into `common/plot.rs`. Both backends had near-identical
+  loops; deciding *where* to sample is a rendering decision, so it belongs in
+  the shared layer (TD-02, principle #4). The duplication gate now guards it.
+- Sampling is **adaptive**: refined by chord deviation where the curve bends,
+  seeded uniformly first so high-frequency features cannot be missed. A pole
+  splits the curve instead of drawing a false vertical, and the curve is
+  bisected toward the break so it reaches its asymptote.
+- The expression is parsed **once per plot** rather than once per sample per
+  frame — 720 000 parses of one constant string over a minute of output.
+  **TD-04 closed.**
+- `asin`/`acos`/`atan` were broken: `str::replace("sin(", "math::sin(")` turned
+  `asin(x)` into `amath::sin(x)`. Tokenised now. Mixing namespaced and bare
+  calls in one expression also works — the old code abandoned normalisation
+  entirely if `math::` appeared anywhere.
+- Sampling is f64 throughout, narrowing only at the screen transform. A domain
+  like `[0, 1e6]` previously lost resolution before the renderer saw it.
+- `draw_fraction` scaled the *sample count*, so a Plot visibly changed
+  resolution as it drew. It narrows the domain now and samples at full detail.
+- Tick positions come from an index rather than `t += step`. The `+ 1e-4` guard
+  on the old loop was the accumulated-error symptom. Shared and bounded, so an
+  unvalidated caller cannot hang the renderer.
+- One test was reframed rather than satisfied: "a straight line takes under 100
+  points" was pinning the seed size, not a property. The real claim — a flat
+  curve costs a fraction of its budget — is what it asserts now, and the
+  adaptivity claim lives in the neighbouring wiggly-vs-flat test.
+- All 18 parity fixtures still match after both backends changed.
+
 ## 2026-09-02 (night, later) — Wave 2: colour and interpolation
 
 - Colour moved from CIELAB to **OKLab**. Both are perceptual; CIELAB's hue

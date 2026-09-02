@@ -28,6 +28,20 @@
 
 pub(crate) mod common;
 pub(crate) mod raster;
+
+/// Internals exposed for the crate's own integration tests.
+///
+/// Not a public API. These items are crate-private by intent and re-exported
+/// here only so `tests/` can reach them; nothing outside this repository
+/// should depend on anything in this module.
+#[doc(hidden)]
+pub mod testing {
+    /// Shared plot sampling — see `common::plot`.
+    pub mod plot {
+        pub use crate::common::plot::{normalize_math_calls, sample, Segment};
+    }
+}
+
 /// CPU reference backend (`tiny-skia`).
 pub mod skia_backend;
 /// GPU backend (`vello`/`wgpu`, headless).
