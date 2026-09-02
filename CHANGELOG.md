@@ -42,6 +42,25 @@ programme to reach reference quality in [plan/](plan/).
 - Interpolation never yields `null`. `Value::from` maps non-finite floats to
   `Value::Null`, which made the property disappear from the state map so the
   renderer silently used its default.
+- **Plot sampling is shared by both backends** (`common/plot.rs`), so they draw
+  the same curve from the same points rather than from two similar loops. The
+  expression is parsed **once per plot** instead of once per sample per frame —
+  720 000 parses of one constant string over a minute of 60 fps output (TD-04).
+- **`asin`, `acos`, and `atan` now work in plot expressions.** Namespace
+  rewriting used `str::replace("sin(", "math::sin(")`, which turned `asin(x)`
+  into `amath::sin(x)` — not a function, so the plot silently drew nothing. It
+  is tokenised now. Mixing `math::sin(x) + cos(x)` in one expression also
+  works; previously the presence of `math::` anywhere disabled normalisation
+  for the whole string.
+- **Plot domains are sampled in `f64`.** f32 gives ~7 significant digits, so a
+  domain like `[0, 1e6]` lost resolution before the renderer saw it.
+- **`draw_fraction` on a Plot no longer changes the curve's resolution.** It
+  scaled the sample count, so the curve visibly *resolved* as it drew; it now
+  narrows the domain and samples at full detail throughout.
+- **Tick positions are computed by index, not accumulated.** `t += step` drifts
+  linearly in the tick count — the `+ 1e-4` guard on the loop was the symptom.
+  Shared between backends and bounded, so an unvalidated caller cannot hang the
+  renderer.
 
 ### Added
 - `NUMBER_NOT_REPRESENTABLE` validation error. `1e39` parses as f64 without
