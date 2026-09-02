@@ -150,7 +150,14 @@ pub(crate) fn camera_transform(
         Some(cam) => {
             let cx = width as f32 / 2.0;
             let cy = height as f32 / 2.0;
-            let t = tiny_skia::Transform::from_translate(cx + cam.x, cy + cam.y)
+            let mut t = tiny_skia::Transform::from_translate(cx + cam.x, cy + cam.y);
+            // Skipped rather than composed at zero, so every scene written
+            // before the camera could rotate produces the identical matrix it
+            // did before, down to the last bit.
+            if cam.rotation != 0.0 {
+                t = t.pre_concat(tiny_skia::Transform::from_rotate(cam.rotation));
+            }
+            let t = t
                 .pre_concat(tiny_skia::Transform::from_scale(cam.zoom, cam.zoom))
                 .pre_concat(tiny_skia::Transform::from_translate(-cx, -cy));
             Mat2x3::from_tiny(t)

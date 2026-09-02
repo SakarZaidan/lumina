@@ -108,6 +108,20 @@ programme to reach reference quality in [plan/](plan/).
   At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
   continuous drawing rather than several racing each other. Both backends share
   one implementation, covered by parity fixture 19.
+- **Camera rotation.** `camera.timeline[].state.rotation`, in degrees about the
+  canvas centre, positive clockwise, matching `GroupProps.rotation`. It
+  interpolates as the angle written rather than by shortest arc, so `0 → 350`
+  turns 350 degrees forwards rather than 10 backwards — otherwise a full
+  revolution could not be expressed at all.
+
+  The field defaults to `0` and a zero rotation is skipped rather than composed
+  into the transform, so every camera authored before it existed renders the
+  identical bytes it did before. Parity fixture 20 covers it on both backends.
+- A camera state whose `x`, `y`, `zoom`, or `rotation` is not finite is now a
+  validation error (`CAMERA_STATE_NOT_FINITE`). The camera is a root transform,
+  so a single non-finite component rendered the *entire* video empty with no
+  diagnostic anywhere. JSON cannot write `inf`, but a literal past f32's range
+  becomes one on the way in.
 - **Motion blur**, via `canvas.motion_blur_samples` and `canvas.shutter`. Each
   frame is rendered several times across the shutter interval and averaged, so
   anything moving smears the way a camera's shutter makes it. `shutter` defaults

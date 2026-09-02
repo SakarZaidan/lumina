@@ -24,6 +24,28 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, later) — The camera can turn
+
+- `AAA-MOT-05`. `camera.timeline[].state.rotation`, degrees about the canvas
+  centre, positive clockwise to match `GroupProps.rotation`.
+- Free on both backends: `common::scene::camera_transform` builds the matrix
+  once and each backend concatenates it, so there was one place to change and
+  no way for them to disagree. Parity fixture 20 asserts that anyway — the
+  claim is cheap to make and cheap to check.
+- **Interpolated as a plain angle, not by shortest arc.** Shortest-arc is the
+  usual choice and it is wrong here: `0 → 350` would turn 10 degrees backwards,
+  reversing the direction the author stated, and a full revolution would become
+  inexpressible.
+- **Zero is skipped, not composed.** The field is `#[serde(default)]`, so every
+  camera ever written now carries `rotation: 0.0`. A test asserts the rendered
+  bytes are *identical* with the field absent and with it explicitly zero —
+  concatenating an approximate identity would have drifted every existing
+  golden image by a fraction of a pixel.
+- Found while wiring it: a non-finite camera component blanked the whole video
+  silently, since the camera transform reaches every object. Now
+  `CAMERA_STATE_NOT_FINITE`.
+- Tests 252 → 259.
+
 ## 2026-09-02 (night) — Morphing flows instead of collapsing
 
 - `AAA-MOT-04`. Interpolating a point list to one of a different length padded

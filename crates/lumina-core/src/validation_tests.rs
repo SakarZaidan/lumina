@@ -67,6 +67,7 @@ mod tests {
                     x: 0.0,
                     y: 0.0,
                     zoom: 1.0,
+                    rotation: 0.0,
                 },
                 easing: "zoom_zoom".to_string(),
                 easing_params: None,

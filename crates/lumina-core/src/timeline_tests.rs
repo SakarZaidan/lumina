@@ -276,6 +276,7 @@ mod camera_easing {
                         x: 0.0,
                         y: 0.0,
                         zoom: 1.0,
+                        rotation: 0.0,
                     },
                     easing: "linear".into(),
                     easing_params: None,
@@ -286,6 +287,7 @@ mod camera_easing {
                         x: 100.0,
                         y: 0.0,
                         zoom: 1.0,
+                        rotation: 0.0,
                     },
                     easing: easing.into(),
                     easing_params: params,
@@ -336,5 +338,101 @@ mod camera_easing {
         assert!((timeline.get_camera_at(1.0, &scene).x - 100.0).abs() < 1e-3);
         // ease_out starts fast, so the midpoint is past halfway.
         assert!(timeline.get_camera_at(0.5, &scene).x > 55.0);
+    }
+}
+
+/// Camera rotation, added in `AAA-MOT-05`.
+///
+/// The field is `#[serde(default)]`, which makes the interesting cases the
+/// ones about *absence*: a scene written before the field existed must render
+/// exactly as it did, and a rotation the author wrote must be interpolated as
+/// the angle they wrote rather than the shortest way round.
+#[cfg(test)]
+mod camera_rotation {
+    use crate::Timeline;
+    use lumina_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
+
+    fn bare_scene() -> Scene {
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": {},
+            "timeline": []
+        }))
+        .expect("fixture")
+    }
+
+    fn scene_rotating(from: f32, to: f32) -> Scene {
+        let mut scene = bare_scene();
+        scene.camera = Some(Camera {
+            timeline: vec![
+                CameraTimelineEntry {
+                    time: 0.0,
+                    state: CameraState {
+                        x: 0.0,
+                        y: 0.0,
+                        zoom: 1.0,
+                        rotation: from,
+                    },
+                    easing: "linear".into(),
+                    easing_params: None,
+                },
+                CameraTimelineEntry {
+                    time: 1.0,
+                    state: CameraState {
+                        x: 0.0,
+                        y: 0.0,
+                        zoom: 1.0,
+                        rotation: to,
+                    },
+                    easing: "linear".into(),
+                    easing_params: None,
+                },
+            ],
+        });
+        scene
+    }
+
+    #[test]
+    fn a_camera_without_the_field_still_parses() {
+        // Every camera in every scene authored before this change omits
+        // `rotation`. If that stopped deserialising, the field would be a
+        // breaking change to LSF rather than an addition to it.
+        let json = r#"{ "timeline": [
+            { "time": 0.0, "state": { "x": 1, "y": 2, "zoom": 1.5 }, "easing": "linear" }
+        ] }"#;
+        let camera: Camera = serde_json::from_str(json).expect("legacy camera must parse");
+        assert_eq!(camera.timeline[0].state.rotation, 0.0);
+    }
+
+    #[test]
+    fn rotation_interpolates_with_the_other_components() {
+        let scene = scene_rotating(0.0, 90.0);
+        let timeline = Timeline::from_scene(&scene);
+        assert_eq!(timeline.get_camera_at(0.0, &scene).rotation, 0.0);
+        assert_eq!(timeline.get_camera_at(0.5, &scene).rotation, 45.0);
+        assert_eq!(timeline.get_camera_at(1.0, &scene).rotation, 90.0);
+    }
+
+    #[test]
+    fn a_full_turn_is_a_full_turn() {
+        // Shortest-arc interpolation would make this camera turn 10 degrees
+        // backwards instead of 350 forwards — reversing the author's stated
+        // direction, and making a full revolution unexpressible at all.
+        let scene = scene_rotating(0.0, 350.0);
+        let timeline = Timeline::from_scene(&scene);
+        let mid = timeline.get_camera_at(0.5, &scene).rotation;
+        assert_eq!(mid, 175.0, "the camera took the short way round");
+    }
+
+    #[test]
+    fn a_scene_with_no_camera_is_unrotated() {
+        let scene = bare_scene();
+        let rotation = Timeline::from_scene(&scene)
+            .get_camera_at(0.5, &scene)
+            .rotation;
+        assert_eq!(rotation, 0.0);
     }
 }
