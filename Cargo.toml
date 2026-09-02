@@ -11,6 +11,8 @@ members = [
     "tools/lumina-cli",
     "xtask",
 ]
+# `fuzz/` is a separate workspace (nightly + sanitizers); see fuzz/README.md.
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]

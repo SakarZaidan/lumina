@@ -70,3 +70,9 @@ lumina-server.log
 # ── NOTE: media/ is intentionally tracked ────────────────────────────────────
 # media/*.mp4 and media/*.gif are committed demo artifacts.
 # Do NOT add media/ to this file.
+
+# ── proptest regression seeds are committed on purpose ───────────────────────
+# proptest saves the seed of every failing case it finds. Committing them means
+# a bug found once is re-tested for everyone, forever — the tool's own
+# recommendation. Do NOT ignore these.
+!**/proptest-regressions/

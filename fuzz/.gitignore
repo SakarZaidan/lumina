@@ -1,0 +1,6 @@
+# Corpora and crash artefacts are generated and can grow large (ADR-0010).
+corpus/
+artifacts/
+coverage/
+target/
+Cargo.lock

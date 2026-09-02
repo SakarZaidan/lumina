@@ -24,6 +24,35 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late) — Wave 2 closes: fuzzing, and why it is not only fuzzing
+
+- Four `cargo-fuzz` targets over every parser that reads untrusted input:
+  scene JSON (the server's front door), SVG path data, LaTeX, and plot
+  expressions. `scene_json` continues past deserialisation into validation and
+  timeline construction, because all of that runs before a renderer sees the
+  scene — a panic there is reachable from the same request body.
+- **They are not the main safety net, and that is the interesting part.**
+  `libfuzzer` needs nightly plus sanitizer flags, so a fuzz target alone runs
+  only when somebody remembers. On a repository that went quiet for seven
+  weeks, that is never — the same failure mode that let two RUSTSEC advisories
+  sit unnoticed.
+- So the same entry points also get **corpus-driven tests that run on stable,
+  in CI, on every commit**: unbalanced braces, truncated path commands, 200
+  levels of nesting, a 10 000-deep group chain, keyframes that change a
+  property's type mid-animation, degenerate and infinite plot ranges, and every
+  registered easing driven end to end through a real scene.
+- Those tests assert bounds, not just absence of panics: a transliterator must
+  not turn a bounded input into an unbounded one, and namespace rewriting must
+  stay proportional to its input. A quadratic blow-up is reachable straight
+  from a scene file.
+- `fuzz/` is a separate workspace, excluded from the root, so
+  `cargo check --workspace` never tries to build libfuzzer.
+- proptest regression seeds are committed and explicitly un-ignored. The two
+  saved seeds are the ones that found the quantised spring.
+- Tests 179 → 188. **Wave 2 complete** apart from `AAA-ACC-09` (gradient stops
+  still interpolate in sRGB while the timeline uses OKLab), which belongs with
+  the linear-light compositing work in Wave 4.
+
 ## 2026-09-02 (night, latest) — Wave 2: plot sampling shared and adaptive
 
 - Plot sampling moved into `common/plot.rs`. Both backends had near-identical

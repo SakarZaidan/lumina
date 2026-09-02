@@ -35,7 +35,7 @@ pub(crate) fn rounded_rect(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> 
 
 /// A backend-neutral path: an ordered list of absolute commands.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) struct PathData(pub(crate) Vec<PathCmd>);
+pub struct PathData(pub(crate) Vec<PathCmd>);
 
 /// Control-point bounding box `(x, y, w, h)` of a path — the same
 /// conservative bounds tiny-skia reports for the equivalent `Path`, so
@@ -74,7 +74,7 @@ pub(crate) fn bbox(p: &PathData) -> Option<(f32, f32, f32, f32)> {
 /// Parse SVG path data into a [`PathData`].
 /// Supports: M/m (move), L/l (line), H/h (horizontal), V/v (vertical),
 ///           C/c (cubic bezier), Z/z (close).
-pub(crate) fn parse_svg_path(d: &str) -> Option<PathData> {
+pub fn parse_svg_path(d: &str) -> Option<PathData> {
     let mut cmds = Vec::new();
 
     // Normalize: insert spaces around command letters, replace commas with spaces

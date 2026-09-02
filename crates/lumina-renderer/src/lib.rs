@@ -40,6 +40,16 @@ pub mod testing {
     pub mod plot {
         pub use crate::common::plot::{normalize_math_calls, sample, Segment};
     }
+
+    /// SVG path parsing — see `common::path`.
+    pub mod path {
+        pub use crate::common::path::{parse_svg_path, PathData};
+    }
+
+    /// LaTeX transliteration — see `skia_backend`.
+    pub mod latex {
+        pub use crate::skia_backend::latex_to_unicode;
+    }
 }
 
 /// CPU reference backend (`tiny-skia`).

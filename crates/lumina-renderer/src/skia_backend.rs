@@ -1116,8 +1116,17 @@ fn is_svg(data: &[u8]) -> bool {
     trimmed.starts_with("<?xml") || trimmed.starts_with("<svg") || s.contains("<svg")
 }
 
-// Convert common LaTeX/math notation to Unicode for plain-text rendering.
-pub(crate) fn latex_to_unicode(expr: &str) -> String {
+/// Convert common LaTeX and math notation to Unicode for plain-text rendering.
+///
+/// This is the whole of Lumina's LaTeX support: substitution, not typesetting.
+/// `mitex` was declared as a dependency for three releases and imported by
+/// nothing; ADR-0012 records the decision to drop it and describe this
+/// honestly rather than imply an engine that was never wired up.
+///
+/// Handles the Greek alphabet, common operators, `\frac{a}{b}` as `a/b`,
+/// super- and subscripts, `\sqrt`, `\sum`, `\int`, and spacing commands.
+/// Anything it does not recognise is passed through rather than dropped.
+pub fn latex_to_unicode(expr: &str) -> String {
     let mut s = expr.to_string();
 
     // Spacing commands → collapse to a single (or no) space.
