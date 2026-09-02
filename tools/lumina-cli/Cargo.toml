@@ -12,6 +12,13 @@ keywords = ["animation", "cli", "rendering", "video"]
 categories = ["command-line-utilities", "multimedia::video"]
 readme = "../../README.md"
 
+[lib]
+# The logic lives in a library so it can be tested: the binary measured 0%
+# coverage while the rest of the workspace sat above 80%, for the ordinary
+# reason that a `main` cannot be called (TD-10).
+name = "luminafx_cli"
+path = "src/lib.rs"
+
 [[bin]]
 # Explicit, because the binary name defaults to the package name. The package
 # had to become `luminafx-cli` (crates.io has a `lumina-cli` already, an
@@ -24,6 +31,7 @@ path = "src/main.rs"
 luminafx-core = { path = "../../crates/lumina-core", version = "0.5.0" }
 luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.5.0" }
 luminafx-schema = { path = "../../crates/lumina-schema", version = "0.5.0" }
+schemars = { workspace = true }
 luminafx-export = { path = "../../crates/lumina-export", version = "0.5.0" }
 clap = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

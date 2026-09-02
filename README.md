@@ -182,6 +182,17 @@ cargo build --release
 
 ```bash
 # PNG frame sequence
+# Subcommands (v0.5+). The flag form below still works and is what the
+# examples use; both go through the same code.
+./target/release/lumina-cli new my-scene.lsf          # a starter scene that animates
+./target/release/lumina-cli validate my-scene.lsf     # exit 1 on errors, for CI
+./target/release/lumina-cli validate my-scene.lsf --json
+./target/release/lumina-cli render my-scene.lsf -o out --format mp4
+./target/release/lumina-cli inspect --easing ease_out_elastic   # see the curve
+./target/release/lumina-cli inspect --list
+./target/release/lumina-cli schema | jq .
+./target/release/lumina-cli objects
+
 ./target/release/lumina-cli --scene examples/hello.lsf --output frames/ --format png
 
 # MP4 video
