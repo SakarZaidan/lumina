@@ -181,6 +181,11 @@ cargo build --release
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output unit_circle.webm --format webm
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output unit_circle.gif  --format gif
 
+# With an alpha channel, for compositing over other footage. Give the scene a
+# transparent canvas.background ("#00000000") first.
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.webm --format webm-alpha
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.mov  --format mov
+
 # GPU (Vello) backend — renders text, LaTeX, images and particles too
 ./target/release/lumina-cli --scene examples/showcase_grand.lsf --output grand.mp4 --format mp4 --backend vello
 ```
@@ -256,17 +261,21 @@ Animate any line, curve, or plot growing onto screen:
 }
 ```
 
-### Camera zoom
+### Camera pan, zoom, and rotation
 
 ```json
 "camera": {
   "timeline": [
-    { "time": 0.0,  "state": { "x": 0, "y": 0, "zoom": 1.0 }, "easing": "linear" },
-    { "time": 10.0, "state": { "x": -80, "y": 30, "zoom": 1.4 }, "easing": "ease_in_out_cubic" },
-    { "time": 13.0, "state": { "x": 0, "y": 0, "zoom": 1.0 }, "easing": "ease_in_out_cubic" }
+    { "time": 0.0,  "state": { "x": 0, "y": 0, "zoom": 1.0, "rotation": 0 }, "easing": "linear" },
+    { "time": 10.0, "state": { "x": -80, "y": 30, "zoom": 1.4, "rotation": 12 }, "easing": "ease_in_out_cubic" },
+    { "time": 13.0, "state": { "x": 0, "y": 0, "zoom": 1.0, "rotation": 0 }, "easing": "ease_in_out_cubic" }
   ]
 }
 ```
+
+`rotation` is in degrees about the canvas centre, positive clockwise, and
+defaults to `0`. It interpolates as the angle you wrote rather than by the
+shortest arc, so `0 → 350` turns 350 degrees forwards, not 10 backwards.
 
 ### Function plots with Axes
 

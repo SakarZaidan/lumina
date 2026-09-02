@@ -452,6 +452,33 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 &mut errors,
                 &mut warnings,
             );
+            // A camera state is a root transform, so one non-finite component
+            // makes the whole matrix non-finite and every object in the scene
+            // disappears — a blank video with no diagnostic anywhere. JSON
+            // cannot write `inf`, but a literal past f32's range becomes one
+            // on the way into these fields.
+            let st = &entry.state;
+            for (name, v) in [
+                ("x", st.x),
+                ("y", st.y),
+                ("zoom", st.zoom),
+                ("rotation", st.rotation),
+            ] {
+                if !v.is_finite() {
+                    errors.push(ValidationError {
+                        code: "CAMERA_STATE_NOT_FINITE".to_string(),
+                        path: format!("$.camera.timeline[{i}].state.{name}"),
+                        message: format!(
+                            "camera `{name}` is not a finite number. The camera transform is \
+                             applied to every object, so the entire frame would render empty."
+                        ),
+                        fix_suggestion: format!(
+                            "Give `{name}` a value within 32-bit float range (about \
+                             ±3.4e38)."
+                        ),
+                    });
+                }
+            }
         }
     }
 

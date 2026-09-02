@@ -39,7 +39,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install FFmpeg (needed by lumina-export)
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: cargo clippy --workspace --exclude lumina-wasm --all-targets
+      - run: cargo clippy --workspace --all-targets
 
   # ── Tests (3-OS matrix) ──────────────────────────────────────────────────────
   test:

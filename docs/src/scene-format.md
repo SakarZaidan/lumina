@@ -13,7 +13,7 @@ LSF is a pure-JSON, declarative description of a scene. It is **declarative only
   "objects": { "<id>": { "type": "Circle", "properties": { ... } } },
   "timeline": [ { "time": 1.0, "object": "<id>", "state": { ... }, "easing": "ease_out_cubic" } ],
   "events":   [ { "object": "<id>", "trigger": "click", "action": { ... } } ],
-  "camera":   { "timeline": [ { "time": 0.0, "state": { "x": 0, "y": 0, "zoom": 1.0 } } ] }
+  "camera":   { "timeline": [ { "time": 0.0, "state": { "x": 0, "y": 0, "zoom": 1.0, "rotation": 0 } } ] }
 }
 ```
 
