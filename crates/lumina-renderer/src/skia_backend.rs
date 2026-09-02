@@ -476,6 +476,9 @@ impl SkiaRenderer {
                     paint.anti_alias = true;
                     let mut stroke = Stroke::default();
                     stroke.width = stroke_width;
+                    // `draw_fraction` also works by dashing, so it wins when
+                    // both are present: a line being revealed should reveal,
+                    // not reveal-and-dash. TD-19.
                     if let Some(frac) = draw_fraction {
                         let dx = x2 - x1;
                         let dy = y2 - y1;
@@ -484,6 +487,8 @@ impl SkiaRenderer {
                             crate::common::stroke::draw_fraction_dash(frac, length),
                             0.0,
                         );
+                    } else if let Some(pattern) = crate::common::stroke::dash_pattern(state) {
+                        stroke.dash = StrokeDash::new(pattern, 0.0);
                     }
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }

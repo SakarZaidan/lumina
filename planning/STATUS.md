@@ -24,6 +24,28 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (later, more) — Wave 4: two schema promises finally kept
+
+- **`LineProps.dash` implemented** on both backends (TD-19 closed). It had sat
+  in the schema since v0.1 with neither backend drawing it, so a dashed line
+  rendered solid — the docs even claimed CPU support at one point. Both now
+  read the pattern through one shared normaliser: odd-length patterns repeat to
+  make them even (SVG and Canvas both do this, so `[5]` is five on, five off),
+  and a malformed pattern draws solid rather than something the two backends
+  might disagree about. `draw_fraction` still wins when both are set, because
+  it reveals by dashing too and a line being revealed should reveal, not
+  reveal-and-dash.
+- Parity fixture 18 added — 19 fixtures now. It passed first time, which is the
+  useful outcome: the shared normaliser means there is only one interpretation
+  of a pattern to get wrong.
+- **Camera keyframes accept `easing_params`** (`AAA-MOT-01`, #67). The field
+  did not exist, so `cubic_bezier` and `spline` on a camera passed validation —
+  both are registered names — and then animated linearly. The test asserts the
+  camera follows the *same* curve an object property would with the same
+  parameters, and a second test checks the midpoint specifically, because
+  falling back to linear still hits both endpoints.
+- Tests 224 → 232.
+
 ## 2026-09-02 (later) — Wave 4 opens: output fidelity
 
 - **Encode quality** (`AAA-OUT-03/04/05/13`). Every video now carries BT.709

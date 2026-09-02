@@ -243,3 +243,96 @@ mod tests {
         assert!((opacity - 0.5).abs() < 1e-3);
     }
 }
+
+/// A camera keyframe must follow the curve it names, like any other property.
+///
+/// `CameraTimelineEntry` had no `easing_params` field, so `cubic_bezier` and
+/// `spline` passed validation — both are registered easing names — and then
+/// animated **linearly**, because the parameterless lookup does not know them.
+/// Camera moves are the most visible motion in a scene, which makes it a bad
+/// place for a silent fallback.
+#[cfg(test)]
+mod camera_easing {
+    use crate::Timeline;
+    use lumina_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
+
+    fn scene_with_camera(easing: &str, params: Option<serde_json::Value>) -> Scene {
+        let mut scene: Scene = serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": {},
+            "timeline": []
+        }))
+        .expect("fixture");
+        scene.camera = Some(Camera {
+            timeline: vec![
+                CameraTimelineEntry {
+                    time: 0.0,
+                    state: CameraState {
+                        x: 0.0,
+                        y: 0.0,
+                        zoom: 1.0,
+                    },
+                    easing: "linear".into(),
+                    easing_params: None,
+                },
+                CameraTimelineEntry {
+                    time: 1.0,
+                    state: CameraState {
+                        x: 100.0,
+                        y: 0.0,
+                        zoom: 1.0,
+                    },
+                    easing: easing.into(),
+                    easing_params: params,
+                },
+            ],
+        });
+        scene
+    }
+
+    #[test]
+    fn a_parameterised_camera_easing_follows_its_curve() {
+        // The same parameters applied to an object property, so the two must
+        // agree — that is the whole claim.
+        let params = serde_json::json!([0.9, 0.0, 0.9, 1.0]);
+        let scene = scene_with_camera("cubic_bezier", Some(params.clone()));
+        let timeline = Timeline::from_scene(&scene);
+
+        for step in 1..10 {
+            let t = f64::from(step) / 10.0;
+            let expected =
+                crate::easing::eval_easing("cubic_bezier", Some(&params), t as f32) * 100.0;
+            let actual = timeline.get_camera_at(t as f32, &scene).x;
+            assert!(
+                (actual - expected).abs() < 0.5,
+                "at t={t}: camera x = {actual}, the same easing on a property gives {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_parameterised_camera_easing_is_not_linear() {
+        // Guards the actual regression: falling back to linear would still
+        // hit both endpoints, so only the middle of the curve reveals it.
+        let params = serde_json::json!([0.9, 0.0, 0.9, 1.0]);
+        let scene = scene_with_camera("cubic_bezier", Some(params));
+        let mid = Timeline::from_scene(&scene).get_camera_at(0.5, &scene).x;
+        assert!(
+            (mid - 50.0).abs() > 5.0,
+            "a strongly-eased curve should not pass through the linear midpoint; got {mid}"
+        );
+    }
+
+    #[test]
+    fn plain_easings_still_work_without_parameters() {
+        let scene = scene_with_camera("ease_out_cubic", None);
+        let timeline = Timeline::from_scene(&scene);
+        assert!((timeline.get_camera_at(0.0, &scene).x).abs() < 1e-3);
+        assert!((timeline.get_camera_at(1.0, &scene).x - 100.0).abs() < 1e-3);
+        // ease_out starts fast, so the midpoint is past halfway.
+        assert!(timeline.get_camera_at(0.5, &scene).x > 55.0);
+    }
+}

@@ -375,6 +375,15 @@ fn parity_17_showcase_combined() {
     assert_parity("17_showcase_combined", TEXT_TOL);
 }
 
+#[test]
+fn parity_18_dashed_lines() {
+    // `LineProps.dash` was in the schema and implemented by neither backend
+    // (TD-19), so a dashed line drew solid. Both read the pattern through the
+    // same shared normaliser now — odd-length patterns doubled, malformed ones
+    // ignored — and this fixture is what keeps the two dash phases in step.
+    assert_parity("18_dashed_lines", PATH_TOL);
+}
+
 // ── Behavioural parity ──────────────────────────────────────────────────────
 //
 // The pixel suite above compares frames that *both* backends produced. When
