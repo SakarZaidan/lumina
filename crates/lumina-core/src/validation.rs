@@ -98,11 +98,11 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
     // Check 1: Timeline entries must reference declared object IDs
     for (i, entry) in scene.timeline.iter().enumerate() {
         if !object_ids.contains(entry.object.as_str()) {
-            let suggestion = object_ids
-                .iter()
-                .find(|id| id.starts_with(&entry.object[..entry.object.len().min(3)]))
-                .map(|s| format!("Did you mean '{s}'?"))
-                .unwrap_or_else(|| "Check the 'objects' block for valid IDs.".to_string());
+            let suggestion = crate::suggest::did_you_mean(
+                &entry.object,
+                object_ids.iter().copied(),
+                "Check the 'objects' block for valid IDs.",
+            );
 
             errors.push(ValidationError {
                 code: "UNKNOWN_OBJECT_ID".to_string(),
@@ -126,11 +126,90 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     "Event {} references object '{}', which is not declared.",
                     i, event.object
                 ),
-                fix_suggestion: format!(
-                    "Add '{}' to the 'objects' block or correct the event's object field.",
-                    event.object
+                fix_suggestion: crate::suggest::did_you_mean(
+                    &event.object,
+                    object_ids.iter().copied(),
+                    &format!(
+                        "Add '{}' to the 'objects' block or correct the event's object field.",
+                        event.object
+                    ),
                 ),
             });
+        }
+    }
+
+    // Check 2b: Image/SVG objects must reference a declared asset.
+    //
+    // This was not checked at all, and the failure mode is the quietest kind:
+    // a typo'd `asset_id` draws nothing, so the object simply is not there and
+    // the render succeeds. Every other unknown reference in a scene is an
+    // error, and this one was silence.
+    {
+        let asset_ids: std::collections::HashSet<&str> =
+            scene.assets.images.iter().map(|a| a.id.as_str()).collect();
+        for (obj_id, obj) in &scene.objects {
+            let asset_id = match obj {
+                Object::Image(p) => Some(&p.asset_id),
+                Object::SVG(p) => Some(&p.asset_id),
+                _ => None,
+            };
+            if let Some(asset_id) = asset_id {
+                if !asset_ids.contains(asset_id.as_str()) {
+                    errors.push(ValidationError {
+                        code: "UNKNOWN_ASSET_ID".to_string(),
+                        path: format!("$.objects.{obj_id}.properties.asset_id"),
+                        message: format!(
+                            "Object '{obj_id}' references asset '{asset_id}', which is not \
+                             declared in 'assets.images'."
+                        ),
+                        fix_suggestion: crate::suggest::did_you_mean(
+                            asset_id,
+                            asset_ids.iter().copied(),
+                            "Declare it under 'assets.images' with an id and a path.",
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    // Check 2c: a Plot must reference an Axes that exists, and is an Axes.
+    //
+    // Also unchecked. A plot with a dangling `axes_id` has no coordinate
+    // system to draw in, so it too rendered as nothing at all.
+    for (obj_id, obj) in &scene.objects {
+        if let Object::Plot(p) = obj {
+            match scene.objects.get(&p.axes_id) {
+                Some(Object::Axes(_)) => {}
+                Some(other) => errors.push(ValidationError {
+                    code: "AXES_ID_IS_NOT_AXES".to_string(),
+                    path: format!("$.objects.{obj_id}.properties.axes_id"),
+                    message: format!(
+                        "Plot '{obj_id}' references '{}', which is a {} rather than an Axes.",
+                        p.axes_id,
+                        object_type_name(other)
+                    ),
+                    fix_suggestion: "A Plot draws inside an Axes; point axes_id at one."
+                        .to_string(),
+                }),
+                None => errors.push(ValidationError {
+                    code: "UNKNOWN_AXES_ID".to_string(),
+                    path: format!("$.objects.{obj_id}.properties.axes_id"),
+                    message: format!(
+                        "Plot '{obj_id}' references axes '{}', which is not declared.",
+                        p.axes_id
+                    ),
+                    fix_suggestion: crate::suggest::did_you_mean(
+                        &p.axes_id,
+                        scene
+                            .objects
+                            .iter()
+                            .filter(|(_, o)| matches!(o, Object::Axes(_)))
+                            .map(|(k, _)| k.as_str()),
+                        "Add an Axes object and point axes_id at it.",
+                    ),
+                }),
+            }
         }
     }
 
@@ -145,8 +224,13 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                         message: format!(
                             "Group '{obj_id}' references child '{child_id}', which is not declared."
                         ),
-                        fix_suggestion: format!(
-                            "Add '{child_id}' to the 'objects' block or remove it from group '{obj_id}'."
+                        fix_suggestion: crate::suggest::did_you_mean(
+                            child_id,
+                            object_ids.iter().copied(),
+                            &format!(
+                                "Add '{child_id}' to the 'objects' block or remove it from \
+                                 group '{obj_id}'."
+                            ),
                         ),
                     });
                 }
@@ -513,6 +597,29 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         valid: errors.is_empty(),
         errors,
         warnings,
+    }
+}
+
+/// The LSF type name of an object, for diagnostics.
+fn object_type_name(obj: &Object) -> &'static str {
+    match obj {
+        Object::Circle(_) => "Circle",
+        Object::Rectangle(_) => "Rectangle",
+        Object::Polygon(_) => "Polygon",
+        Object::Path(_) => "Path",
+        Object::Line(_) => "Line",
+        Object::Arrow(_) => "Arrow",
+        Object::Text(_) => "Text",
+        Object::LaTeX(_) => "LaTeX",
+        Object::MathML(_) => "MathML",
+        Object::Image(_) => "Image",
+        Object::SVG(_) => "SVG",
+        Object::Group(_) => "Group",
+        Object::NumberLine(_) => "NumberLine",
+        Object::Axes(_) => "Axes",
+        Object::Plot(_) => "Plot",
+        Object::BezierCurve(_) => "BezierCurve",
+        Object::Particles(_) => "Particles",
     }
 }
 
