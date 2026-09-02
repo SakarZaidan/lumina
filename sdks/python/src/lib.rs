@@ -89,7 +89,7 @@ fn schema(py: Python<'_>) -> PyResult<PyObject> {
 }
 
 #[pymodule]
-fn lumina(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn luminafx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate, m)?)?;
     m.add_function(wrap_pyfunction!(render, m)?)?;
     m.add_function(wrap_pyfunction!(schema, m)?)?;

@@ -14,7 +14,7 @@ Prerequisites:
 import json
 import os
 
-import lumina  # the maturin-built extension module
+import luminafx  # the maturin-built extension module
 
 try:
     import anthropic
@@ -71,14 +71,14 @@ def main() -> None:
             ],
         }
 
-    report = lumina.validate(scene)
+    report = luminafx.validate(scene)
     if not report["valid"]:
         print("Scene invalid:")
         for err in report["errors"]:
             print(f"  [{err['code']}] {err['message']}  → {err['fix_suggestion']}")
         return
 
-    lumina.render(scene, "out.mp4", format="mp4")
+    luminafx.render(scene, "out.mp4", format="mp4")
     print("Rendered out.mp4")
 
 

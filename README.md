@@ -416,7 +416,7 @@ lumina/
 │   └── lumina-bench/      Criterion benchmarks: timeline eval, Skia render, easing dispatch
 ├── sdks/
 │   ├── javascript/        React (LuminaPlayer, useLumina) + vanilla-JS (createPlayer), dual ESM/CJS
-│   └── python/            PyO3 + maturin: lumina.validate / lumina.render / lumina.schema
+│   └── python/            PyO3 + maturin: luminafx.validate / luminafx.render / luminafx.schema
 ├── tools/
 │   └── lumina-cli/        CLI: --watch live-reload, --backend skia|vello, --format png|mp4|webm|gif
 ├── examples/              9 showcase LSF scenes + generator scripts
@@ -553,7 +553,9 @@ player.seek(3.5);
 
 ## Python SDK
 
-> **Not on PyPI yet** — there is no `pip install lumina`. Build it locally with
+> **Not on PyPI yet.** Once v0.5.0 is released it installs as `pip install luminafx`
+> (`lumina` on PyPI is an unrelated object-detection package). Until then, build
+> it locally with
 > [maturin](https://www.maturin.rs/); publishing is tracked in
 > [#45](https://github.com/SakarZaidan/lumina/issues/45).
 
@@ -562,17 +564,17 @@ cd sdks/python && maturin develop
 ```
 
 ```python
-import lumina
+import luminafx
 
 # Validate a scene dict
-result = lumina.validate(scene_dict)
+result = luminafx.validate(scene_dict)
 print(result["valid"], result.get("errors"))
 
 # Render to file (drives SkiaRenderer + FFmpeg in-process, no shell-out)
-lumina.render(scene_dict, "output.mp4", format="mp4")
+luminafx.render(scene_dict, "output.mp4", format="mp4")
 
 # Get the live JSON Schema
-schema = lumina.schema()
+schema = luminafx.schema()
 ```
 
 See [`sdks/python/examples/from_anthropic.py`](sdks/python/examples/from_anthropic.py) for a complete LLM → validate → render loop.
