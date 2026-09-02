@@ -68,7 +68,53 @@ fn parse_stops(v: Option<&Value>, opacity: f32) -> Option<Vec<(f32, [u8; 4])>> {
     if out.len() < 2 {
         return None;
     }
-    Some(out)
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Some(refine_perceptually(&out))
+}
+
+/// How many segments each adjacent stop pair is split into.
+///
+/// Both rasterisers interpolate **linearly in sRGB** between adjacent stops,
+/// which is not the space the timeline blends colours in — so the same two
+/// colours produced one midpoint in a gradient and a different one in a fade.
+/// Neither backend exposes a choice of interpolation space, but both accept as
+/// many stops as we care to give them, so sampling the perceptual curve and
+/// handing over the samples gets the right result through an API that cannot
+/// ask for it directly.
+///
+/// Eight segments keeps the maximum error from the piecewise-linear
+/// approximation below one 8-bit step for the transitions where the two spaces
+/// diverge most (saturated complementary hues); more stops would cost memory
+/// for a difference nothing can display.
+const GRADIENT_SEGMENTS: usize = 8;
+
+/// Insert intermediate stops sampled from the perceptual blend.
+///
+/// Positions and colours of the author's own stops are preserved exactly; only
+/// the path *between* them changes.
+fn refine_perceptually(stops: &[(f32, [u8; 4])]) -> Vec<(f32, [u8; 4])> {
+    let mut out = Vec::with_capacity(stops.len() + (stops.len() - 1) * (GRADIENT_SEGMENTS - 1));
+    for pair in stops.windows(2) {
+        let (p0, c0) = pair[0];
+        let (p1, c1) = pair[1];
+        out.push((p0, c0));
+        // A zero-width span has nothing between it to refine, and would
+        // otherwise emit a run of stops at one position.
+        if p1 - p0 <= f32::EPSILON {
+            continue;
+        }
+        for k in 1..GRADIENT_SEGMENTS {
+            let t = k as f32 / GRADIENT_SEGMENTS as f32;
+            out.push((
+                p0 + (p1 - p0) * t,
+                lumina_core::interpolator::mix_rgba8(c0, c1, t),
+            ));
+        }
+    }
+    if let Some(last) = stops.last() {
+        out.push(*last);
+    }
+    out
 }
 
 /// Linear-gradient axis derived from the shape bbox `(x, y, w, h)`: the
