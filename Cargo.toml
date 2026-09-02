@@ -9,6 +9,7 @@ members = [
     "crates/lumina-wasm",
     "crates/lumina-bench",
     "tools/lumina-cli",
+    "xtask",
 ]
 resolver = "2"
 
@@ -21,6 +22,36 @@ authors = ["Sakar Hashim"]
 license = "MIT"
 repository = "https://github.com/SakarZaidan/lumina"
 homepage = "https://github.com/SakarZaidan/lumina"
+
+# Lint policy for the whole workspace, so it is stated once rather than
+# copy-pasted into every crate root. Crates opt in with `[lints] workspace = true`.
+#
+# `unwrap_used`/`expect_used` are warnings rather than errors *for now*: two
+# call sites remain in production code (validation.rs and skia_backend.rs, both
+# provably guarded and documented in planning/METRICS.md). CI runs with
+# `-D warnings`, so they still fail the build — the distinction is that a
+# `#[allow]` with a justification is the intended escape hatch, and denying
+# outright would make that impossible to express.
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+# Correctness and clarity, not style enforcement for its own sake.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+# These fire on genuinely error-prone patterns rather than taste.
+cast_possible_truncation = "allow"  # pervasive and deliberate at JSON boundaries
+doc_markdown = "warn"
+explicit_iter_loop = "warn"
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+uninlined_format_args = "warn"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

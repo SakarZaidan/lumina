@@ -9,7 +9,7 @@ mod tests {
         let mut objects = HashMap::new();
         for i in 0..2000 {
             objects.insert(
-                format!("circle_{}", i),
+                format!("circle_{i}"),
                 lumina_schema::Object::Circle(CircleProps {
                     cx: 0.0,
                     cy: 0.0,
@@ -60,7 +60,7 @@ mod tests {
         let mut objects = HashMap::new();
         for i in 0..2000 {
             objects.insert(
-                format!("obj_{}", i),
+                format!("obj_{i}"),
                 lumina_schema::Object::Circle(CircleProps {
                     cx: 0.0,
                     cy: 0.0,

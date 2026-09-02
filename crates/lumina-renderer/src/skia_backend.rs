@@ -244,11 +244,11 @@ impl SkiaRenderer {
             )));
         }
         let obj = objects.get(id).ok_or_else(|| {
-            RendererError::Failed(format!("Object '{}' not found in scene graph", id))
+            RendererError::Failed(format!("Object '{id}' not found in scene graph"))
         })?;
         let state = states
             .get(id)
-            .ok_or_else(|| RendererError::Failed(format!("No state for object '{}'", id)))?;
+            .ok_or_else(|| RendererError::Failed(format!("No state for object '{id}'")))?;
 
         match obj {
             Object::Group(props) => {
@@ -381,12 +381,11 @@ impl SkiaRenderer {
                 let mut pb = PathBuilder::new();
                 for (i, p) in points.iter().enumerate() {
                     let arr = p.as_array().ok_or_else(|| {
-                        RendererError::Failed(format!("Polygon point {} is not an array", i))
+                        RendererError::Failed(format!("Polygon point {i} is not an array"))
                     })?;
                     if arr.len() < 2 {
                         return Err(RendererError::Failed(format!(
-                            "Polygon point {} has fewer than 2 coordinates",
-                            i
+                            "Polygon point {i} has fewer than 2 coordinates"
                         )));
                     }
                     let x = arr[0].as_f64().unwrap_or(0.0) as f32;
@@ -999,7 +998,7 @@ impl Renderer for SkiaRenderer {
         camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError> {
         let mut pixmap = Pixmap::new(width, height).ok_or_else(|| {
-            RendererError::Failed(format!("Failed to create {}x{} pixmap", width, height))
+            RendererError::Failed(format!("Failed to create {width}x{height} pixmap"))
         })?;
 
         pixmap.fill(parse_color(background, 1.0));
@@ -1445,13 +1444,19 @@ fn replace_scripts(s: &str) -> String {
                 vec![]
             };
             // Map each char; if any has no script form, fall back to marker+raw.
-            if content.iter().all(|&c| map(c).is_some()) {
-                for &c in &content {
-                    out.push(map(c).unwrap());
+            // Collecting into Option<Vec<_>> maps each character exactly once
+            // and short-circuits on the first failure, so there is nothing left
+            // to unwrap.
+            match content
+                .iter()
+                .map(|&c| map(c))
+                .collect::<Option<Vec<char>>>()
+            {
+                Some(mapped) => out.extend(mapped),
+                None => {
+                    out.push(marker);
+                    out.extend(content.iter());
                 }
-            } else {
-                out.push(marker);
-                out.extend(content.iter());
             }
         } else {
             out.push(marker);
@@ -1461,7 +1466,7 @@ fn replace_scripts(s: &str) -> String {
     out
 }
 
-/// Strip MathML tags and decode common entities into a plain Unicode string,
+/// Strip `MathML` tags and decode common entities into a plain Unicode string,
 /// reusing the same text pipeline as LaTeX.
 pub(crate) fn mathml_to_unicode(markup: &str) -> String {
     let mut out = String::with_capacity(markup.len());
@@ -1538,7 +1543,7 @@ fn parse_svg_path(d: &str) -> Option<Path> {
 
 /// Apply a `FillSpec` to a paint, deriving gradient geometry from the shape
 /// bounding box via the shared helpers.
-fn apply_fill(paint: &mut Paint, fill: &crate::common::fill::FillSpec, bbox: Rect) {
+fn apply_fill(paint: &mut Paint<'_>, fill: &crate::common::fill::FillSpec, bbox: Rect) {
     use crate::common::fill::FillSpec;
     let bb = (bbox.x(), bbox.y(), bbox.width(), bbox.height());
     match fill {

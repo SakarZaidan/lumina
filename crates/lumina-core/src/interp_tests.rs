@@ -53,7 +53,7 @@ mod interp_tests {
         let state = timeline.get_state_at(0.5);
         let cx = state["c1"]["cx"].as_f64().unwrap();
 
-        assert_eq!(cx, 50.0, "Expected cx=50.0 at t=0.5, got {}", cx);
+        assert_eq!(cx, 50.0, "Expected cx=50.0 at t=0.5, got {cx}");
     }
 
     #[test]
@@ -69,7 +69,7 @@ mod interp_tests {
 
         // Parse the resulting hex and verify it's roughly gray (R≈G≈B≈128±20)
         let hex = mid_hex.trim_start_matches('#');
-        assert_eq!(hex.len(), 6, "Expected #RRGGBB format, got: {}", mid_hex);
+        assert_eq!(hex.len(), 6, "Expected #RRGGBB format, got: {mid_hex}");
         let r = u8::from_str_radix(&hex[0..2], 16).unwrap();
         let g = u8::from_str_radix(&hex[2..4], 16).unwrap();
         let b = u8::from_str_radix(&hex[4..6], 16).unwrap();

@@ -1,0 +1,11 @@
+# Pins the toolchain so a contributor, CI, and the maintainer all format and
+# lint identically. This matters more than usual here: CI sets
+# `RUSTFLAGS: -D warnings` globally, so a new stable release introducing a lint
+# turns the build red on a repository nobody has touched.
+#
+# Bumping this is a deliberate change with its own PR, where any new lints get
+# resolved once rather than surprising whoever opens the next pull request.
+# The MSRV job pins 1.88 separately and independently.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

@@ -90,6 +90,10 @@ mod resource_bounds {
     use lumina_schema::Scene;
 
     /// Build a scene from JSON, merging `canvas` and `objects` overrides.
+    ///
+    /// Takes owned `Value`s so callers can pass `json!(...)` literals directly;
+    /// borrowing would put a `&` in front of every fixture for no gain.
+    #[allow(clippy::needless_pass_by_value)]
     fn scene(canvas: serde_json::Value, objects: serde_json::Value) -> Scene {
         let json = serde_json::json!({
             "version": "1.0",

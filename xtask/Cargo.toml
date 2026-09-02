@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Repository automation: runs the same gate CI runs."
+
+[dependencies]
+
+[lints]
+workspace = true

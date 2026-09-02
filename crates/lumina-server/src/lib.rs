@@ -14,9 +14,15 @@
 //! and bind/serve failures return errors instead of panicking. The server
 //! is still not hardened for untrusted networks — no authentication, rate
 //! limiting, or CORS allowlist until v0.5 (see `SECURITY.md` and
-//! planning/TECH_DEBT.md TD-09). Run it locally or behind a trusted
+//! `planning/TECH_DEBT.md` TD-09). Run it locally or behind a trusted
 //! reverse proxy.
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 use axum::{
@@ -69,7 +75,7 @@ pub struct PatchResponse {
 }
 
 /// Semantic patch request: a typed scene plus a list of domain-level operations
-/// (add_object, add_keyframe, update_canvas, …) applied via `lumina_core`.
+/// (`add_object`, `add_keyframe`, `update_canvas`, …) applied via `lumina_core`.
 #[derive(Debug, Deserialize)]
 pub struct ScenePatchRequest {
     /// The scene to patch.
@@ -138,10 +144,7 @@ async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
         match serde_json::from_value(serde_json::Value::Array(payload.patch)) {
             Ok(p) => p,
             Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    format!("Invalid JSON Patch: {}", e),
-                )
+                return (StatusCode::BAD_REQUEST, format!("Invalid JSON Patch: {e}"))
                     .into_response()
             }
         };
@@ -150,7 +153,7 @@ async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
     if let Err(e) = json_patch::patch(&mut scene_value, &patch_ops) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Patch failed: {}", e),
+            format!("Patch failed: {e}"),
         )
             .into_response();
     }
@@ -160,7 +163,7 @@ async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
         Err(e) => {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                format!("Patched document is not a valid Scene: {}", e),
+                format!("Patched document is not a valid Scene: {e}"),
             )
                 .into_response()
         }
@@ -178,7 +181,7 @@ async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
     if let Err(e) = lumina_core::apply_patch(&mut payload.scene, &payload.patch) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Scene patch failed: {}", e),
+            format!("Scene patch failed: {e}"),
         )
             .into_response();
     }
@@ -188,7 +191,7 @@ async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Serialize error: {}", e),
+                format!("Serialize error: {e}"),
             )
                 .into_response()
         }
@@ -262,7 +265,7 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
     // on ffmpeg. Running it directly on the async path let N concurrent
     // renders (N = worker threads) starve the runtime, so /health and every
     // other route stopped answering until they finished.
-    let outcome = tokio::task::spawn_blocking(move || render_blocking(payload, ext)).await;
+    let outcome = tokio::task::spawn_blocking(move || render_blocking(&payload, ext)).await;
 
     match outcome {
         Ok(RenderOutcome::Done { bytes }) => Response::builder()
@@ -289,7 +292,7 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
 }
 
 /// Load assets, render, and encode. Runs on a blocking thread.
-fn render_blocking(payload: RenderRequest, ext: &str) -> RenderOutcome {
+fn render_blocking(payload: &RenderRequest, ext: &str) -> RenderOutcome {
     let mut renderer = SkiaRenderer::new();
     // Load declared font/image assets from disk, restricted to the asset
     // root (LUMINA_ASSET_ROOT, default CWD): /render must not be a remote
@@ -353,7 +356,7 @@ fn render_blocking(payload: RenderRequest, ext: &str) -> RenderOutcome {
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
 /// The full route table (health, schema, objects, validate, patch,
-/// scene_patch, render) with the body-size and CORS layers applied.
+/// `scene_patch`, render) with the body-size and CORS layers applied.
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health_check))
@@ -372,7 +375,7 @@ pub fn build_router() -> Router {
 pub async fn run_server() -> Result<(), std::io::Error> {
     let app = build_router();
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    log::info!("Lumina Server listening on {}", addr);
+    log::info!("Lumina Server listening on {addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await
 }

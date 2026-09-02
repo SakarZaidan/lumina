@@ -10,9 +10,9 @@ pub struct Timeline {
     pub duration: f32,
     /// Frames per second (from the canvas block).
     pub fps: u32,
-    /// object_id → property_name → keyframes (sorted by time)
+    /// `object_id` → `property_name` → keyframes (sorted by time)
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
-    /// object_id → property_name → value (interactive overrides take precedence)
+    /// `object_id` → `property_name` → value (interactive overrides take precedence)
     pub overrides: HashMap<String, HashMap<String, Value>>,
 }
 

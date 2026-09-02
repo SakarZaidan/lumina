@@ -10,6 +10,13 @@
 //! GPU backend in the browser via WebGPU is on the roadmap. Consumed by the
 //! JavaScript SDK in `sdks/javascript`.
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
+
 use lumina_core::{Event, EventBus, SceneGraph, Timeline};
 use lumina_renderer::skia_backend::SkiaRenderer;
 use lumina_renderer::Renderer;

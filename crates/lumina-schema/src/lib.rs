@@ -13,6 +13,12 @@
 //! Layering: `lumina-schema` → `lumina-core` → `lumina-renderer` →
 //! `lumina-export`. Runtime behavior lives upstream; this crate is data only.
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 use schemars::JsonSchema;
@@ -136,7 +142,7 @@ pub enum Object {
     Plot(PlotProps),
     /// A cubic Bézier stroke.
     BezierCurve(BezierCurveProps),
-    /// MathML markup (Unicode substitution).
+    /// `MathML` markup (Unicode substitution).
     MathML(MathMLProps),
     /// A deterministic particle emitter.
     Particles(ParticlesProps),
@@ -771,11 +777,11 @@ pub struct BezierCurveProps {
     pub opacity: f32,
 }
 
-/// Presentation MathML rendered through the same Unicode text fallback as
-/// LaTeX. `markup` is a MathML string; tags are stripped and content shown.
+/// Presentation `MathML` rendered through the same Unicode text fallback as
+/// LaTeX. `markup` is a `MathML` string; tags are stripped and content shown.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MathMLProps {
-    /// MathML markup source.
+    /// `MathML` markup source.
     pub markup: String,
     /// Anchor x (interpreted per `align`).
     pub x: f32,

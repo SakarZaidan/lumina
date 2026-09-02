@@ -1,0 +1,15 @@
+# Clippy configuration for the workspace. Lint *selection* lives in
+# [workspace.lints] in Cargo.toml; this file configures how individual lints
+# behave.
+
+# `unwrap_used`, `expect_used`, and `panic` are warnings in production code
+# (ENGINEERING_PRINCIPLES #2). In tests they are the correct thing to write —
+# a test that handles its own setup failure gracefully is a test that can pass
+# without testing anything.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+
+# The MSRV clippy should lint against. Kept in step with `rust-version` in
+# Cargo.toml; a suggestion clippy makes must actually compile on 1.88.
+msrv = "1.88"

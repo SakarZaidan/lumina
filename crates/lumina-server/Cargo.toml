@@ -37,3 +37,5 @@ log = { workspace = true }
 env_logger = { workspace = true }
 tempfile = "3.10"
 
+[lints]
+workspace = true

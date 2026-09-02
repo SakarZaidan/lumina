@@ -4,12 +4,18 @@
 //! writes the result as:
 //!
 //! - a PNG frame sequence (via the `image` crate), or
-//! - MP4 (H.264), WebM (VP9), or GIF (palette-based) by streaming raw RGBA
+//! - MP4 (H.264), `WebM` (VP9), or GIF (palette-based) by streaming raw RGBA
 //!   frames to an **external `ffmpeg` binary** found on `PATH`.
 //!
 //! There is no in-process encoder: video export requires ffmpeg to be
 //! installed, and fails with a descriptive error when it is missing.
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 use anyhow::{Context, Result};
@@ -69,7 +75,7 @@ impl<R: Renderer> Exporter<R> {
                         anyhow::anyhow!("Failed to create image buffer from frame data")
                     })?;
 
-            let filename = format!("frame_{:04}.png", frame_idx);
+            let filename = format!("frame_{frame_idx:04}.png");
             img.save(output_dir.join(filename))?;
 
             log::info!("Exported frame {}/{}", frame_idx + 1, total_frames);
@@ -112,13 +118,13 @@ impl<R: Renderer> Exporter<R> {
             sink(&frame_data)?;
 
             if frame_idx % 10 == 0 {
-                log::info!("Rendered frame {}/{}", frame_idx, total_frames);
+                log::info!("Rendered frame {frame_idx}/{total_frames}");
             }
         }
         Ok(())
     }
 
-    /// Pipe rendered frames into FFmpeg with the given output-stage arguments
+    /// Pipe rendered frames into `FFmpeg` with the given output-stage arguments
     /// (everything after the rawvideo `-i -` input, up to the output path).
     fn encode_with_ffmpeg(
         &mut self,
@@ -160,9 +166,9 @@ impl<R: Renderer> Exporter<R> {
         drop(stdin);
         let status = child.wait()?;
         if !status.success() {
-            anyhow::bail!("FFmpeg exited with non-zero status: {}", status);
+            anyhow::bail!("FFmpeg exited with non-zero status: {status}");
         }
-        log::info!("Export complete: {:?}", output_path);
+        log::info!("Export complete: {output_path:?}");
         Ok(())
     }
 
@@ -177,7 +183,7 @@ impl<R: Renderer> Exporter<R> {
         )
     }
 
-    /// Export VP9 WebM (`-crf 30 -b:v 0`, yuv420p) — smaller, web-friendly.
+    /// Export VP9 `WebM` (`-crf 30 -b:v 0`, yuv420p) — smaller, web-friendly.
     pub fn export_webm(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
         self.encode_with_ffmpeg(
             scene,

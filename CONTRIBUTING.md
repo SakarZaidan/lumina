@@ -54,21 +54,38 @@ the cross-backend parity suite locally. Without one those tests skip; set
 
 ## The gate
 
-Run this before opening a pull request:
+One command runs everything CI runs, in the same order:
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --exclude lumina-wasm --all-targets -- -D warnings
-cargo test --workspace --exclude lumina-wasm --exclude lumina-bench
-cargo build -p lumina-wasm                 # the wasm lib compiles
-mdbook build docs                          # when you touched docs/src/
+cargo xtask ci
 ```
 
-For a rendering change, also run the parity suite with a real adapter:
+It stops at the first failure and prints a summary. Steps needing a tool you
+do not have — `wasm-pack`, `mdbook`, `cargo-deny` — are reported as skipped
+rather than failing, so a partial toolchain still gets you most of the way.
+
+While iterating, skip the slow steps:
 
 ```bash
-LUMINA_REQUIRE_VELLO=1 cargo test -p lumina-renderer --test backend_parity
+cargo xtask ci --fast      # no wasm, book, or example renders
 ```
+
+The gate is defined once, in `xtask/src/main.rs`. That matters more than the
+convenience: when a command list in a README drifts from what CI runs, the
+README loses silently and a contributor finds out at merge time.
+
+Other tasks:
+
+```bash
+cargo xtask fmt            # format the workspace
+cargo xtask examples       # render every example scene (needs ffmpeg)
+```
+
+The test step sets `LUMINA_REQUIRE_VELLO=1`, so a missing wgpu adapter fails
+rather than silently skipping the cross-backend parity suite. Install a
+software Vulkan driver (`mesa-vulkan-drivers` on Debian/Ubuntu) if you do not
+have one. Parity failures write both frames plus a difference heat map to
+`target/parity-failures/` — look at them before assuming the tolerance is wrong.
 
 Failures write both frames plus a difference heat map to
 `target/parity-failures/` — look at them before assuming the tolerance is

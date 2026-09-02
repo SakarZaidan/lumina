@@ -18,6 +18,12 @@
 //! cross-backend pixel-diff suite in `tests/backend_parity.rs`. Rendering
 //! is deterministic: the same inputs always produce the same frame.
 
+// The engine has never contained `unsafe`, and the metric tracking that was a
+// `grep` over the source — which by v0.4.0 was returning a false positive from
+// the word appearing in a comment. `forbid` makes it a compile error instead:
+// it cannot be silenced by an `allow` further down, so a future `unsafe` block
+// has to be argued for by removing this line, in a diff a reviewer will see.
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub(crate) mod common;

@@ -123,6 +123,20 @@ jobs:
         run: wasm-pack test --node crates/lumina-wasm
 
   # ── cargo-deny ────────────────────────────────────────────────────────────────
+  examples:
+    name: Examples render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # ENGINEERING_PRINCIPLES #12: a broken example is a broken build. This
+      # renders every scene in examples/ with the documented command, which is
+      # the only way that principle is actually enforced rather than asserted.
+      - run: cargo xtask examples
+
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest
