@@ -78,6 +78,13 @@ programme to reach reference quality in [plan/](plan/).
   Output is byte-identical. The buffer is cleared to the background before
   anything is drawn — the same operation that always began a frame — and it is
   reallocated whenever the requested frame size changes.
+- **Text rendering is ~10% faster** on top of the above. Glyphs were rasterised
+  from their outlines on every frame, and `font_for_char` walked every loaded
+  font per character — twice, once to measure and once to draw. Rasterised
+  glyphs are now cached per `(font, character, exact size)`; the cache stores
+  coverage rather than colour, so one entry serves every colour a character is
+  drawn in, and it is bounded so an animated `font_size` cannot grow it without
+  limit. Measurement and drawing read the same cache, so they cannot disagree.
 - **Timeline evaluation is 34–42% faster.** Per-frame state was built into a
   nested `HashMap` and then rebuilt into `serde_json::Map`s, walking and
   reallocating every property twice; it is built once now. Keyframe lookup is a

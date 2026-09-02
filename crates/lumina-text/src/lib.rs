@@ -17,9 +17,42 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use fontdue::{Font, FontSettings};
+use fontdue::{Font, FontSettings, Metrics};
 use lumina_schema::TextProps;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+/// A glyph rasterised from its outline: fontdue's metrics plus the coverage
+/// bitmap, one byte of alpha per pixel.
+///
+/// Deliberately colourless. Colour is applied when the glyph is composited, so
+/// one cache entry serves every colour the same character is ever drawn in —
+/// which is what makes caching worthwhile on a scene that fades text.
+pub struct RasterizedGlyph {
+    /// Advance, bearings, and bitmap dimensions, from fontdue.
+    pub metrics: Metrics,
+    /// Coverage, `metrics.width * metrics.height` bytes.
+    pub alpha: Vec<u8>,
+}
+
+/// What identifies a rasterised glyph: which font, which character, what size.
+///
+/// The font is an index into `font_order` rather than a `String`, so a lookup
+/// costs no allocation. The size is the `f32`'s exact bit pattern rather than
+/// a rounded value — two sizes that differ below rounding really do produce
+/// different bitmaps, and silently sharing one would be a rendering bug rather
+/// than an optimisation.
+type GlyphKey = (usize, char, u32);
+
+/// Ceiling on cached glyphs before the cache is dropped and rebuilt.
+///
+/// An animated `font_size` produces a new key every frame, so an unbounded
+/// cache would grow without limit across a long render. Clearing wholesale
+/// rather than evicting least-recently-used keeps this predictable and cheap:
+/// the pathological case rebuilds from scratch occasionally, and the common
+/// case — a handful of sizes — never reaches the limit at all.
+const MAX_CACHED_GLYPHS: usize = 8_192;
 
 /// Font store with deterministic fallback: fonts are tried in load order,
 /// so the same scene always resolves glyphs to the same font.
@@ -29,6 +62,19 @@ pub struct TextEngine {
     fonts: HashMap<String, Font>,
     /// Insertion order so fallback traversal is deterministic.
     font_order: Vec<String>,
+    /// Rasterised glyphs, keyed by font, character, and exact size.
+    ///
+    /// Glyphs were previously rasterised from outlines on every frame, and
+    /// `font_for_char` walked every loaded font per character — twice, once to
+    /// measure and once to draw. A fifty-character title over a minute of
+    /// 60 fps output meant ~180 000 rasterisations of perhaps twenty distinct
+    /// glyphs.
+    ///
+    /// `RefCell` because rasterisation happens behind `&self`, matching the
+    /// SVG cache in the renderer. The engine is therefore not `Sync`, which is
+    /// correct: frame-parallel export gives each thread its own renderer, and
+    /// sharing one would serialise them anyway.
+    glyphs: RefCell<HashMap<GlyphKey, Rc<RasterizedGlyph>>>,
 }
 
 impl TextEngine {
@@ -46,7 +92,82 @@ impl TextEngine {
             self.font_order.push(id.clone());
         }
         self.fonts.insert(id, font);
+        // Re-loading an id keeps its index but replaces its outlines, so
+        // anything cached against that index is now wrong.
+        self.glyphs.borrow_mut().clear();
         Ok(())
+    }
+
+    /// Which font in load order will draw `c`, as an index into `font_order`.
+    ///
+    /// The index is what the glyph cache keys on, and it is stable for the
+    /// lifetime of the engine because `load_font` never removes an entry from
+    /// `font_order` — re-loading an id replaces the font data but keeps its
+    /// position, so a cached glyph can never come back attributed to a
+    /// different font.
+    fn font_index_for_char(&self, c: char, preferred_id: Option<&str>) -> Option<usize> {
+        if let Some(id) = preferred_id {
+            if let Some(font) = self.fonts.get(id) {
+                if font.metrics(c, 16.0).advance_width > 0.0 {
+                    return self.font_order.iter().position(|f| f == id);
+                }
+            }
+        }
+        for (i, id) in self.font_order.iter().enumerate() {
+            if Some(id.as_str()) == preferred_id {
+                continue;
+            }
+            if let Some(font) = self.fonts.get(id) {
+                if font.metrics(c, 16.0).advance_width > 0.0 {
+                    return Some(i);
+                }
+            }
+        }
+        // Last resort: the first loaded font, so the glyph is at least
+        // attempted — matching `font_for_char`.
+        (!self.font_order.is_empty()).then_some(0)
+    }
+
+    /// Rasterise `c` at `font_size`, from cache when possible.
+    ///
+    /// Returns `None` only when no font is loaded at all. Colour is applied by
+    /// the caller, so the returned coverage is shared across colours.
+    pub fn glyph(
+        &self,
+        c: char,
+        font_size: f32,
+        preferred_id: Option<&str>,
+    ) -> Option<Rc<RasterizedGlyph>> {
+        let idx = self.font_index_for_char(c, preferred_id)?;
+        let key: GlyphKey = (idx, c, font_size.to_bits());
+
+        if let Some(hit) = self.glyphs.borrow().get(&key) {
+            return Some(Rc::clone(hit));
+        }
+
+        let font = self.fonts.get(self.font_order.get(idx)?)?;
+        let (metrics, alpha) = font.rasterize(c, font_size);
+        let glyph = Rc::new(RasterizedGlyph { metrics, alpha });
+
+        let mut cache = self.glyphs.borrow_mut();
+        if cache.len() >= MAX_CACHED_GLYPHS {
+            cache.clear();
+        }
+        cache.insert(key, Rc::clone(&glyph));
+        Some(glyph)
+    }
+
+    /// Metrics for `c` at `font_size`, from the same cache as [`Self::glyph`].
+    ///
+    /// Measurement and drawing therefore agree by construction, and a string
+    /// is rasterised once rather than once to measure and once to draw.
+    pub fn glyph_metrics(
+        &self,
+        c: char,
+        font_size: f32,
+        preferred_id: Option<&str>,
+    ) -> Option<Metrics> {
+        self.glyph(c, font_size, preferred_id).map(|g| g.metrics)
     }
 
     /// Find the best font for a character: try the requested `font_id` first,
@@ -132,8 +253,8 @@ impl TextEngine {
         let mut width = 0.0;
         let count = content.chars().count();
         for c in content.chars() {
-            if let Some(font) = self.font_for_char(c, font_id) {
-                width += font.metrics(c, font_size).advance_width;
+            if let Some(metrics) = self.glyph_metrics(c, font_size, font_id) {
+                width += metrics.advance_width;
             }
         }
         if count > 1 {

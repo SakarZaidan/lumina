@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late, end) — Wave 3: glyph cache, and an estimate that was 5x off
+
+- Rasterised glyphs are cached per `(font index, character, exact size)`. The
+  cache stores **coverage, not colour**, so one entry serves every colour a
+  character is ever drawn in — which is what makes it worth having on a scene
+  that fades text. Bounded, because an animated `font_size` produces a new key
+  every frame.
+- Measurement and drawing now read the same cache, so a string cannot measure
+  one width and draw another.
+- Result: `text_render` **−9.5%** and **−10.8%**, and `skia_render` −1.6% to
+  −2.9%, which incidentally recovers the ~1% regression from the previous PR.
+- **The plan overestimated this by about five times.** It predicted 2–3 ms on a
+  text-heavy scene; the measured saving is ~0.45 ms. The estimate was written
+  before buffer reuse removed the allocation that dominated everything, and it
+  assumed outline rasterisation was the cost. It is not: the remaining per-glyph
+  cost is the temporary `Pixmap` allocated for each glyph's mask plus the
+  per-pixel colour conversion, both of which happen per glyph per frame whether
+  or not the outline is cached. Recorded in METRICS; that is the next thing to
+  attack in text, and it is a different change.
+- Second time this wave a plan estimate has been wrong in a way only measuring
+  could show — the first reordered the whole wave. The pattern is worth naming:
+  estimates written before the dominant cost was removed are estimates of the
+  wrong system.
+- `lumina-text` has its first tests ever (TD-10 partly addressed): cached glyph
+  identical to fresh, sizes not sharing entries, measurement agreeing with
+  drawing, font reload invalidating, and the cache staying bounded.
+
 ## 2026-09-02 (late, last) — Wave 3: timeline evaluation 34–42% faster
 
 - `get_state_at` built a nested `HashMap` and then rebuilt it into

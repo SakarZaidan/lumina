@@ -193,11 +193,15 @@ impl SkiaRenderer {
 
         let mut x_cursor = start_x;
         for c in content.chars() {
-            let font = match self.text_engine.font_for_char(c, font_id) {
-                Some(f) => f,
+            // Same cache the shared raster path uses, so the CPU backend's
+            // inline glyph drawing and the bitmap the GPU backend consumes
+            // come from one rasterisation rather than two.
+            let glyph = match self.text_engine.glyph(c, font_size, font_id) {
+                Some(g) => g,
                 None => continue,
             };
-            let (metrics, alpha) = font.rasterize(c, font_size);
+            let metrics = glyph.metrics;
+            let alpha = &glyph.alpha;
 
             // Skip zero-size glyphs (spaces, control chars).
             if metrics.width == 0 || metrics.height == 0 {
