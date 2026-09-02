@@ -152,6 +152,7 @@ fn main() -> ExitCode {
         "ci" => run_ci(fast),
         "fmt" => run_one(&step("fmt", "cargo", &["fmt", "--all"])),
         "examples" => render_examples(args.iter().any(|a| a == "--full")),
+        "bench" => run_bench(&args),
         "help" | "--help" | "-h" => {
             print_help();
             ExitCode::SUCCESS
@@ -171,6 +172,9 @@ fn print_help() {
          Tasks:\n\
          \x20 ci [--fast]   Run the merge gate. --fast skips wasm, book, and examples.\n\
          \x20 fmt           Format the workspace.\n\
+         \x20 bench [--save NAME | --baseline NAME]\n\
+         \x20               Run the benchmark suite. --save records a baseline;\n\
+         \x20               --baseline compares against one.\n\
          \x20 examples [--full]\n\
          \x20               Check every example renders. Draws one frame per scene by\n\
          \x20               default; --full encodes complete videos (slow, needs ffmpeg).\n\
@@ -227,6 +231,54 @@ fn run_ci(fast: bool) -> ExitCode {
 fn run_one(s: &Step) -> ExitCode {
     let mut cmd = Command::new(s.program);
     cmd.args(&s.args);
+    match cmd.status() {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
+}
+
+/// Run the criterion suite, optionally saving or comparing a baseline.
+///
+/// Comparison is only meaningful when both sides are measured on the same
+/// machine in the same session. CI runner performance varies enough between
+/// jobs that a cross-run comparison would report double-digit swings on
+/// identical code, so the workflow measures the merge base and the pull request
+/// back to back in one job.
+///
+/// The workflow calls `cargo bench` directly rather than going through here:
+/// the merge base is arbitrary older code and cannot be assumed to have this
+/// task. Keep the flags below in step with `.github/workflows/ci.yml`.
+fn run_bench(args: &[String]) -> ExitCode {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["bench", "-p", "lumina-bench", "--"]);
+
+    // Shorter than criterion's defaults. The suite renders thousands of glyphs
+    // per iteration; the default 100 samples over 5 seconds each would take
+    // long enough that nobody would run it, and a gate nobody runs is not one.
+    cmd.args(["--warm-up-time", "1", "--measurement-time", "3"]);
+
+    if let Some(i) = args.iter().position(|a| a == "--save") {
+        match args.get(i + 1) {
+            Some(name) => {
+                cmd.args(["--save-baseline", name]);
+            }
+            None => {
+                eprintln!("--save needs a baseline name");
+                return ExitCode::FAILURE;
+            }
+        }
+    } else if let Some(i) = args.iter().position(|a| a == "--baseline") {
+        match args.get(i + 1) {
+            Some(name) => {
+                cmd.args(["--baseline", name]);
+            }
+            None => {
+                eprintln!("--baseline needs a baseline name");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
     match cmd.status() {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         _ => ExitCode::FAILURE,

@@ -61,10 +61,20 @@ rather than a note nobody reads.
 Baselines are captured **before** any change; ENGINEERING_PRINCIPLES #5 makes
 this the entry condition, not the write-up.
 
+**This table was reordered after measuring it.** It originally named the glyph
+atlas the largest single win. The first benchmark run showed `skia_render`
+costing 5.21 ms for ten objects and 6.54 ms for five hundred — nearly flat, so
+the cost is not drawing. Reusing the frame buffer is worth ~4.7 ms on every
+scene; the glyph atlas is worth 2–3 ms on scenes with a lot of text. Numbers in
+[`planning/METRICS.md`](../planning/METRICS.md#performance-baselines).
+
+Which is the point of the principle: this plan was wrong about its own
+priority until something measured it.
+
 | ID | Item | Where | Expected |
 |---|---|---|---|
-| `AAA-P-01` | Glyph atlas keyed `(char, font_id, size)`; index `font_for_char` instead of walking | `lumina-text`, `raster.rs:44,65` | Largest single win on text-heavy scenes |
-| `AAA-P-02` | `render_into(&mut [u8])` on the trait; reuse one framebuffer per export | `renderer/src/lib.rs:39` | Two 8.3 MB allocations per frame removed |
+| `AAA-P-02` | Reuse the frame buffer across frames; `render_into(&mut [u8])` on the trait | `renderer/src/lib.rs:39`, `skia_backend.rs:988,1001` | **Measured largest win.** Allocating an 8.3 MB `Pixmap` per frame costs **5.3 ms**; reusing one costs **0.57 ms**. The allocator returns the block to the OS, so every frame faults in fresh pages. ~87% of render time for an ordinary scene, on *every* scene |
+| `AAA-P-01` | Glyph atlas keyed `(char, font_id, size)`; index `font_for_char` instead of walking | `lumina-text`, `raster.rs:44,65` | 2–3 ms on text-heavy scenes |
 | `AAA-P-03` | Frame-parallel export with `rayon` (TD-05) | `export/src/lib.rs:36-77,89-113` | Near-linear in cores for PNG sequences |
 | `AAA-P-04` | Timeline state caching; stop cloning unchanged properties (TD-03) | `timeline.rs:105-124` | Scales with object count |
 | `AAA-P-05` | `partition_point` for keyframe and camera lookup | `timeline.rs:193,158` | O(log K) per property |
