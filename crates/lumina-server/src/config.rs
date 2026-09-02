@@ -125,3 +125,173 @@ fn env_var(key: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Environment variables are process-global, so these tests set and clear
+    /// them under one lock rather than running in parallel and reading each
+    /// other's values. The alternative — a `from_env` that takes a map — would
+    /// test a function nothing calls.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct EnvGuard(Vec<&'static str>);
+
+    impl EnvGuard {
+        fn set(vars: &[(&'static str, &str)]) -> Self {
+            for (k, v) in vars {
+                std::env::set_var(k, v);
+            }
+            Self(vars.iter().map(|(k, _)| *k).collect())
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for k in &self.0 {
+                std::env::remove_var(k);
+            }
+        }
+    }
+
+    fn clear() {
+        for k in [
+            "LUMINA_BIND",
+            "LUMINA_API_TOKEN",
+            "LUMINA_CORS_ORIGINS",
+            "LUMINA_RATE_LIMIT",
+            "LUMINA_REQUEST_TIMEOUT_SECS",
+        ] {
+            std::env::remove_var(k);
+        }
+    }
+
+    #[test]
+    fn the_defaults_are_the_closed_ones() {
+        // The three defaults that changed in TD-09 part 2. Each was a way to be
+        // exposed without having decided to be, so each is worth pinning: a
+        // future refactor that "simplifies" the default back to 0.0.0.0 should
+        // fail here rather than in somebody's deployment.
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let cfg = ServerConfig::from_env().expect("defaults parse");
+        assert!(
+            cfg.bind.ip().is_loopback(),
+            "the default bind is not loopback"
+        );
+        assert_eq!(cfg.bind.port(), 3000);
+        assert!(cfg.api_token.is_none());
+        assert!(
+            cfg.cors_origins.is_empty(),
+            "cross-origin is open by default"
+        );
+        assert!(
+            cfg.rate_limit_per_minute > 0,
+            "the limiter is off by default"
+        );
+    }
+
+    #[test]
+    fn a_malformed_value_is_an_error_rather_than_a_silent_default() {
+        // A typo in LUMINA_BIND that quietly reverted to the default would be a
+        // server listening somewhere its operator did not intend, and the only
+        // symptom would be that it worked.
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let _g = EnvGuard::set(&[("LUMINA_BIND", "not-an-address")]);
+        let err = ServerConfig::from_env().expect_err("a bad address must not be ignored");
+        assert!(
+            err.contains("LUMINA_BIND"),
+            "the error must name the variable: {err}"
+        );
+    }
+
+    #[test]
+    fn an_empty_value_reads_as_unset() {
+        // `LUMINA_API_TOKEN=` in a shell script or compose file reads as "no
+        // token" to a human. Taken literally it configures a server whose
+        // password is the empty string.
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let _g = EnvGuard::set(&[("LUMINA_API_TOKEN", "   ")]);
+        let cfg = ServerConfig::from_env().expect("parses");
+        assert!(cfg.api_token.is_none(), "whitespace became a password");
+    }
+
+    #[test]
+    fn the_origin_list_is_split_and_trimmed() {
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let _g = EnvGuard::set(&[(
+            "LUMINA_CORS_ORIGINS",
+            " https://a.example , https://b.example ,, ",
+        )]);
+        let cfg = ServerConfig::from_env().expect("parses");
+        assert_eq!(
+            cfg.cors_origins,
+            vec!["https://a.example", "https://b.example"],
+            "an empty entry would become an origin nothing matches"
+        );
+    }
+
+    #[test]
+    fn every_setting_can_be_overridden() {
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let _g = EnvGuard::set(&[
+            ("LUMINA_BIND", "0.0.0.0:8080"),
+            ("LUMINA_API_TOKEN", "a-token-with-real-entropy"),
+            ("LUMINA_RATE_LIMIT", "5"),
+            ("LUMINA_REQUEST_TIMEOUT_SECS", "30"),
+        ]);
+        let cfg = ServerConfig::from_env().expect("parses");
+        assert_eq!(cfg.bind.to_string(), "0.0.0.0:8080");
+        assert_eq!(cfg.api_token.as_deref(), Some("a-token-with-real-entropy"));
+        assert_eq!(cfg.rate_limit_per_minute, 5);
+        assert_eq!(cfg.request_timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn a_non_numeric_limit_is_refused() {
+        let _lock = ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear();
+        let _g = EnvGuard::set(&[("LUMINA_RATE_LIMIT", "lots")]);
+        let err = ServerConfig::from_env().expect_err("must be refused");
+        assert!(err.contains("LUMINA_RATE_LIMIT"), "{err}");
+    }
+
+    #[test]
+    fn warning_about_exposure_never_panics() {
+        // It runs at startup on every path, including the ones nobody exercises
+        // in development, so it must be total.
+        for cfg in [
+            ServerConfig::default(),
+            ServerConfig {
+                bind: "0.0.0.0:3000".parse().expect("addr"),
+                api_token: None,
+                rate_limit_per_minute: 0,
+                ..ServerConfig::default()
+            },
+            ServerConfig {
+                bind: "0.0.0.0:3000".parse().expect("addr"),
+                api_token: Some("short".into()),
+                ..ServerConfig::default()
+            },
+        ] {
+            cfg.warn_about_exposure();
+        }
+    }
+}
