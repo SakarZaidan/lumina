@@ -24,6 +24,38 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 (night, later) — The MCP server
+
+- `AAA-AI-02`. A new crate, `luminafx-mcp`, exposing the engine as MCP tools
+  over newline-delimited JSON-RPC on stdio. No port, no credentials, no glue.
+- **The same error vocabulary as HTTP**, which is the whole point. An agent
+  that learned `SCHEMA_MISMATCH` through one door knows it in the other. To
+  keep that true rather than merely intended, `object_registry` moved into
+  `lumina-core`: a registry maintained in two places is one that disagrees with
+  itself, which is exactly what TD-02 recorded for the path and colour parsers.
+- The protocol layer is hand-written. MCP needs four message shapes and three
+  methods; a dependency for that is more code to audit than the code it
+  replaces, and this is a crate an agent runs on a developer's machine.
+- Three decisions that only show up through the transport, so the tests drive
+  real frames rather than calling handlers:
+  - **A notification is not answered.** No id means no reply, and replying is a
+    protocol error some clients treat as fatal.
+  - **A malformed frame does not end the session.** One bad message must not
+    cost a client every message after it.
+  - **Every response is flushed.** The client is blocked reading a line, so a
+    buffered response is indistinguishable from a hung server.
+- Tool failures are carried *inside* a successful response with `isError`, as
+  the protocol specifies. A model then sees a failed tool as content it can
+  read and retry rather than as a broken connection.
+- `lumina_schema` scopes transitively. A scoped schema with a dangling `$ref`
+  is worse than a large one: the model either invents the missing type or
+  refuses. A test walks every surviving `$ref` and asserts it resolves.
+- `lumina_render` validates before rendering — microseconds against seconds —
+  and confines output to `LUMINA_ASSET_ROOT`. It runs with the developer's
+  permissions, so "render to `../../.ssh/authorized_keys`" must not be
+  something it can be talked into.
+- Tests 297 → 311.
+
 ## 2026-09-03 (night) — v0.5.0 prepared
 
 - Workspace to `0.5.0`, and every internal dependency's `version` requirement

@@ -6,6 +6,7 @@ members = [
     "crates/lumina-schema",
     "crates/lumina-export",
     "crates/lumina-server",
+    "crates/lumina-mcp",
     "crates/lumina-wasm",
     "crates/lumina-bench",
     "tools/lumina-cli",
