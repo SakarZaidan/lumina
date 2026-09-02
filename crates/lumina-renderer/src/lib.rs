@@ -125,7 +125,10 @@ pub trait Renderer {
 /// A trailing partial pixel (a slice whose length is not a multiple of four)
 /// is ignored rather than treated as an error; callers pass whole frames.
 pub fn demultiply_in_place(rgba: &mut [u8]) {
-    for px in rgba.chunks_exact_mut(4) {
+    // `as_chunks_mut` rather than `chunks_exact_mut(4)`: the compiler knows
+    // the length is four, so the bounds check inside the loop goes away.
+    let (pixels, _trailing) = rgba.as_chunks_mut::<4>();
+    for px in pixels {
         let a = px[3];
         if a == 255 || a == 0 {
             continue;
