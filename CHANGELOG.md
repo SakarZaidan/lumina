@@ -75,6 +75,19 @@ programme to reach reference quality in [plan/](plan/).
   Shared between backends and bounded, so an unvalidated caller cannot hang the
   renderer.
 
+- **Transparency leaves the engine undarkened.** Frames were handed to PNG,
+  ffmpeg, and the WASM canvas with **premultiplied** alpha, and all three store
+  straight alpha. A half-opaque pure red left the rasteriser as
+  `(127, 0, 0, 127)` and was written as a *dark* red at half opacity rather
+  than a bright one — every semi-transparent pixel darkened by its own alpha.
+
+  It had never mattered: at `a = 255` the two encodings are the same bytes, and
+  until now every background was opaque. Opaque output is unchanged, byte for
+  byte. `Renderer::render_frame` still returns premultiplied values, which is
+  what compositing and frame averaging need — motion blur is correct on them
+  and wrong on straight alpha — and `demultiply_in_place` is called once at
+  each boundary where pixels leave the engine.
+
 ### Added
 - **Full SVG path grammar.** `Q`/`q`, `S`/`s`, `T`/`t` and elliptical arcs
   `A`/`a` are now understood; previously the parser handled `M L H V C Z` and
@@ -108,6 +121,10 @@ programme to reach reference quality in [plan/](plan/).
   At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
   continuous drawing rather than several racing each other. Both backends share
   one implementation, covered by parity fixture 19.
+- **Alpha output**: `--format webm-alpha` (VP9) and `--format mov` (ProRes
+  4444, 10-bit 4:4:4). Give a scene a transparent `canvas.background` such as
+  `"#00000000"` and it composites over other footage in an editor instead of
+  arriving as a rectangle of backdrop.
 - **Camera rotation.** `camera.timeline[].state.rotation`, in degrees about the
   canvas centre, positive clockwise, matching `GroupProps.rotation`. It
   interpolates as the angle written rather than by shortest arc, so `0 → 350`

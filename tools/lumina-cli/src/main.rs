@@ -43,7 +43,11 @@ struct Args {
     #[arg(short, long, default_value = "output")]
     output: PathBuf,
 
-    /// Output format: png (frame sequence), mp4, webm, or gif
+    /// Output format: png (frame sequence), mp4, webm, webm-alpha, mov, or gif
+    ///
+    /// `webm-alpha` (VP9) and `mov` (`ProRes` 4444) carry an alpha channel, for
+    /// compositing a scene with a transparent `canvas.background` over other
+    /// footage.
     #[arg(short, long, default_value = "png")]
     format: String,
 
@@ -190,6 +194,18 @@ fn do_export<R: Renderer>(
             exporter.export_webm_with(scene, &args.output, quality)?;
             timings.push(t0.elapsed());
         }
+        "webm-alpha" => {
+            log::info!("Exporting WebM with alpha to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_webm_alpha_with(scene, &args.output, quality)?;
+            timings.push(t0.elapsed());
+        }
+        "mov" | "prores" => {
+            log::info!("Exporting ProRes 4444 MOV to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_mov_prores4444_with(scene, &args.output, quality)?;
+            timings.push(t0.elapsed());
+        }
         "gif" => {
             log::info!("Exporting GIF to {:?}", args.output);
             let t0 = Instant::now();
@@ -202,7 +218,9 @@ fn do_export<R: Renderer>(
             exporter.export_png_sequence(scene, &args.output)?;
             timings.push(t0.elapsed());
         }
-        other => anyhow::bail!("Unknown format '{other}'. Valid: png, mp4, webm, gif"),
+        other => {
+            anyhow::bail!("Unknown format '{other}'. Valid: png, mp4, webm, webm-alpha, mov, gif")
+        }
     }
     Ok(timings)
 }

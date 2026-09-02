@@ -101,6 +101,16 @@ impl Quality {
         }
     }
 
+    /// `ProRes` quantiser. Lower is better; the encoder's usable range is
+    /// roughly 4 to 20, and it is not the same scale as either CRF.
+    fn prores_qscale(self) -> u8 {
+        match self {
+            Quality::Draft => 17,
+            Quality::Standard => 11,
+            Quality::Final => 5,
+        }
+    }
+
     /// Pixel format for VP9.
     fn pix_fmt_vp9(self) -> &'static str {
         match self {
@@ -191,6 +201,7 @@ impl<R: Renderer> Exporter<R> {
 
         if samples == 1 {
             *out = render_at(&mut self.renderer, base)?;
+            lumina_renderer::demultiply_in_place(out);
             return Ok(());
         }
 
@@ -217,6 +228,11 @@ impl<R: Renderer> Exporter<R> {
         // channel down, which darkens a blurred frame relative to a sharp one.
         let half = samples / 2;
         out.extend(accum.iter().map(|a| ((a + half) / samples) as u8));
+        // Straight alpha from here on. This is the last point at which every
+        // export path is still holding raw renderer output, so it is the one
+        // place the conversion has to happen — and it has to happen *after*
+        // the averaging above, which is only correct on premultiplied values.
+        lumina_renderer::demultiply_in_place(out);
         Ok(())
     }
 
@@ -510,6 +526,110 @@ impl<R: Renderer> Exporter<R> {
         self.encode_with_ffmpeg(scene, output_path, &args)
     }
 
+    /// Export VP9 `WebM` **with an alpha channel**, at the default quality.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_webm_alpha(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
+        self.export_webm_alpha_with(scene, output_path, Quality::default())
+    }
+
+    /// Export VP9 `WebM` with an alpha channel at a chosen [`Quality`].
+    ///
+    /// For compositing over other footage: give the scene a transparent
+    /// `canvas.background` (`"#00000000"`) and whatever it draws arrives in an
+    /// editor with its own edges rather than a rectangle of backdrop.
+    ///
+    /// The pixel format is fixed at 8-bit `yuva420p` rather than following
+    /// `quality` — libvpx carries alpha in an auxiliary stream that has no
+    /// 10-bit form, so `Quality::Final` buys a lower CRF here and not more
+    /// bits. [`Exporter::export_mov_prores4444`] is the format to reach for
+    /// when the depth matters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_webm_alpha_with(
+        &mut self,
+        scene: &Scene,
+        output_path: &Path,
+        quality: Quality,
+    ) -> Result<()> {
+        let crf = quality.crf_vp9().to_string();
+        let mut args = vec![
+            "-c:v",
+            "libvpx-vp9",
+            "-b:v",
+            "0",
+            "-crf",
+            &crf,
+            "-row-mt",
+            "1",
+            "-pix_fmt",
+            "yuva420p",
+            // Without this libvpx writes the alpha plane but no player looks
+            // for it; the file plays back opaque and the transparency is
+            // silently gone.
+            "-auto-alt-ref",
+            "0",
+        ];
+        args.extend_from_slice(BT709_TAGS);
+        self.encode_with_ffmpeg(scene, output_path, &args)
+    }
+
+    /// Export `ProRes` 4444 in a `MOV` container, at the default quality.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_mov_prores4444(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
+        self.export_mov_prores4444_with(scene, output_path, Quality::default())
+    }
+
+    /// Export `ProRes` 4444 at a chosen [`Quality`] — the editorial master.
+    ///
+    /// 10-bit 4:4:4 with a full alpha channel: no chroma subsampling, so hard
+    /// coloured edges and thin strokes survive intact where a 4:2:0 codec
+    /// smears them, and it is the format every editor and compositor ingests
+    /// without transcoding.
+    ///
+    /// `quality` maps to the encoder's quantiser rather than to a CRF. Files
+    /// are large by design — this is an intermediate, not a delivery format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_mov_prores4444_with(
+        &mut self,
+        scene: &Scene,
+        output_path: &Path,
+        quality: Quality,
+    ) -> Result<()> {
+        let qscale = quality.prores_qscale().to_string();
+        let mut args = vec![
+            "-c:v",
+            "prores_ks",
+            "-profile:v",
+            "4444",
+            "-pix_fmt",
+            "yuva444p10le",
+            // `ProRes` stores alpha at 16 bits; the default is to drop it.
+            "-alpha_bits",
+            "16",
+            // QuickTime checks the vendor atom and refuses files written with
+            // ffmpeg's default identifier. Every other `ProRes` writer claims
+            // Apple's, and so must this one to be openable.
+            "-vendor",
+            "apl0",
+            "-qscale:v",
+            &qscale,
+        ];
+        args.extend_from_slice(BT709_TAGS);
+        args.extend_from_slice(&["-movflags", "+faststart"]);
+        self.encode_with_ffmpeg(scene, output_path, &args)
+    }
+
     /// Export an animated GIF using a single-pass palettegen/paletteuse filter
     /// graph (Floyd–Steinberg dithering) over the piped rawvideo stream.
     pub fn export_gif(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
@@ -524,5 +644,7 @@ impl<R: Renderer> Exporter<R> {
     }
 }
 
+#[cfg(test)]
+mod alpha_tests;
 #[cfg(test)]
 mod export_tests;

@@ -24,6 +24,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, latest) — Alpha output, and the bug under it
+
+- `AAA-OUT-06`. `--format webm-alpha` (VP9, `yuva420p`) and `--format mov`
+  (ProRes 4444, 10-bit 4:4:4 with 16-bit alpha).
+- The flags were the easy half. **Frames were leaving the engine
+  premultiplied** and PNG, ffmpeg's `rgba` input, and the WASM canvas all store
+  straight alpha, so a half-opaque pure red was written as a dark red at half
+  opacity. It had never been visible because at `a = 255` the two encodings are
+  identical bytes and every background so far was opaque — the feature and the
+  bug could only be found together.
+- `render_frame` still returns premultiplied, documented on the trait. That is
+  deliberate: motion blur is correct averaging premultiplied values and wrong
+  averaging straight ones, and demultiplying at the renderer would force a
+  lossy 8-bit round trip through every blurred frame. `demultiply_in_place` is
+  called once per boundary instead — inside `render_blurred` after the average,
+  and in the WASM `render_frame`.
+- Two things the tests get right by accident of being written last:
+  - The VP9 check is a **decode round trip**, not an `ffprobe` field. WebM
+    reports `pix_fmt=yuv420p` for a file with a full alpha plane and signals
+    the plane in an `alpha_mode` tag, so the obvious probe reports "no alpha"
+    on a correct file. The first version of the test failed for that reason.
+  - "Still red" is asserted as channel dominance. A saturated primary does not
+    survive an RGB → BT.709 → RGB round trip exactly (ProRes returns green 25
+    where the source had 0), and pinning absolute values would test ffmpeg's
+    rounding rather than ours.
+- An opaque scene is byte-for-byte what it was; a test asserts it.
+- Tests 259 → 265.
+
 ## 2026-09-02 (night, later) — The camera can turn
 
 - `AAA-MOT-05`. `camera.timeline[].state.rotation`, degrees about the canvas

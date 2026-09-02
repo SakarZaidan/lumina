@@ -181,6 +181,11 @@ cargo build --release
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output unit_circle.webm --format webm
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output unit_circle.gif  --format gif
 
+# With an alpha channel, for compositing over other footage. Give the scene a
+# transparent canvas.background ("#00000000") first.
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.webm --format webm-alpha
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.mov  --format mov
+
 # GPU (Vello) backend — renders text, LaTeX, images and particles too
 ./target/release/lumina-cli --scene examples/showcase_grand.lsf --output grand.mp4 --format mp4 --backend vello
 ```

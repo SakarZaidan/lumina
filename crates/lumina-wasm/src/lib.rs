@@ -79,7 +79,8 @@ impl LuminaEngine {
         let camera_state = self.timeline.get_camera_at(time, &self.scene);
         let camera = self.scene.camera.as_ref().map(|_| &camera_state);
         self.renderer.set_time(time);
-        self.renderer
+        let mut frame = self
+            .renderer
             .render_frame(
                 &self.scene_graph.objects,
                 &states,
@@ -88,7 +89,14 @@ impl LuminaEngine {
                 &self.scene.canvas.background,
                 camera,
             )
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        // `ImageData` — the only thing a caller can do with these bytes — is
+        // defined as straight alpha, and the renderer composes in
+        // premultiplied. Identical while the background is opaque; a scene
+        // with a transparent background painted every semi-transparent pixel
+        // too dark without this.
+        lumina_renderer::demultiply_in_place(&mut frame);
+        Ok(frame)
     }
 
     /// Dispatch an interactive event and return the resulting playback state
