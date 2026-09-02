@@ -43,11 +43,15 @@ struct Args {
     #[arg(short, long, default_value = "output")]
     output: PathBuf,
 
-    /// Output format: png (frame sequence), mp4, webm, webm-alpha, mov, or gif
+    /// Output format: png, exr, mp4, webm, webm-alpha, mov, or gif
+    ///
+    /// `png` and `exr` are numbered frame sequences; the rest are encoded
+    /// video and need `FFmpeg`.
     ///
     /// `webm-alpha` (VP9) and `mov` (`ProRes` 4444) carry an alpha channel, for
     /// compositing a scene with a transparent `canvas.background` over other
-    /// footage.
+    /// footage. `exr` is the intermediate for a compositor: linear light,
+    /// float channels, associated alpha.
     #[arg(short, long, default_value = "png")]
     format: String,
 
@@ -225,6 +229,12 @@ fn do_export<R: Renderer>(
             exporter.export_mov_prores4444_with(scene, &args.output, quality)?;
             timings.push(t0.elapsed());
         }
+        "exr" => {
+            log::info!("Exporting EXR sequence to {:?}", args.output);
+            let t0 = Instant::now();
+            exporter.export_exr_sequence(scene, &args.output)?;
+            timings.push(t0.elapsed());
+        }
         "gif" => {
             log::info!("Exporting GIF to {:?}", args.output);
             let t0 = Instant::now();
@@ -238,7 +248,9 @@ fn do_export<R: Renderer>(
             timings.push(t0.elapsed());
         }
         other => {
-            anyhow::bail!("Unknown format '{other}'. Valid: png, mp4, webm, webm-alpha, mov, gif")
+            anyhow::bail!(
+                "Unknown format '{other}'. Valid: png, exr, mp4, webm, webm-alpha, mov, gif"
+            )
         }
     }
     Ok(timings)
