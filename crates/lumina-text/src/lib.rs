@@ -21,7 +21,7 @@ use fontdue::{Font, FontSettings, Metrics};
 use lumina_schema::TextProps;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A glyph rasterised from its outline: fontdue's metrics plus the coverage
 /// bitmap, one byte of alpha per pixel.
@@ -72,9 +72,14 @@ pub struct TextEngine {
     ///
     /// `RefCell` because rasterisation happens behind `&self`, matching the
     /// SVG cache in the renderer. The engine is therefore not `Sync`, which is
-    /// correct: frame-parallel export gives each thread its own renderer, and
-    /// sharing one would serialise them anyway.
-    glyphs: RefCell<HashMap<GlyphKey, Rc<RasterizedGlyph>>>,
+    /// correct — a renderer is used by one thread at a time.
+    ///
+    /// `Arc` rather than `Rc` specifically so the engine stays **`Send`**. An
+    /// `Rc` here compiles and passes every test, and then silently makes the
+    /// whole renderer un-movable between threads, which is not discovered
+    /// until somebody tries to build a pipelined export months later.
+    /// `renderer_tests` asserts `Send` so that cannot happen quietly.
+    glyphs: RefCell<HashMap<GlyphKey, Arc<RasterizedGlyph>>>,
 }
 
 impl TextEngine {
@@ -137,23 +142,23 @@ impl TextEngine {
         c: char,
         font_size: f32,
         preferred_id: Option<&str>,
-    ) -> Option<Rc<RasterizedGlyph>> {
+    ) -> Option<Arc<RasterizedGlyph>> {
         let idx = self.font_index_for_char(c, preferred_id)?;
         let key: GlyphKey = (idx, c, font_size.to_bits());
 
         if let Some(hit) = self.glyphs.borrow().get(&key) {
-            return Some(Rc::clone(hit));
+            return Some(Arc::clone(hit));
         }
 
         let font = self.fonts.get(self.font_order.get(idx)?)?;
         let (metrics, alpha) = font.rasterize(c, font_size);
-        let glyph = Rc::new(RasterizedGlyph { metrics, alpha });
+        let glyph = Arc::new(RasterizedGlyph { metrics, alpha });
 
         let mut cache = self.glyphs.borrow_mut();
         if cache.len() >= MAX_CACHED_GLYPHS {
             cache.clear();
         }
-        cache.insert(key, Rc::clone(&glyph));
+        cache.insert(key, Arc::clone(&glyph));
         Some(glyph)
     }
 

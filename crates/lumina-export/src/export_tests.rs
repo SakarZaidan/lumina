@@ -194,3 +194,119 @@ mod tests {
         // If ffmpeg IS present, the test still passes (export succeeded)
     }
 }
+
+/// The export pipelines must not change what is produced.
+///
+/// Both paths hand frames to another thread — PNG to a rayon pool, video to a
+/// writer feeding ffmpeg. Neither may alter the result, and the PNG path in
+/// particular writes files out of order by design, so the *contents* have to
+/// carry the ordering rather than the writing sequence.
+///
+/// These very nearly shipped broken. An earlier version of this work appeared
+/// to change pixels as a function of queue depth, and the investigation found
+/// the real cause elsewhere: draw order was non-deterministic between
+/// processes (see `lumina-renderer/tests/draw_order.rs`). The pipelines were
+/// correct; the base was not.
+#[cfg(test)]
+mod pipelined_export {
+    use crate::Exporter;
+    use lumina_renderer::skia_backend::SkiaRenderer;
+    use lumina_schema::Scene;
+
+    fn short_scene(frames: u32) -> Scene {
+        let fps = 30;
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": {
+                "width": 64, "height": 48, "fps": fps,
+                "duration": f64::from(frames) / f64::from(fps), "background": "#101020"
+            },
+            "objects": {
+                // Two objects sharing a z-index and overlapping: the shape that
+                // exposed the ordering bug.
+                "a": { "type": "Rectangle", "properties": {
+                    "x": 5.0, "y": 5.0, "width": 40.0, "height": 30.0,
+                    "fill": "#FF4040", "z_index": 2, "opacity": 1.0 } },
+                "b": { "type": "Circle", "properties": {
+                    "cx": 30.0, "cy": 20.0, "radius": 15.0,
+                    "fill": "#40A0FF", "z_index": 2, "opacity": 1.0 } }
+            },
+            "timeline": [
+                { "time": 0.0, "object": "b", "state": { "cx": 10.0 }, "easing": "linear" },
+                { "time": 1.0, "object": "b", "state": { "cx": 54.0 }, "easing": "ease_out_cubic" }
+            ]
+        }))
+        .expect("fixture scene")
+    }
+
+    fn export_to(dir: &std::path::Path, scene: &Scene) {
+        let mut exporter = Exporter::new(SkiaRenderer::new());
+        exporter
+            .export_png_sequence(scene, dir)
+            .expect("png export succeeds");
+    }
+
+    fn frames_in(dir: &std::path::Path) -> Vec<(String, Vec<u8>)> {
+        let mut out: Vec<_> = std::fs::read_dir(dir)
+            .expect("output dir")
+            .filter_map(Result::ok)
+            .map(|e| {
+                (
+                    e.file_name().to_string_lossy().into_owned(),
+                    std::fs::read(e.path()).expect("frame readable"),
+                )
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    #[test]
+    fn png_export_writes_every_frame() {
+        let scene = short_scene(20);
+        let dir = tempfile::tempdir().expect("temp dir");
+        export_to(dir.path(), &scene);
+        let frames = frames_in(dir.path());
+        assert_eq!(frames.len(), 20, "one file per frame");
+        assert_eq!(frames[0].0, "frame_0000.png");
+        assert_eq!(frames[19].0, "frame_0019.png");
+        assert!(
+            frames.iter().all(|(_, bytes)| !bytes.is_empty()),
+            "no frame may be written empty"
+        );
+    }
+
+    #[test]
+    fn png_export_is_reproducible() {
+        // Encoding happens on a pool, so files are written out of order. The
+        // contents must not depend on which worker got which frame.
+        let scene = short_scene(24);
+        let a = tempfile::tempdir().expect("temp dir");
+        let b = tempfile::tempdir().expect("temp dir");
+        export_to(a.path(), &scene);
+        export_to(b.path(), &scene);
+        assert_eq!(
+            frames_in(a.path()),
+            frames_in(b.path()),
+            "two exports of the same scene must be byte-identical"
+        );
+    }
+
+    #[test]
+    fn png_frames_differ_from_each_other() {
+        // Guards against the pipeline writing the same frame under every name,
+        // which "reproducible" alone would happily accept.
+        let scene = short_scene(20);
+        let dir = tempfile::tempdir().expect("temp dir");
+        export_to(dir.path(), &scene);
+        let frames = frames_in(dir.path());
+        let distinct: std::collections::HashSet<&Vec<u8>> = frames.iter().map(|(_, b)| b).collect();
+        assert!(
+            distinct.len() > 10,
+            "an animated scene should produce mostly distinct frames, got {} distinct of {}",
+            distinct.len(),
+            frames.len()
+        );
+    }
+}

@@ -24,6 +24,29 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (end) — Wave 3 closes: export pipelined, TD-05 shut
+
+- Export: MP4 **12.86 s → 9.82 s** (−24%), PNG **4.54 s → 3.04 s** (−33%) on a
+  1 560-frame 1080p scene.
+- TD-05's premise was wrong and the measurement said so before any code was
+  written. Rendering was **2.33 s of the 12.86 s** — ffmpeg was the other 82%,
+  and the two stages ran back to back rather than overlapping. So the win is
+  *pipelining*, not N-way parallel rendering, which cannot beat the encoder.
+  For PNG, where there is no encoder to wait on, compression genuinely does
+  parallelise, and that is where `rayon` finally earns its place after being
+  declared and unimported since v0.1.
+- The whole determinism investigation started here: the parallel PNG path
+  appeared to change pixels with queue depth. It did not. The **base** was
+  non-deterministic, and finding that (see the previous entry) mattered far
+  more than the speedup being chased. Re-tested on the fixed base: 8 runs one
+  hash, and byte-identical to sequential across all 1 560 frames.
+- Recorded because it nearly went the other way: the honest option at the time
+  was to ship only the part that was verified and file the rest. Refusing to
+  ship the unexplained half is what turned up the real bug.
+- Also fixed en route: the glyph cache used `Rc`, quietly making the renderer
+  `!Send` and blocking any future threading. `Arc` now, with a test asserting
+  `Send` so it cannot regress silently again.
+
 ## 2026-09-02 (late, critical) — **Rendering was not deterministic.** Fixed.
 
 - Found while investigating why a parallel-export experiment changed pixels.

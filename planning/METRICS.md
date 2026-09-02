@@ -95,6 +95,21 @@ That reorders Wave 3. `plan/02-performance.md` named the glyph atlas
 while buffer reuse (`AAA-P-02`) is worth ~4.7 ms on **every** scene. The plan
 has been corrected rather than followed.
 
+## Export wall-time
+
+`examples/unit_circle.lsf` — 1 560 frames at 1080p, measured end to end.
+
+| | before | after | change |
+|---|---|---|---|
+| MP4 (H.264) | 12.86 s | **9.82 s** | −24% |
+| PNG sequence | 4.54 s | **3.04 s** | −33% |
+
+Of the 12.86 s MP4, rendering was only **2.33 s** — ffmpeg was the other 82%,
+and the two ran back to back rather than overlapping. TD-05's premise that
+export is "embarrassingly parallel" holds only for the PNG path; for video,
+overlapping the two stages is worth far more than N-way parallel rendering,
+which cannot beat the encoder.
+
 ## Methodology
 
 - **LOC**: `find crates tools sdks -name "*.rs" -not -path "*/target/*" | xargs wc -l`
