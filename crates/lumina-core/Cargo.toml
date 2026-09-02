@@ -13,7 +13,7 @@ categories = ["graphics", "multimedia"]
 readme = "../../README.md"
 
 [dependencies]
-luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -15,14 +15,38 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09); five audited DoS vectors open (`AAA-SEC-01..05`) |
 | Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite gating in CI; Windows probe suppressed (TD-20) |
-| Release | 🟢 | v0.4.0 tagged and released |
-| Distribution | 🔴 | nothing published to crates.io, PyPI, or npm — the largest open gap (`AAA-REL-*`) |
+| Release | 🟡 | v0.5.0 prepared and unreleased — the stack is green but unmerged; nothing on crates.io yet |
+| Distribution | 🟡 | names settled (`luminafx-*`, ADR-0014), token stored, `release.yml` written and armed. Still nothing published: it needs the stack merged and a `v0.5.0` tag |
 | Dependencies | 🟢 | deny green; 386 locked crates (mitex removed); rustybuzz tracked as TD-22 |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-03 (night) — v0.5.0 prepared
+
+- Workspace to `0.5.0`, and every internal dependency's `version` requirement
+  with it. They have to move together: a 0.5.0 crate asking for
+  `version = "0.4.0"` of its sibling resolves against whatever 0.4.x is on the
+  registry rather than the sibling in this workspace — which for a first
+  publish means it resolves against nothing at all.
+- **0.5.0, not 0.4.1.** This release changes behaviour existing scenes will
+  notice: `ease` and `spring` are different curves, colour interpolates in
+  OKLab, `draw_fraction` means one thing rather than three, every crate is
+  renamed, and the server's defaults went from open to closed. None of that is
+  a patch.
+- The `v0.4.0` tag already exists and points at the pre-rename code, so it
+  cannot be reused even if the version had not moved.
+- **Still nothing on crates.io**, and the reason is mechanical rather than
+  unfinished: `release.yml` fires on a `v*` tag and lives on the #85 branch, so
+  it is not on `main` to fire. `main` still declares `lumina-core`. The chain
+  is merge → tag → publish, and the merge is blocked on a permission this
+  session does not have (`gh pr merge` denied twice by the classifier).
+- Everything else is ready: names verified free on all three registries, token
+  stored as `CARGO_REGISTRY_TOKEN`, ordered publish written with a resumable
+  skip for versions already up, and a tag-matches-manifest check that runs
+  before anything uploads.
 
 ## 2026-09-03 (evening) — The server grows up; TD-09 closes
 

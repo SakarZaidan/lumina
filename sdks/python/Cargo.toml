@@ -5,7 +5,7 @@
 
 [package]
 name = "luminafx-py"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 description = "Python bindings for the Lumina animation engine"
@@ -15,10 +15,10 @@ name = "lumina"
 crate-type = ["cdylib"]
 
 [dependencies]
-luminafx-schema = { path = "../../crates/lumina-schema", version = "0.4.0" }
-luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.4.0" }
-luminafx-export = { path = "../../crates/lumina-export", version = "0.4.0" }
-luminafx-server = { path = "../../crates/lumina-server", version = "0.4.0" }
+luminafx-schema = { path = "../../crates/lumina-schema", version = "0.5.0" }
+luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.5.0" }
+luminafx-export = { path = "../../crates/lumina-export", version = "0.5.0" }
+luminafx-server = { path = "../../crates/lumina-server", version = "0.5.0" }
 pyo3 = { version = "0.22", features = ["extension-module"] }
 pythonize = "0.22"
 schemars = "0.8"

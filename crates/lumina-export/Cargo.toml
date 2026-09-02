@@ -13,9 +13,9 @@ categories = ["multimedia::video", "multimedia::encoding"]
 readme = "../../README.md"
 
 [dependencies]
-luminafx-core = { path = "../lumina-core", version = "0.4.0" }
-luminafx-renderer = { path = "../lumina-renderer", version = "0.4.0" }
-luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
+luminafx-core = { path = "../lumina-core", version = "0.5.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.5.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
 image = { workspace = true }
 rayon = { workspace = true }
 anyhow = { workspace = true }
