@@ -72,6 +72,8 @@ fn make_scene(n_objects: usize) -> Scene {
             fps: 30,
             duration: 4.0,
             background: "#0F0F1A".into(),
+            motion_blur_samples: 1,
+            shutter: 0.5,
         },
         assets: Default::default(),
         objects,

@@ -36,6 +36,8 @@ mod tests {
                 fps: 1,
                 duration: 2.0,
                 background: "#000000".into(),
+                motion_blur_samples: 1,
+                shutter: 0.5,
             },
             assets: Default::default(),
             objects,
@@ -454,6 +456,150 @@ mod encoded_output {
         assert!(
             moov < mdat,
             "moov at {moov} must precede mdat at {mdat} for progressive playback"
+        );
+    }
+}
+
+/// Temporal supersampling: motion blur.
+///
+/// Rendering is analytic at any time, so blur is just several renders averaged
+/// — which makes the risks accounting rather than graphics: does it stay
+/// deterministic, does it stay aligned with the unblurred frame, and does it
+/// darken the image.
+#[cfg(test)]
+mod motion_blur {
+    use crate::Exporter;
+    use lumina_renderer::skia_backend::SkiaRenderer;
+    use lumina_schema::Scene;
+
+    const W: u32 = 200;
+    const H: u32 = 60;
+
+    fn moving_scene(samples: u32, shutter: f32) -> Scene {
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": {
+                "width": W, "height": H, "fps": 20, "duration": 1.0,
+                "background": "#000000",
+                "motion_blur_samples": samples, "shutter": shutter
+            },
+            "objects": {
+                "c": { "type": "Circle", "properties": {
+                    "cx": 20.0, "cy": 30.0, "radius": 12.0,
+                    "fill": "#FFFFFF", "z_index": 1, "opacity": 1.0 } }
+            },
+            "timeline": [
+                { "time": 0.0, "object": "c", "state": { "cx": 20.0 }, "easing": "linear" },
+                { "time": 1.0, "object": "c", "state": { "cx": 180.0 }, "easing": "linear" }
+            ]
+        }))
+        .expect("fixture")
+    }
+
+    /// The middle frame of a render, as raw RGBA.
+    fn middle_frame(scene: &Scene) -> Vec<u8> {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut exporter = Exporter::new(SkiaRenderer::new());
+        exporter
+            .export_png_sequence(scene, dir.path())
+            .expect("export");
+        let img = image::open(dir.path().join("frame_0010.png")).expect("frame");
+        img.to_rgba8().into_raw()
+    }
+
+    /// Mean luminance of the row through the circle's centre.
+    fn centre_row_mean(px: &[u8]) -> f64 {
+        let row = (H / 2) * W;
+        let sum: u64 = (0..W).map(|x| u64::from(px[(row + x) as usize * 4])).sum();
+        sum as f64 / f64::from(W)
+    }
+
+    #[test]
+    fn one_sample_is_unchanged_from_no_blur() {
+        // The default must be bit-identical to the previous behaviour, or every
+        // existing scene renders differently.
+        let a = middle_frame(&moving_scene(1, 0.5));
+        let b = middle_frame(&moving_scene(1, 1.0));
+        assert_eq!(a, b, "shutter must be ignored when there is one sample");
+    }
+
+    #[test]
+    fn blur_is_deterministic() {
+        // Samples are taken at fixed offsets, so two renders must agree.
+        let a = middle_frame(&moving_scene(8, 0.5));
+        let b = middle_frame(&moving_scene(8, 0.5));
+        assert_eq!(a, b, "a blurred frame must render identically every time");
+    }
+
+    #[test]
+    fn blur_spreads_the_moving_object() {
+        // A blurred frame covers more of the row at lower intensity, so the
+        // sharp frame has a higher peak and the blurred one a wider footprint.
+        let sharp = middle_frame(&moving_scene(1, 0.5));
+        let blurred = middle_frame(&moving_scene(8, 1.0));
+
+        let row = (H / 2) * W;
+        let lit = |px: &[u8], threshold: u8| {
+            (0..W)
+                .filter(|x| px[(row + x) as usize * 4] > threshold)
+                .count()
+        };
+        assert!(
+            lit(&blurred, 20) > lit(&sharp, 20),
+            "blur should cover more pixels: sharp {} vs blurred {}",
+            lit(&sharp, 20),
+            lit(&blurred, 20)
+        );
+        let peak = |px: &[u8]| {
+            (0..W)
+                .map(|x| px[(row + x) as usize * 4])
+                .max()
+                .unwrap_or(0)
+        };
+        assert!(
+            peak(&blurred) <= peak(&sharp),
+            "a blurred edge cannot be brighter than the sharp original"
+        );
+    }
+
+    #[test]
+    fn blur_does_not_darken_the_frame() {
+        // Averaging with truncation instead of rounding biases every channel
+        // down, which dims a blurred render relative to a sharp one. The total
+        // light in the row is conserved because the object only moves along it.
+        let sharp = centre_row_mean(&middle_frame(&moving_scene(1, 0.5)));
+        let blurred = centre_row_mean(&middle_frame(&moving_scene(8, 0.5)));
+        assert!(
+            (blurred - sharp).abs() < sharp * 0.15,
+            "mean luminance should be roughly conserved: sharp {sharp:.1}, blurred {blurred:.1}"
+        );
+    }
+
+    #[test]
+    fn blur_stays_centred_on_the_frame_time() {
+        // The shutter is centred on the frame's instant, so a blurred object
+        // straddles where the sharp one is rather than trailing behind it.
+        let sharp = middle_frame(&moving_scene(1, 0.5));
+        let blurred = middle_frame(&moving_scene(8, 1.0));
+        let row = (H / 2) * W;
+        let centroid = |px: &[u8]| {
+            let (mut wsum, mut sum) = (0.0f64, 0.0f64);
+            for x in 0..W {
+                let v = f64::from(px[(row + x) as usize * 4]);
+                wsum += v * f64::from(x);
+                sum += v;
+            }
+            if sum > 0.0 {
+                wsum / sum
+            } else {
+                0.0
+            }
+        };
+        let (a, b) = (centroid(&sharp), centroid(&blurred));
+        assert!(
+            (a - b).abs() < 2.0,
+            "blur must stay centred: sharp centroid {a:.1}, blurred {b:.1}"
         );
     }
 }

@@ -144,6 +144,82 @@ pub struct Exporter<R: Renderer> {
 }
 
 impl<R: Renderer> Exporter<R> {
+    /// Render one frame, applying motion blur when the scene asks for it.
+    ///
+    /// With `motion_blur_samples == 1` this renders a single instant, exactly
+    /// as before. Above that, the frame is rendered several times across the
+    /// shutter interval and the results averaged, so anything moving smears
+    /// the way a camera's shutter makes it.
+    ///
+    /// The samples are taken at fixed offsets centred on the frame's own
+    /// instant, so the result is deterministic — a frame renders identically
+    /// however many times it is asked for, which the whole engine depends on.
+    ///
+    /// Averaging happens on **premultiplied** values, which is what
+    /// `render_frame` returns and what makes the average correct: averaging
+    /// straight-alpha colours weights a nearly-transparent sample as heavily
+    /// as an opaque one and produces haloes around moving edges.
+    fn render_blurred(
+        &mut self,
+        scene: &Scene,
+        objects: &std::collections::HashMap<String, lumina_schema::Object>,
+        timeline: &Timeline,
+        frame_idx: u32,
+        out: &mut Vec<u8>,
+    ) -> Result<()> {
+        let fps = f64::from(scene.canvas.fps).max(1.0);
+        let base = f64::from(frame_idx) / fps;
+        let samples = scene.canvas.motion_blur_samples.max(1);
+
+        let render_at = |renderer: &mut R, t: f64| -> Result<Vec<u8>> {
+            let t = t as f32;
+            let states = timeline.get_state_at(t);
+            let camera_state = timeline.get_camera_at(t, scene);
+            let camera = scene.camera.as_ref().map(|_| &camera_state);
+            renderer.set_time(t);
+            renderer
+                .render_frame(
+                    objects,
+                    &states,
+                    scene.canvas.width,
+                    scene.canvas.height,
+                    &scene.canvas.background,
+                    camera,
+                )
+                .map_err(|e| anyhow::anyhow!(e))
+        };
+
+        if samples == 1 {
+            *out = render_at(&mut self.renderer, base)?;
+            return Ok(());
+        }
+
+        // The shutter is centred on the frame's instant rather than opening at
+        // it, so a blurred frame stays aligned with the unblurred one — an
+        // object is where the timeline says it is, smeared either side.
+        let shutter = f64::from(scene.canvas.shutter).clamp(f64::EPSILON, 1.0) / fps;
+        let mut accum: Vec<u32> = Vec::new();
+
+        for k in 0..samples {
+            let offset = ((f64::from(k) + 0.5) / f64::from(samples) - 0.5) * shutter;
+            let frame = render_at(&mut self.renderer, base + offset)?;
+            if accum.is_empty() {
+                accum = vec![0u32; frame.len()];
+            }
+            for (a, v) in accum.iter_mut().zip(&frame) {
+                *a += u32::from(*v);
+            }
+        }
+
+        out.clear();
+        out.reserve(accum.len());
+        // Round to nearest rather than truncating: truncation biases every
+        // channel down, which darkens a blurred frame relative to a sharp one.
+        let half = samples / 2;
+        out.extend(accum.iter().map(|a| ((a + half) / samples) as u8));
+        Ok(())
+    }
+
     /// Wrap a renderer for export.
     pub fn new(renderer: R) -> Self {
         Self { renderer }
@@ -188,27 +264,21 @@ impl<R: Renderer> Exporter<R> {
             })
         });
 
+        let mut frame_data = Vec::new();
         let render_result = (|| -> Result<()> {
             for frame_idx in 0..total_frames {
-                let time = frame_idx as f32 / scene.canvas.fps as f32;
-                let states = timeline.get_state_at(time);
-                let camera_state = timeline.get_camera_at(time, scene);
-                let camera = scene.camera.as_ref().map(|_| &camera_state);
+                self.render_blurred(
+                    scene,
+                    &scene_graph.objects,
+                    &timeline,
+                    frame_idx,
+                    &mut frame_data,
+                )?;
 
-                self.renderer.set_time(time);
-                let frame_data = self
-                    .renderer
-                    .render_frame(
-                        &scene_graph.objects,
-                        &states,
-                        width,
-                        height,
-                        &scene.canvas.background,
-                        camera,
-                    )
-                    .map_err(|e| anyhow::anyhow!(e))?;
-
-                if tx.send((frame_idx, frame_data)).is_err() {
+                if tx
+                    .send((frame_idx, std::mem::take(&mut frame_data)))
+                    .is_err()
+                {
                     break; // encoders stopped; the join below reports why
                 }
                 if frame_idx % 10 == 0 {
@@ -240,24 +310,15 @@ impl<R: Renderer> Exporter<R> {
         let timeline = Timeline::from_scene(scene);
         let total_frames = (scene.canvas.duration * scene.canvas.fps as f32).ceil() as u32;
 
+        let mut frame_data = Vec::new();
         for frame_idx in 0..total_frames {
-            let time = frame_idx as f32 / scene.canvas.fps as f32;
-            let states = timeline.get_state_at(time);
-            let camera_state = timeline.get_camera_at(time, scene);
-            let camera = scene.camera.as_ref().map(|_| &camera_state);
-
-            self.renderer.set_time(time);
-            let frame_data = self
-                .renderer
-                .render_frame(
-                    &scene_graph.objects,
-                    &states,
-                    scene.canvas.width,
-                    scene.canvas.height,
-                    &scene.canvas.background,
-                    camera,
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
+            self.render_blurred(
+                scene,
+                &scene_graph.objects,
+                &timeline,
+                frame_idx,
+                &mut frame_data,
+            )?;
 
             sink(&frame_data)?;
 

@@ -43,6 +43,11 @@ pub const MAX_TICK_COUNT: f64 = 100_000.0;
 /// Largest `function_str` on a `Plot`, in bytes. evalexpr parses by recursive
 /// descent, so an unbounded expression is an unbounded stack.
 pub const MAX_EXPRESSION_BYTES: usize = 4_096;
+/// Most temporal supersamples per frame. Cost is linear in this, on top of
+/// the frame count — 64 samples of a 1 000 000-frame render is 64 million
+/// renders.
+pub const MAX_MOTION_BLUR_SAMPLES: u32 = 64;
+
 /// Deepest chain of nested groups. Bounds the recursive walks in cycle
 /// detection here and in scene traversal in the renderers.
 pub const MAX_GROUP_DEPTH: usize = 256;
@@ -315,6 +320,46 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 ),
             });
         }
+    }
+
+    // Check 7c2: Motion blur multiplies the render cost by its sample count,
+    // on top of every other per-frame bound.
+    if scene.canvas.motion_blur_samples == 0 {
+        errors.push(ValidationError {
+            code: "INVALID_MOTION_BLUR".to_string(),
+            path: "$.canvas.motion_blur_samples".to_string(),
+            message: "motion_blur_samples is 0, so no frame would be rendered at all.".to_string(),
+            fix_suggestion: "Use 1 for no motion blur, or 2-64 to enable it.".to_string(),
+        });
+    } else if scene.canvas.motion_blur_samples > MAX_MOTION_BLUR_SAMPLES {
+        errors.push(ValidationError {
+            code: "INVALID_MOTION_BLUR".to_string(),
+            path: "$.canvas.motion_blur_samples".to_string(),
+            message: format!(
+                "motion_blur_samples {} exceeds the maximum of {MAX_MOTION_BLUR_SAMPLES}. \
+                 Every sample is a full render of the frame.",
+                scene.canvas.motion_blur_samples
+            ),
+            fix_suggestion: format!(
+                "Use at most {MAX_MOTION_BLUR_SAMPLES}; 4 to 8 is enough for smooth blur."
+            ),
+        });
+    }
+    if scene.canvas.motion_blur_samples > 1
+        && (!scene.canvas.shutter.is_finite()
+            || scene.canvas.shutter <= 0.0
+            || scene.canvas.shutter > 1.0)
+    {
+        errors.push(ValidationError {
+            code: "INVALID_SHUTTER".to_string(),
+            path: "$.canvas.shutter".to_string(),
+            message: format!(
+                "shutter {} must be within (0, 1] — the fraction of each frame interval the \
+                 shutter is open.",
+                scene.canvas.shutter
+            ),
+            fix_suggestion: "Use 0.5 for a 180-degree shutter, the film convention.".to_string(),
+        });
     }
 
     // Check 7d: Keyframe values must survive the f32 conversion the engine

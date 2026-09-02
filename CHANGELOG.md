@@ -83,6 +83,20 @@ programme to reach reference quality in [plan/](plan/).
   never pixels: `final` produces 10-bit output to keep banding out of
   gradients. `-tune animation` and `+faststart` are on by default, and VP9
   gains `-row-mt`.
+- **Motion blur**, via `canvas.motion_blur_samples` and `canvas.shutter`. Each
+  frame is rendered several times across the shutter interval and averaged, so
+  anything moving smears the way a camera's shutter makes it. `shutter` defaults
+  to `0.5` — a 180-degree shutter, the film convention.
+
+  The shutter is centred on the frame's own instant rather than opening at it,
+  so a blurred object straddles where the timeline says it is instead of
+  trailing behind. Samples are taken at fixed offsets, so the result stays
+  deterministic. Averaging is done on premultiplied values, which is what makes
+  it correct: averaging straight-alpha colours weights a nearly-transparent
+  sample as heavily as an opaque one and haloes every moving edge.
+
+  Off by default (`1` sample), and bit-identical to the previous behaviour when
+  off. Cost is linear in the rendering.
 - **Gradients blend perceptually**, in the same space as keyframe fades. The
   timeline blended colours in `OKLab` while both rasterisers interpolated
   gradient stops linearly in sRGB, so the same two colours produced two
