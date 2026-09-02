@@ -396,6 +396,16 @@ impl<R: Renderer> Exporter<R> {
             &crf,
             "-pix_fmt",
             quality.pix_fmt_h264(),
+            // Tell libx264 to write the VUI itself.
+            //
+            // ffmpeg's generic `-color_primaries` reaches the H.264 VUI on
+            // some builds and not others: Ubuntu's ffmpeg 6.1 writes it,
+            // macOS and Windows ffmpeg 8.1 report `unknown` for the same
+            // command line. The encoder always writes what it is told, so
+            // saying it twice is the portable answer. The generic flags below
+            // still carry the container-level metadata and the range.
+            "-x264-params",
+            "colorprim=bt709:transfer=bt709:colormatrix=bt709",
         ];
         args.extend_from_slice(BT709_TAGS);
         // Moves the index to the front so a browser can start playing before
