@@ -36,5 +36,12 @@ log = { workspace = true }
 env_logger = { workspace = true }
 tempfile = "3.10"
 
+[dev-dependencies]
+# `ServiceExt::oneshot` drives the router in-process, so the integration tests
+# exercise the real middleware stack without binding a port or racing a server
+# task. A test that needs a free port is a test that fails on a busy machine.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
 [lints]
 workspace = true
