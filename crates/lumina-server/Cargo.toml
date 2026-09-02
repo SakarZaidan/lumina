@@ -30,7 +30,7 @@ tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
-json-patch = "1"
+json-patch = "4"
 tower-http = { version = "0.5", features = ["cors"] }
 anyhow = { workspace = true }
 log = { workspace = true }
