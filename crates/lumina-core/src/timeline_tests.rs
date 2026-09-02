@@ -19,6 +19,8 @@ mod tests {
                 fps: 60,
                 duration: 10.0,
                 background: "#000".into(),
+                motion_blur_samples: 1,
+                shutter: 0.5,
             },
             assets: Default::default(),
             objects,

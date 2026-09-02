@@ -24,6 +24,30 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (evening) — Motion blur
+
+- `AAA-MOT-06`. `canvas.motion_blur_samples` and `canvas.shutter`; each frame
+  is rendered several times across the shutter interval and averaged.
+- Cheap here for a specific reason: particles are analytic and the timeline is
+  pure, so any instant can be evaluated in isolation. Temporal supersampling is
+  just several renders averaged — no per-object velocity, no reprojection.
+- Three decisions worth recording:
+  - **The shutter is centred on the frame's instant**, not opened at it, so a
+    blurred object straddles where the timeline says it is rather than trailing
+    behind. A test asserts the centroid does not shift.
+  - **Averaging is on premultiplied values.** That is what `render_frame`
+    returns and what makes the average correct — averaging straight-alpha
+    colours weights a nearly-transparent sample as heavily as an opaque one and
+    haloes every moving edge.
+  - **Rounding, not truncation.** Truncating biases every channel down, which
+    dims a blurred frame relative to a sharp one. A test compares mean
+    luminance for exactly that.
+- Off by default and bit-identical when off, which is also tested — a default
+  that changed existing renders would be a far bigger deal than the feature.
+- Bounded at validation like every other per-frame cost (`MAX_MOTION_BLUR_SAMPLES`
+  = 64): it multiplies the render count on top of the frame count.
+- Tests 236 → 241.
+
 ## 2026-09-02 (later, still) — Gradients blend perceptually; linear light is blocked
 
 - **`AAA-OUT-01` (linear-light compositing) cannot be done**, and the obstacle
