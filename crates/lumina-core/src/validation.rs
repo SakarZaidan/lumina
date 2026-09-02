@@ -402,7 +402,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         for (i, entry) in camera.timeline.iter().enumerate() {
             check_easing(
                 &entry.easing,
-                None,
+                entry.easing_params.as_ref(),
                 format!("$.camera.timeline[{i}].easing"),
                 &mut errors,
                 &mut warnings,

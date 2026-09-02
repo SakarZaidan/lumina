@@ -142,7 +142,6 @@ impl Timeline {
     /// Evaluate the camera state at `time` (identity when the scene has no
     /// camera block).
     pub fn get_camera_at(&self, time: f32, scene: &Scene) -> lumina_schema::CameraState {
-        use crate::easing::get_easing_fn;
         use lumina_schema::CameraState;
 
         let default = CameraState {
@@ -177,13 +176,11 @@ impl Timeline {
         }
 
         let t_raw = (time - k0.time) / (k1.time - k0.time);
-        // NOTE: `get_easing_fn`, not `eval_easing`, because
-        // `CameraTimelineEntry` has no `easing_params` field — so a camera
-        // keyframe naming `cubic_bezier` or `spline` currently falls through
-        // to `linear` without saying so. Fixing that means adding a defaulted
-        // schema field; tracked separately rather than smuggled into a
-        // performance change (`AAA-MOT-01`).
-        let t = get_easing_fn(&k1.easing)(t_raw);
+        // Through `eval_easing`, so a camera keyframe gets the same curve an
+        // object property would from the same easing and parameters. It used
+        // to use the parameterless lookup, which does not know `cubic_bezier`
+        // or `spline` and silently fell through to `linear`.
+        let t = crate::easing::eval_easing(&k1.easing, k1.easing_params.as_ref(), t_raw);
         CameraState {
             x: k0.state.x + (k1.state.x - k0.state.x) * t,
             y: k0.state.y + (k1.state.y - k0.state.y) * t,

@@ -432,7 +432,11 @@ impl VelloRenderer {
                     let dy = (y2 - y1) as f32;
                     let length = (dx * dx + dy * dy).sqrt().max(0.001);
                     let dashes = crate::common::stroke::draw_fraction_dash(frac as f32, length);
-                    stroke = stroke.with_dashes(0.0, dashes.iter().map(|d| *d as f64));
+                    stroke = stroke.with_dashes(0.0, dashes.iter().map(|d| f64::from(*d)));
+                } else if let Some(pattern) = crate::common::stroke::dash_pattern(state) {
+                    // Shared with the CPU backend so both read and normalise
+                    // the pattern identically (TD-19).
+                    stroke = stroke.with_dashes(0.0, pattern.iter().map(|d| f64::from(*d)));
                 }
                 scene.stroke(&stroke, affine, stroke_color, None, &line);
             }

@@ -69,6 +69,7 @@ mod tests {
                     zoom: 1.0,
                 },
                 easing: "zoom_zoom".to_string(),
+                easing_params: None,
             }],
         });
         let result = validate_scene_data(&scene);

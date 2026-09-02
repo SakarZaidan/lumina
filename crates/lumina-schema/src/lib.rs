@@ -356,7 +356,11 @@ pub struct LineProps {
     /// Stroke width in pixels.
     #[serde(default = "default_stroke_width")]
     pub stroke_width: f32,
-    /// Dash pattern `[on, off, …]` in pixels (not yet implemented, TD-19).
+    /// Dash pattern `[on, off, …]` in pixels.
+    ///
+    /// An odd-length pattern repeats to make it even, as SVG and Canvas do:
+    /// `[5]` means five on, five off. Ignored while `draw_fraction` is
+    /// animating, since that reveals the line by dashing it too.
     #[serde(default)]
     pub dash: Option<Vec<f32>>,
     /// Progressive reveal: 0 = nothing drawn, 1 = complete.
@@ -590,6 +594,14 @@ pub struct CameraTimelineEntry {
     /// Easing name (see `lumina_core::easing::EASING_NAMES`).
     #[serde(default = "default_easing")]
     pub easing: String,
+    /// Parameters for parameterised easings, matching `TimelineEntry`.
+    ///
+    /// Without this field a camera keyframe naming `cubic_bezier` or `spline`
+    /// passed validation — both are registered easing names — and then
+    /// animated **linearly**, because the parameterless lookup does not know
+    /// them. Defaulted, so existing scenes are unaffected.
+    #[serde(default)]
+    pub easing_params: Option<serde_json::Value>,
 }
 
 /// Camera pan/zoom at one instant.

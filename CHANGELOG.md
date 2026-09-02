@@ -83,6 +83,17 @@ programme to reach reference quality in [plan/](plan/).
   never pixels: `final` produces 10-bit output to keep banding out of
   gradients. `-tune animation` and `+faststart` are on by default, and VP9
   gains `-row-mt`.
+- **`LineProps.dash` is implemented** on both backends (TD-19). The field had
+  been in the schema since v0.1 and neither backend drew it, so a dashed line
+  rendered solid. Odd-length patterns repeat to make them even, as SVG and
+  Canvas do — `[5]` is five on, five off — and a malformed pattern draws solid
+  rather than something the two backends might disagree about. Parity fixture
+  18 keeps their dash phases in step.
+- **Camera keyframes accept `easing_params`.** Without the field, a camera
+  keyframe naming `cubic_bezier` or `spline` passed validation — both are
+  registered easing names — and then animated **linearly**, because the
+  parameterless lookup does not know them. Camera moves are the most visible
+  motion in a scene. Defaulted, so existing scenes are unaffected.
 - `INVALID_COLOR` validation error. An unparseable colour — `"red"`, a typo, or
   SVG's `"none"` — silently became **opaque white** in the renderer.
 
