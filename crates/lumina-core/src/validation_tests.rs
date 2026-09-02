@@ -332,3 +332,116 @@ mod resource_bounds {
         );
     }
 }
+
+/// The easing solvers assume preconditions the parameter *shape* checks do not
+/// cover. Violating one used to produce a silently wrong curve rather than an
+/// error — the worst outcome for a declarative format, because there is nothing
+/// for an author or a self-correcting loop to act on.
+#[cfg(test)]
+mod easing_preconditions {
+    use crate::validation::validate_scene_data;
+    use lumina_schema::{Scene, TimelineEntry};
+
+    fn scene_with_params(easing: &str, params: serde_json::Value) -> Scene {
+        let json = serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 100, "height": 100, "fps": 30, "duration": 2.0, "background": "#000000" },
+            "objects": {
+                "dot": { "type": "Circle", "properties": { "cx": 10, "cy": 10, "radius": 5 } }
+            },
+            "timeline": []
+        });
+        let mut scene: Scene = serde_json::from_value(json).expect("fixture");
+        scene.timeline.push(TimelineEntry {
+            time: 1.0,
+            object: "dot".to_string(),
+            state: serde_json::json!({ "cx": 50 }),
+            easing: easing.to_string(),
+            easing_params: Some(params),
+        });
+        scene
+    }
+
+    fn codes(scene: &Scene) -> Vec<String> {
+        validate_scene_data(scene)
+            .errors
+            .into_iter()
+            .map(|e| e.code)
+            .collect()
+    }
+
+    #[test]
+    fn cubic_bezier_x_control_points_outside_the_unit_interval_are_rejected() {
+        // Newton and bisection both need bezier_x monotonic in t, which the
+        // CSS spec guarantees by constraining x1 and x2 to [0, 1].
+        for params in [
+            serde_json::json!([1.5, 0.0, 0.5, 1.0]),
+            serde_json::json!([0.5, 0.0, -0.2, 1.0]),
+        ] {
+            let s = scene_with_params("cubic_bezier", params.clone());
+            assert!(
+                codes(&s).iter().any(|c| c == "INVALID_CUBIC_BEZIER"),
+                "expected rejection for {params}, got {:?}",
+                codes(&s)
+            );
+        }
+    }
+
+    #[test]
+    fn cubic_bezier_y_control_points_may_leave_the_unit_interval() {
+        // Overshoot is a legitimate effect and is expressed exactly this way.
+        let s = scene_with_params("cubic_bezier", serde_json::json!([0.5, -0.8, 0.5, 1.8]));
+        assert!(
+            validate_scene_data(&s).valid,
+            "y control points outside [0,1] are how overshoot is written: {:?}",
+            validate_scene_data(&s).errors
+        );
+    }
+
+    #[test]
+    fn unsorted_spline_keypoints_are_rejected() {
+        // Unsorted input clamps a negative interval to 1e-9, so the tangent
+        // becomes ~1e9 and the output is garbage that then reads as `null`.
+        let s = scene_with_params(
+            "spline",
+            serde_json::json!({ "keypoints": [[0.0, 0.0], [0.8, 0.5], [0.3, 1.0]] }),
+        );
+        assert!(
+            codes(&s).iter().any(|c| c == "UNSORTED_SPLINE_KEYPOINTS"),
+            "got {:?}",
+            codes(&s)
+        );
+    }
+
+    #[test]
+    fn duplicate_spline_keypoint_times_are_rejected() {
+        let s = scene_with_params(
+            "spline",
+            serde_json::json!({ "keypoints": [[0.0, 0.0], [0.5, 0.4], [0.5, 1.0]] }),
+        );
+        assert!(
+            codes(&s).iter().any(|c| c == "UNSORTED_SPLINE_KEYPOINTS"),
+            "got {:?}",
+            codes(&s)
+        );
+    }
+
+    #[test]
+    fn well_formed_easing_params_still_validate() {
+        let bezier = scene_with_params("cubic_bezier", serde_json::json!([0.25, 0.1, 0.25, 1.0]));
+        assert!(validate_scene_data(&bezier).valid);
+
+        let spline = scene_with_params(
+            "spline",
+            serde_json::json!({ "keypoints": [[0.0, 0.0], [0.5, 0.8], [1.0, 1.0]] }),
+        );
+        assert!(validate_scene_data(&spline).valid);
+
+        let spring = scene_with_params(
+            "spring",
+            serde_json::json!({ "stiffness": 300.0, "damping": 25.0, "mass": 1.0 }),
+        );
+        assert!(validate_scene_data(&spring).valid);
+    }
+}

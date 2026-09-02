@@ -11,6 +11,40 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md), and the
 programme to reach reference quality in [plan/](plan/).
 
+### Changed
+- **`spring` is now solved rather than integrated.** It was 100 fixed steps of
+  semi-implicit Euler indexed by `(t / dt).round()` — which made it *quantised*
+  to 101 distinct output values, resolution-dependent, and O(100) per property
+  per frame, while its documentation claimed RK4. It is now the closed-form
+  damped-harmonic solution: exact, continuous, O(1), and correct in all three
+  damping regimes. It also lands exactly on 1, where the old curve stopped at
+  1.0000196 and left animated objects fractionally off their keyframe.
+- **`spring` is tunable** via `easing_params`: `stiffness`, `damping`, `mass`,
+  any subset, defaulting to the previous behaviour.
+- **`ease` now is the CSS `ease` curve.** It was documented as
+  `cubic-bezier(0.25, 0.1, 0.25, 1.0)` and implemented as `ease_in_out_sine`, a
+  visibly different curve. Scenes using `ease` will animate slightly
+  differently — correctly.
+- `cubic_bezier` inversion uses Newton–Raphson with a bisection fallback,
+  converging in a handful of iterations rather than a fixed 32.
+- **Particle positions shift slightly.** `hash01` divided by `u32::MAX`, which
+  f32 rounds *up* to 2^32, so large inputs produced exactly `1.0` despite the
+  documented `[0, 1)` range. It now divides by 2^32 using the top 24 bits.
+
+### Added
+- **Property tests** (`proptest`) over the easing registry: endpoint pinning,
+  finiteness, boundedness, monotonicity, determinism, and a distinct-value
+  count that distinguishes a real curve from a quantised approximation. The
+  last of these is what caught the spring, reporting exactly 101 levels.
+- Validation of easing solver **preconditions**, which the parameter-shape
+  checks did not cover:
+  - `INVALID_CUBIC_BEZIER` — x control points must lie in `[0, 1]`, since both
+    solvers require `bezier_x` to be monotonic. y values may still leave the
+    interval; that is how overshoot is expressed.
+  - `UNSORTED_SPLINE_KEYPOINTS` — keypoint times must be strictly increasing.
+    Unsorted input clamped a negative interval to `1e-9`, producing tangents
+    around 1e9 and output that then read as `null`.
+
 ---
 
 ## [0.4.0] — 2026-09-02

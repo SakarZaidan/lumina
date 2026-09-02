@@ -44,6 +44,8 @@ pub mod timeline;
 pub mod validation;
 
 #[cfg(test)]
+mod easing_proptests;
+#[cfg(test)]
 mod easing_tests;
 #[cfg(test)]
 mod events_tests;

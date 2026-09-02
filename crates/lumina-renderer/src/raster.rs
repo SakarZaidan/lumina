@@ -181,5 +181,10 @@ pub(crate) fn hash01(n: u32) -> f32 {
     x ^= x >> 15;
     x = x.wrapping_mul(0x735a_2d97);
     x ^= x >> 15;
-    (x as f32) / (u32::MAX as f32)
+    // Divide by 2^32, not by u32::MAX. f32 has a 24-bit mantissa, so
+    // `u32::MAX as f32` rounds *up* to 4294967296.0 and large inputs then
+    // round to exactly 1.0 — breaking the half-open range this function
+    // documents and every caller assumes. Taking the top 24 bits keeps the
+    // result exactly representable and strictly below 1.
+    (x >> 8) as f32 / 16_777_216.0
 }
