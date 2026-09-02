@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::Exporter;
-    use lumina_renderer::skia_backend::SkiaRenderer;
-    use lumina_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
+    use luminafx_renderer::skia_backend::SkiaRenderer;
+    use luminafx_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -212,8 +212,8 @@ mod tests {
 #[cfg(test)]
 mod pipelined_export {
     use crate::Exporter;
-    use lumina_renderer::skia_backend::SkiaRenderer;
-    use lumina_schema::Scene;
+    use luminafx_renderer::skia_backend::SkiaRenderer;
+    use luminafx_schema::Scene;
 
     fn short_scene(frames: u32) -> Scene {
         let fps = 30;
@@ -322,8 +322,8 @@ mod pipelined_export {
 #[cfg(test)]
 mod encoded_output {
     use crate::{Exporter, Quality};
-    use lumina_renderer::skia_backend::SkiaRenderer;
-    use lumina_schema::Scene;
+    use luminafx_renderer::skia_backend::SkiaRenderer;
+    use luminafx_schema::Scene;
     use std::path::Path;
     use std::process::Command;
 
@@ -469,8 +469,8 @@ mod encoded_output {
 #[cfg(test)]
 mod motion_blur {
     use crate::Exporter;
-    use lumina_renderer::skia_backend::SkiaRenderer;
-    use lumina_schema::Scene;
+    use luminafx_renderer::skia_backend::SkiaRenderer;
+    use luminafx_schema::Scene;
 
     const W: u32 = 200;
     const H: u32 = 60;

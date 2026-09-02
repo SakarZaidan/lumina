@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_renderer::testing::{latex, path, plot};
+use luminafx_renderer::testing::{latex, path, plot};
 
 /// Inputs that break parsers which walk a buffer by index.
 fn hostile_strings() -> Vec<String> {

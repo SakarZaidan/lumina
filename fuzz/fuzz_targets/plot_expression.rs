@@ -16,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
     if text.len() > 4096 {
         return;
     }
-    let _ = lumina_renderer::testing::plot::normalize_math_calls(text);
+    let _ = luminafx_renderer::testing::plot::normalize_math_calls(text);
     // A small budget: this is looking for panics, not for slow expressions.
-    let _ = lumina_renderer::testing::plot::sample(text, -10.0, 10.0, -10.0, 10.0, 64);
+    let _ = luminafx_renderer::testing::plot::sample(text, -10.0, 10.0, -10.0, 10.0, 64);
 });

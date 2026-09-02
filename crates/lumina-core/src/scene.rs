@@ -1,4 +1,4 @@
-use lumina_schema::{Object, Scene};
+use luminafx_schema::{Object, Scene};
 use std::collections::HashMap;
 
 /// The scene's object map plus the set of root objects (those not claimed

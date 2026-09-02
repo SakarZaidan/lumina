@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::timeline::Timeline;
-    use lumina_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
+    use luminafx_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -256,7 +256,7 @@ mod tests {
 #[cfg(test)]
 mod camera_easing {
     use crate::Timeline;
-    use lumina_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
+    use luminafx_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
 
     fn scene_with_camera(easing: &str, params: Option<serde_json::Value>) -> Scene {
         let mut scene: Scene = serde_json::from_value(serde_json::json!({
@@ -350,7 +350,7 @@ mod camera_easing {
 #[cfg(test)]
 mod camera_rotation {
     use crate::Timeline;
-    use lumina_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
+    use luminafx_schema::{Camera, CameraState, CameraTimelineEntry, Scene};
 
     fn bare_scene() -> Scene {
         serde_json::from_value(serde_json::json!({

@@ -3,7 +3,7 @@
 # toolchain and sanitizer flags, so `cargo check --workspace` must not see it.
 
 [package]
-name = "lumina-fuzz"
+name = "luminafx-fuzz"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -15,9 +15,9 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-lumina-core = { path = "../crates/lumina-core" }
-lumina-schema = { path = "../crates/lumina-schema" }
-lumina-renderer = { path = "../crates/lumina-renderer" }
+luminafx-core = { path = "../crates/lumina-core", version = "0.4.0" }
+luminafx-schema = { path = "../crates/lumina-schema", version = "0.4.0" }
+luminafx-renderer = { path = "../crates/lumina-renderer", version = "0.4.0" }
 serde_json = "1"
 
 [[bin]]

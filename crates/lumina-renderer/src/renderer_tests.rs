@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{skia_backend::SkiaRenderer, Renderer};
-    use lumina_schema::{
+    use luminafx_schema::{
         CircleProps, ImageProps, LineProps, Object, ParticlesProps, RectangleProps, SVGProps,
     };
     use serde_json::{json, Value};
@@ -937,7 +937,7 @@ mod hash_range {
 #[cfg(test)]
 mod frame_buffer_reuse {
     use crate::{skia_backend::SkiaRenderer, Renderer};
-    use lumina_schema::{CircleProps, Object, RectangleProps};
+    use luminafx_schema::{CircleProps, Object, RectangleProps};
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -1075,7 +1075,7 @@ mod frame_buffer_reuse {
         let mut objects = HashMap::new();
         objects.insert(
             "bad".to_string(),
-            Object::Arrow(lumina_schema::ArrowProps {
+            Object::Arrow(luminafx_schema::ArrowProps {
                 from: [0.0, 0.0],
                 to: [1.0, 1.0],
                 z_index: 1,
@@ -1127,6 +1127,6 @@ mod thread_safety {
 
     #[test]
     fn the_text_engine_is_send() {
-        assert_send::<lumina_text::TextEngine>();
+        assert_send::<luminafx_text::TextEngine>();
     }
 }

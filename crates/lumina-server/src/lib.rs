@@ -32,10 +32,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use lumina_export::Exporter;
-use lumina_renderer::skia_backend::SkiaRenderer;
-use lumina_renderer::Renderer;
-use lumina_schema::Scene;
+use luminafx_export::Exporter;
+use luminafx_renderer::skia_backend::SkiaRenderer;
+use luminafx_renderer::Renderer;
+use luminafx_schema::Scene;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
@@ -75,20 +75,20 @@ pub struct PatchResponse {
 }
 
 /// Semantic patch request: a typed scene plus a list of domain-level operations
-/// (`add_object`, `add_keyframe`, `update_canvas`, …) applied via `lumina_core`.
+/// (`add_object`, `add_keyframe`, `update_canvas`, …) applied via `luminafx_core`.
 #[derive(Debug, Deserialize)]
 pub struct ScenePatchRequest {
     /// The scene to patch.
     pub scene: Scene,
     /// Semantic operations to apply, in order.
-    pub patch: lumina_core::ScenePatch,
+    pub patch: luminafx_core::ScenePatch,
 }
 
 // ── Semantic validation ───────────────────────────────────────────────────────
 //
 // Validation logic lives in lumina-core (shared by server, CLI and SDKs);
 // re-exported here so the server's public API is unchanged.
-pub use lumina_core::validation::{
+pub use luminafx_core::validation::{
     validate_scene_data, ValidationError, ValidationResponse, ValidationWarning,
 };
 
@@ -178,7 +178,7 @@ async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
 }
 
 async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
-    if let Err(e) = lumina_core::apply_patch(&mut payload.scene, &payload.patch) {
+    if let Err(e) = luminafx_core::apply_patch(&mut payload.scene, &payload.patch) {
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
             format!("Scene patch failed: {e}"),
@@ -336,7 +336,7 @@ fn render_blocking(payload: &RenderRequest, ext: &str) -> RenderOutcome {
     let mut tracks = Vec::new();
     for audio in &payload.scene.assets.audio {
         match resolve_asset_path(&audio.path) {
-            Ok(p) => tracks.push(lumina_export::AudioTrack::new(p, audio)),
+            Ok(p) => tracks.push(luminafx_export::AudioTrack::new(p, audio)),
             Err(msg) => return RenderOutcome::BadRequest(msg),
         }
     }
@@ -399,7 +399,7 @@ pub async fn run_server() -> Result<(), std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lumina_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
+    use luminafx_schema::{Canvas, CircleProps, GroupProps, Meta, Object, TimelineEntry};
     use std::collections::HashMap;
 
     /// The render path must not occupy the async runtime.
@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn test_scene_patch_add_object_then_validates() {
         let mut scene = minimal_scene();
-        let patch: lumina_core::ScenePatch = serde_json::from_value(serde_json::json!({
+        let patch: luminafx_core::ScenePatch = serde_json::from_value(serde_json::json!({
             "patches": [{
                 "op": "add_object",
                 "id": "c2",
@@ -540,7 +540,7 @@ mod tests {
             }]
         }))
         .unwrap();
-        lumina_core::apply_patch(&mut scene, &patch).expect("patch applies");
+        luminafx_core::apply_patch(&mut scene, &patch).expect("patch applies");
         assert!(scene.objects.contains_key("c2"));
         let validation = validate_scene_data(&scene);
         assert!(validation.valid, "patched scene should validate clean");

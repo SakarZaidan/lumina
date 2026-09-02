@@ -24,6 +24,37 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 — crates.io names, and two blockers nobody had checked
+
+- The owner supplied a crates.io token, and the first thing it revealed was
+  that **the project cannot publish under its own names**. `lumina`,
+  `lumina-core`, and `lumina-cli` are all taken.
+- `lumina-core` is the bad one: an unrelated GUI framework described as *"wgpu
+  rendering, Taffy layout"*. Same domain, adjacent in every search — and a real
+  technical collision, since two crates cannot both offer `use lumina_core::`
+  in one dependency graph. Publishing as `luminafx-core` while keeping the
+  `lumina_core` library target would have shipped that collision rather than
+  avoided it, so the library targets moved too.
+- Checked all three registries before proposing anything. `lumina-engine` was
+  free on crates.io but taken on npm *and* PyPI; **`luminafx`** was the only
+  short candidate free on all three. Owner chose it. ADR-0014.
+- **Second blocker, found by the same check:** internal dependencies were
+  path-only, and `cargo publish` rejects a dependency with no `version`. Every
+  one of them now carries `version = "0.4.0"`.
+- **Third, nearly shipped silently:** a binary's name defaults to its package
+  name, so renaming `lumina-cli` to `luminafx-cli` would have renamed the
+  command every doc and example invokes. Now pinned in an explicit `[[bin]]`
+  with the reason written beside it.
+- Nothing else moves: repository, docs, book, scene format, and source
+  directories all stay `lumina`. `luminafx` is a registry identity.
+- `luminafx-schema` dry-run publishes clean. The rest cannot be dry-run until
+  their dependencies exist on the registry — expected, and why `release.yml`
+  publishes in dependency order and skips versions already up, so a partial
+  release is resumable rather than stuck.
+- Token is stored as the `CARGO_REGISTRY_TOKEN` repository secret. **Nothing
+  has been published**; the first real publish is the owner's call, since it
+  cannot be undone, only yanked.
+
 ## 2026-09-03 (last) — EXR, and what it honestly buys
 
 - `AAA-OUT-07`. `--format exr` writes an OpenEXR sequence in linear light with

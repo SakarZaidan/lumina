@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::scene_patch::{apply_patch, ScenePatch};
-    use lumina_schema::{
+    use luminafx_schema::{
         Action, Canvas, CircleProps, EventEntry, GroupProps, Meta, Object, Scene, TimelineEntry,
     };
     use serde_json::json;

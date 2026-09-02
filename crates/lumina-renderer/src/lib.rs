@@ -59,7 +59,7 @@ pub mod skia_backend;
 /// GPU backend (`vello`/`wgpu`, headless).
 pub mod vello_backend;
 
-use lumina_schema::{CameraState, Object};
+use luminafx_schema::{CameraState, Object};
 use serde_json::Value;
 use std::collections::HashMap;
 

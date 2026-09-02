@@ -17,8 +17,8 @@
 
 use std::path::{Path, PathBuf};
 
-use lumina_renderer::skia_backend::SkiaRenderer;
-use lumina_schema::Scene;
+use luminafx_renderer::skia_backend::SkiaRenderer;
+use luminafx_schema::Scene;
 
 use crate::Exporter;
 

@@ -107,7 +107,7 @@ fn refine_perceptually(stops: &[(f32, [u8; 4])]) -> Vec<(f32, [u8; 4])> {
             let t = k as f32 / GRADIENT_SEGMENTS as f32;
             out.push((
                 p0 + (p1 - p0) * t,
-                lumina_core::interpolator::mix_rgba8(c0, c1, t),
+                luminafx_core::interpolator::mix_rgba8(c0, c1, t),
             ));
         }
     }

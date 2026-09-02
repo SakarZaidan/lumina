@@ -17,10 +17,10 @@
 // has to be argued for by removing this line, in a diff a reviewer will see.
 #![forbid(unsafe_code)]
 
-use lumina_core::{Event, EventBus, SceneGraph, Timeline};
-use lumina_renderer::skia_backend::SkiaRenderer;
-use lumina_renderer::Renderer;
-use lumina_schema::{Object, Scene};
+use luminafx_core::{Event, EventBus, SceneGraph, Timeline};
+use luminafx_renderer::skia_backend::SkiaRenderer;
+use luminafx_renderer::Renderer;
+use luminafx_schema::{Object, Scene};
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 
@@ -95,7 +95,7 @@ impl LuminaEngine {
         // premultiplied. Identical while the background is opaque; a scene
         // with a transparent background painted every semi-transparent pixel
         // too dark without this.
-        lumina_renderer::demultiply_in_place(&mut frame);
+        luminafx_renderer::demultiply_in_place(&mut frame);
         Ok(frame)
     }
 

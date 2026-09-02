@@ -1,4 +1,4 @@
-use lumina_schema::{Action as SchemaAction, EventEntry, Scene};
+use luminafx_schema::{Action as SchemaAction, EventEntry, Scene};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

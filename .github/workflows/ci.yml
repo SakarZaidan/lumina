@@ -71,7 +71,7 @@ jobs:
       # first matrix run showed DX12-WARP aborting the test process (exit 2173,
       # two tests never reporting) rather than returning an error the skip path
       # could catch. Parity is verified on Linux; TD-20 tracks re-enabling it.
-      - run: cargo test --workspace --exclude lumina-wasm --exclude lumina-bench
+      - run: cargo test --workspace --exclude luminafx-wasm --exclude luminafx-bench
         env:
           LUMINA_REQUIRE_VELLO: ${{ runner.os == 'Linux' && '1' || '0' }}
           LUMINA_DISABLE_VELLO: ${{ runner.os == 'Windows' && '1' || '0' }}
@@ -94,7 +94,7 @@ jobs:
         with:
           toolchain: "1.88"
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --exclude lumina-wasm --exclude lumina-bench --all-targets
+      - run: cargo check --workspace --exclude luminafx-wasm --exclude luminafx-bench --all-targets
 
   # ── Docs ──────────────────────────────────────────────────────────────────────
   docs:
@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --no-deps --workspace --exclude lumina-wasm --exclude lumina-bench
+      - run: cargo doc --no-deps --workspace --exclude luminafx-wasm --exclude luminafx-bench
 
   # ── WASM Build ────────────────────────────────────────────────────────────────
   wasm:
@@ -149,12 +149,12 @@ jobs:
       - name: Measure the merge base
         run: |
           git checkout --detach ${{ github.event.pull_request.base.sha }}
-          cargo bench -p lumina-bench -- --warm-up-time 1 --measurement-time 3 \
+          cargo bench -p luminafx-bench -- --warm-up-time 1 --measurement-time 3 \
             --save-baseline base
       - name: Measure this pull request
         run: |
           git checkout --detach ${{ github.sha }}
-          cargo bench -p lumina-bench -- --warm-up-time 1 --measurement-time 3 \
+          cargo bench -p luminafx-bench -- --warm-up-time 1 --measurement-time 3 \
             --save-baseline pr
       - name: Compare
         run: |

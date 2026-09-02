@@ -17,7 +17,7 @@
 
 /// Hard ceiling on ticks drawn for one axis in one frame.
 ///
-/// Matches `lumina_core::validation::MAX_TICK_COUNT`. Validation gives the
+/// Matches `luminafx_core::validation::MAX_TICK_COUNT`. Validation gives the
 /// author a structured error; this stops an unvalidated caller from hanging
 /// the renderer.
 const MAX_TICKS: usize = 100_000;

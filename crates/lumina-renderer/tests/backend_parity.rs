@@ -22,11 +22,11 @@
 // silently skipped.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::skia_backend::SkiaRenderer;
-use lumina_renderer::vello_backend::VelloRenderer;
-use lumina_renderer::Renderer;
-use lumina_schema::Scene;
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::skia_backend::SkiaRenderer;
+use luminafx_renderer::vello_backend::VelloRenderer;
+use luminafx_renderer::Renderer;
+use luminafx_schema::Scene;
 use std::path::{Path, PathBuf};
 
 /// Per-fixture comparison budget.
@@ -433,7 +433,7 @@ fn parity_20_camera_rotation() {
 /// time. Timeline state is untyped `serde_json::Value` (TD-07), so a keyframe
 /// is the one route by which malformed geometry reaches a renderer.
 fn malformed_arrow_state() -> (
-    std::collections::HashMap<String, lumina_schema::Object>,
+    std::collections::HashMap<String, luminafx_schema::Object>,
     std::collections::HashMap<String, serde_json::Value>,
 ) {
     let scene: Scene = serde_json::from_value(serde_json::json!({

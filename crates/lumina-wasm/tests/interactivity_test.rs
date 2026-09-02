@@ -3,7 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_wasm::LuminaEngine;
+use luminafx_wasm::LuminaEngine;
 use serde_json::json;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;

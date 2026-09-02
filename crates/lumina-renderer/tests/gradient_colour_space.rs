@@ -11,9 +11,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::{skia_backend::SkiaRenderer, Renderer};
-use lumina_schema::Scene;
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
+use luminafx_schema::Scene;
 
 const W: u32 = 120;
 const H: u32 = 40;
@@ -48,7 +48,7 @@ fn gradient_midpoint(from: &str, to: &str) -> [u8; 4] {
 
 /// The colour a keyframe fade shows halfway between the same two colours.
 fn fade_midpoint(from: &str, to: &str) -> [u8; 4] {
-    let mixed = lumina_core::interpolator::interpolate_value(
+    let mixed = luminafx_core::interpolator::interpolate_value(
         &serde_json::json!(from),
         &serde_json::json!(to),
         0.5,

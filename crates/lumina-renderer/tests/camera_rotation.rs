@@ -17,9 +17,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::{skia_backend::SkiaRenderer, Renderer};
-use lumina_schema::Scene;
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
+use luminafx_schema::Scene;
 
 const W: u32 = 128;
 const H: u32 = 128;

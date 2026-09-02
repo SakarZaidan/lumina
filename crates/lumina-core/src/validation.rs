@@ -6,7 +6,7 @@
 //! written for self-correction loops (both human and LLM authors).
 
 use crate::easing::{is_valid_easing, suggest_easing};
-use lumina_schema::{Action, Object, Scene};
+use luminafx_schema::{Action, Object, Scene};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -529,7 +529,7 @@ fn check_easing(
     if !is_valid_easing(name) {
         let fix_suggestion = match suggest_easing(name) {
             Some(candidate) => format!("Did you mean '{candidate}'?"),
-            None => "See lumina_core::easing::EASING_NAMES for the accepted names.".to_string(),
+            None => "See luminafx_core::easing::EASING_NAMES for the accepted names.".to_string(),
         };
         errors.push(ValidationError {
             code: "UNKNOWN_EASING".to_string(),

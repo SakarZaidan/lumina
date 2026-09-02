@@ -559,7 +559,7 @@ pub struct TimelineEntry {
     pub object: String,
     /// Property values to key at this time.
     pub state: serde_json::Value,
-    /// Easing name (see `lumina_core::easing::EASING_NAMES`).
+    /// Easing name (see `luminafx_core::easing::EASING_NAMES`).
     #[serde(default = "default_easing")]
     pub easing: String,
     /// Parameters for `cubic_bezier`/`spline` easings.
@@ -661,7 +661,7 @@ pub struct CameraTimelineEntry {
     pub time: f32,
     /// Camera state at this keyframe.
     pub state: CameraState,
-    /// Easing name (see `lumina_core::easing::EASING_NAMES`).
+    /// Easing name (see `luminafx_core::easing::EASING_NAMES`).
     #[serde(default = "default_easing")]
     pub easing: String,
     /// Parameters for parameterised easings, matching `TimelineEntry`.
