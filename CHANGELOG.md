@@ -67,6 +67,11 @@ programme to reach reference quality in [plan/](plan/).
   complaint and becomes `inf` as f32 — the precision the engine renders with —
   so the property would vanish. Checked recursively, since point lists and
   gradient stops are arrays.
+- **Fuzz targets** (`fuzz/`, `cargo-fuzz`) over every parser that reads
+  untrusted input: scene JSON, SVG path data, LaTeX, and plot expressions.
+- **Adversarial corpus tests** covering the same entry points on stable, so
+  they run in CI on every commit rather than only when someone runs the fuzzer
+  by hand — `libfuzzer` needs a nightly toolchain that CI does not have.
 - **Property tests** over interpolation: finiteness, exact endpoints,
   boundedness, totality against mismatched types, and colour round-tripping.
 - **Property tests** (`proptest`) over the easing registry: endpoint pinning,
