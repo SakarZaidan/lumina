@@ -24,6 +24,26 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late, latest) — Wave 3: rendering is 3.5–9x faster
+
+- `AAA-P-02` first half landed: the renderer keeps its frame buffer between
+  renders instead of allocating a fresh 8.3 MB `Pixmap` every frame.
+- Measured, on the baselines recorded yesterday: **-89%** on a 1080p frame with
+  10 objects, **-86%** with 100, **-73%** with 500, **-77%** on text, **-80%**
+  on a plot. All at p = 0.00. `frame_sequence` improves least (-13%) because it
+  runs at 720p and its remaining cost is timeline evaluation plus the output
+  copy — the next two targets.
+- Output is byte-identical, and that is tested rather than assumed. Reuse is
+  exactly the kind of change that fails as a faint ghost of a previous frame in
+  one corner of a video months later, not as a crash. Four tests: a reused
+  buffer against a fresh one, shrinking the frame, eight repeated renders, and
+  the error path — a failed render must put the buffer back, or the next frame
+  quietly pays the allocation the change exists to avoid.
+- The GPU backend allocates a texture and staging buffer per frame too
+  (`AAA-P-10`), and is deliberately **not** changed here. wgpu may pool
+  internally; assuming the CPU result transfers would be the same guessing the
+  baselines just disproved. It gets its own measurement.
+
 ## 2026-09-02 (late, later) — Wave 3 opens: baselines, and the plan was wrong
 
 - Four new benchmark groups, because the existing three could not see the

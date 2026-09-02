@@ -49,12 +49,27 @@ pub struct SkiaRenderer {
     svgs: HashMap<String, resvg::usvg::Tree>,
     svg_cache: RefCell<HashMap<(String, u32, u32), Pixmap>>,
     current_time: f32,
+    /// The frame buffer, kept between renders.
+    ///
+    /// A 1080p `Pixmap` is 8.3 MB. Allocating and dropping one per frame
+    /// measured **5.3 ms/frame**; reusing one measures **0.57 ms** — the
+    /// allocator returns a block that size to the operating system, so every
+    /// frame faults in fresh pages. On an ordinary scene that was roughly 87%
+    /// of the total render time, and it applied to every scene regardless of
+    /// content (see `planning/METRICS.md`).
+    ///
+    /// Reallocated only when the requested size changes, which for a render is
+    /// once. Correctness is unaffected because the buffer is cleared to the
+    /// background before anything is drawn — the same operation that always
+    /// began a frame.
+    frame: Option<Pixmap>,
 }
 
 impl SkiaRenderer {
     /// A renderer with no assets loaded.
     pub fn new() -> Self {
         Self {
+            frame: None,
             text_engine: TextEngine::new(),
             images: HashMap::new(),
             svgs: HashMap::new(),
@@ -971,20 +986,32 @@ impl Renderer for SkiaRenderer {
         background: &str,
         camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError> {
-        let mut pixmap = Pixmap::new(width, height).ok_or_else(|| {
-            RendererError::Failed(format!("Failed to create {width}x{height} pixmap"))
-        })?;
+        // Take the buffer out so `self` stays borrowable for `draw_node`.
+        let mut pixmap = match self.frame.take() {
+            Some(p) if p.width() == width && p.height() == height => p,
+            _ => Pixmap::new(width, height).ok_or_else(|| {
+                RendererError::Failed(format!("Failed to create {width}x{height} pixmap"))
+            })?,
+        };
 
+        // Clears every pixel, so nothing survives from the previous frame.
         pixmap.fill(parse_color(background, 1.0));
 
         let root_transform =
             crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut pixmap, &id, objects, states, root_transform, 0)?;
+            if let Err(e) = self.draw_node(&mut pixmap, &id, objects, states, root_transform, 0) {
+                // Put the buffer back before returning, or the next frame pays
+                // the allocation this exists to avoid.
+                self.frame = Some(pixmap);
+                return Err(e);
+            }
         }
 
-        Ok(pixmap.data().to_vec())
+        let out = pixmap.data().to_vec();
+        self.frame = Some(pixmap);
+        Ok(out)
     }
 
     fn load_font(&mut self, id: &str, data: &[u8]) -> Result<(), RendererError> {

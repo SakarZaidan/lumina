@@ -36,17 +36,28 @@ later work has something to be measured against. Comparable release-over-release
 only on the same hardware; CI compares a pull request against its own merge base
 on one runner instead, for the reason given below.
 
-| Benchmark | v0.4.x baseline |
-|---|---|
-| `timeline_eval/100` / `/1000` / `/2000` | 97.5 µs / 1.15 ms / 2.48 ms |
-| `skia_render/10` / `/100` / `/500` (1080p) | 5.21 ms / 5.42 ms / 6.54 ms |
-| `text_render/10x40` / `/40x40` (1080p) | 6.27 ms / 8.31 ms |
-| `plot_render/1x200` / `/8x200` / `/8x2000` | 5.79 ms / 7.04 ms / 7.88 ms |
-| `frame_sequence/30` / `/120` (720p) | 18.9 ms / 75.8 ms |
-| `scene_walk/100` / `/1000` | 9.49 µs / 102 µs |
-| `scene_walk/timeline_build_100` / `/1000` | 237 µs / 2.34 ms |
-| `easing/get_easing_fn_lookup` | 4.35 ns |
-| `easing/eval_easing_cubic_bezier` | 16.7 ns |
+| Benchmark | Baseline | After buffer reuse | Change |
+|---|---|---|---|
+| `skia_render/10` (1080p) | 5.21 ms | **0.569 ms** | −89.1% |
+| `skia_render/100` | 5.42 ms | **0.744 ms** | −86.3% |
+| `skia_render/500` | 6.54 ms | **1.78 ms** | −72.8% |
+| `text_render/10x40` (1080p) | 6.27 ms | **1.44 ms** | −76.7% |
+| `text_render/40x40` | 8.31 ms | **4.15 ms** | −52.7% |
+| `plot_render/1x200` | 5.79 ms | **1.12 ms** | −80.2% |
+| `plot_render/8x200` | 7.04 ms | **2.23 ms** | −68.8% |
+| `plot_render/8x2000` | 7.88 ms | **2.99 ms** | −61.8% |
+| `frame_sequence/30` (720p) | 18.9 ms | **16.5 ms** | −12.8% |
+| `frame_sequence/120` (720p) | 75.8 ms | **65.2 ms** | −14.9% |
+| `timeline_eval/100` / `/1000` / `/2000` | 97.5 µs / 1.15 ms / 2.48 ms | unchanged | — |
+| `scene_walk/100` / `/1000` | 9.49 µs / 102 µs | unchanged | — |
+| `scene_walk/timeline_build_100` / `/1000` | 237 µs / 2.34 ms | unchanged | — |
+| `easing/get_easing_fn_lookup` | 4.35 ns | unchanged | — |
+| `easing/eval_easing_cubic_bezier` | 16.7 ns | unchanged | — |
+
+All changes above significant at p = 0.00. `frame_sequence` improves least
+because it runs at 720p — a smaller buffer faults in fewer pages — and because
+its remaining time is timeline evaluation plus the output copy, which are the
+next two targets (`AAA-P-04`, and the `render_into` half of `AAA-P-02`).
 
 **What the first reading of these numbers changed.** `skia_render` costs
 5.21 ms for ten objects and 6.54 ms for five hundred — almost flat, so nearly
