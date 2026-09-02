@@ -24,6 +24,31 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, later) — Wave 2: colour and interpolation
+
+- Colour moved from CIELAB to **OKLab**. Both are perceptual; CIELAB's hue
+  lines bend, so blue to white drifts purple at the midpoint, while OKLab was
+  fitted so straight lines look straight. For an engine whose main job is
+  watching one colour become another, that is the whole point.
+- **Alpha was silently broken.** `#RGBA` and `#RRGGBBAA` did not parse, so a
+  fade between two eight-digit colours *snapped* to the destination rather than
+  blending. Alpha now blends linearly — it is a coverage fraction, not a
+  perceptual quantity.
+- The property that caught it passed first time for the wrong reason: it only
+  asserted the result was nine characters, which a snap to the destination also
+  satisfies. Asserting the midpoint differs from **both** endpoints is what
+  actually distinguishes interpolation from a snap. Second false-positive test
+  this wave — worth noticing as a pattern.
+- Interpolation can no longer yield `null`. `Value::from` maps non-finite
+  floats to `Value::Null`, so the property vanished from the state map and the
+  renderer substituted its default.
+- Root cause validated too: `1e39` parses as f64 and becomes `inf` as f32.
+  New `NUMBER_NOT_REPRESENTABLE` error, checked recursively since point lists
+  and gradient stops are arrays.
+- No golden pixels moved: goldens render at endpoints, where colour
+  round-trips exactly, and the parity suite compares two backends that share
+  the interpolator. Fade *midpoints* do change, which is the intended effect.
+
 ## 2026-09-02 (night) — Wave 2 opens: easing accuracy, property tests first
 
 - Property tests written **before** the fixes, as the plan requires, and they
