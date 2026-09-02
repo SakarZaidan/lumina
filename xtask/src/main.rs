@@ -151,7 +151,7 @@ fn main() -> ExitCode {
     match task {
         "ci" => run_ci(fast),
         "fmt" => run_one(&step("fmt", "cargo", &["fmt", "--all"])),
-        "examples" => render_examples(),
+        "examples" => render_examples(args.iter().any(|a| a == "--full")),
         "help" | "--help" | "-h" => {
             print_help();
             ExitCode::SUCCESS
@@ -171,7 +171,9 @@ fn print_help() {
          Tasks:\n\
          \x20 ci [--fast]   Run the merge gate. --fast skips wasm, book, and examples.\n\
          \x20 fmt           Format the workspace.\n\
-         \x20 examples      Render every example scene (slow; needs ffmpeg).\n\
+         \x20 examples [--full]\n\
+         \x20               Check every example renders. Draws one frame per scene by\n\
+         \x20               default; --full encodes complete videos (slow, needs ffmpeg).\n\
          \x20 help          This message."
     );
 }
@@ -231,11 +233,18 @@ fn run_one(s: &Step) -> ExitCode {
     }
 }
 
-/// Render every example scene.
+/// Check every example scene still renders.
 ///
-/// `ENGINEERING_PRINCIPLES` #12 says a broken example is a broken build. Nothing
-/// in CI checks that yet (`AAA-TEST-09`); this is the command that will.
-fn render_examples() -> ExitCode {
+/// `ENGINEERING_PRINCIPLES` #12 says a broken example is a broken build, and
+/// until this existed nothing checked it.
+///
+/// By default it draws **one frame** per scene rather than encoding the whole
+/// video. That is a deliberate trade: the flagship showcase is 4 500 frames,
+/// and a gate slow enough to be skipped is not a gate. A single frame still
+/// exercises everything that actually breaks — the scene parses, validates,
+/// every declared asset resolves and decodes, and every object type draws.
+/// `--full` encodes complete videos for a release check.
+fn render_examples(full: bool) -> ExitCode {
     let dir = std::path::Path::new("examples");
     let Ok(entries) = std::fs::read_dir(dir) else {
         eprintln!("no examples/ directory — run from the repository root");
@@ -274,19 +283,23 @@ fn render_examples() -> ExitCode {
     for scene in &scenes {
         let name = scene.file_stem().unwrap_or_default().to_string_lossy();
         eprint!("  {name} … ");
-        let target = out.join(format!("{name}.mp4"));
-        let ok = Command::new("target/release/lumina-cli")
-            .args([
-                "--scene",
-                &scene.to_string_lossy(),
-                "--output",
-                &target.to_string_lossy(),
-                "--format",
-                "mp4",
-            ])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let ext = if full { "mp4" } else { "png" };
+        let target = out.join(format!("{name}.{ext}"));
+
+        let mut cmd = Command::new("target/release/lumina-cli");
+        cmd.args([
+            "--scene",
+            &scene.to_string_lossy(),
+            "--output",
+            &target.to_string_lossy(),
+        ]);
+        if full {
+            cmd.args(["--format", "mp4"]);
+        } else {
+            cmd.arg("--preview");
+        }
+
+        let ok = cmd.status().map(|s| s.success()).unwrap_or(false);
         if ok {
             eprintln!("ok");
         } else {
@@ -296,7 +309,8 @@ fn render_examples() -> ExitCode {
     }
 
     if failed.is_empty() {
-        eprintln!("\nall {} examples rendered", scenes.len());
+        let mode = if full { "rendered" } else { "drew a frame" };
+        eprintln!("\nall {} examples {mode}", scenes.len());
         ExitCode::SUCCESS
     } else {
         eprintln!("\nfailed: {}", failed.join(", "));

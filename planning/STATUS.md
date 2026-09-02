@@ -43,8 +43,27 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 - `cargo xtask ci` replaces the five-command gate. Defined once in Rust, so it
   cannot drift from CI the way a command list in a README does. `--fast` skips
   the slow steps; missing optional tools are reported as skipped, not failed.
-- **CI now renders every example** (`cargo xtask examples`). Principle #12 has
-  always said a broken example is a broken build; nothing checked it until now.
+- **CI now checks every example renders** (`cargo xtask examples`). Principle
+  #12 has always said a broken example is a broken build; nothing checked it.
+  It caught one immediately: `showcase_grand.lsf` and
+  `showcase_neural_network.lsf` carried the **absolute path**
+  `/home/horux/projects/lumina/examples/assets/lumina_node.svg`, baked in by
+  `os.path.dirname(__file__)` in their generators. The two flagship showcase
+  scenes had only ever rendered on one machine. Generators and scenes both
+  fixed.
+- The check draws one frame per scene rather than encoding whole videos: the
+  showcase is 4 500 frames, and a gate slow enough to be skipped is not a gate.
+  A single frame still proves the scene parses, validates, resolves every
+  asset, and draws every object. `--full` encodes properly for a release check.
+- That needed a new CLI flag, `--preview [SECONDS]`, and fixing what it was
+  built on: preview rendering swallowed asset failures with
+  `if let Ok(data) = … { let _ = … }`, so a missing font produced a frame with
+  no text and no message — while the full render path hard-errored on the same
+  input. One loader now serves both (`AAA-DX-08`).
+- The wasm job also went red: `[workspace.lints]` reached `lumina-wasm` for the
+  first time and found **8 undocumented public items** on the browser-facing
+  API, including `LuminaEngine` itself. Documented; the underlying exclusion of
+  that crate from workspace commands is TD-24.
 - `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `.editorconfig` pinned.
   This matters because CI sets `RUSTFLAGS: -D warnings` globally: without a
   pinned toolchain, a new stable release introducing a lint turns the build red

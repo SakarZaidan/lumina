@@ -25,6 +25,11 @@ use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
+/// The engine, as JavaScript sees it.
+///
+/// Owns a parsed scene, its evaluated timeline, a CPU renderer, and an event
+/// bus. The host owns the clock: call [`LuminaEngine::render_frame`] with a
+/// time and paint the returned pixels onto a canvas.
 pub struct LuminaEngine {
     scene: Scene,
     timeline: Timeline,
@@ -36,6 +41,15 @@ pub struct LuminaEngine {
 #[wasm_bindgen]
 impl LuminaEngine {
     #[wasm_bindgen(constructor)]
+    /// Build an engine from a scene.
+    ///
+    /// `scene_json` must be a plain JavaScript object — what `JSON.parse`
+    /// produces, and what the JS SDK passes. A `Map` will not deserialise:
+    /// every field reads as absent and construction fails on the first one.
+    ///
+    /// # Errors
+    ///
+    /// Returns the deserialisation error if the value is not a valid scene.
     pub fn new(scene_json: JsValue) -> Result<LuminaEngine, JsValue> {
         console_error_panic_hook::set_once();
         let scene: Scene = from_value(scene_json)?;
@@ -52,6 +66,14 @@ impl LuminaEngine {
         })
     }
 
+    /// Render the frame at `time` (seconds) and return tightly packed RGBA8.
+    ///
+    /// Any time may be requested in any order: evaluation is deterministic and
+    /// scrub-safe, so seeking backwards costs no more than playing forwards.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the frame cannot be rendered.
     pub fn render_frame(&mut self, time: f32) -> Result<Vec<u8>, JsValue> {
         let states = self.timeline.get_state_at(time);
         let camera_state = self.timeline.get_camera_at(time, &self.scene);
@@ -69,6 +91,12 @@ impl LuminaEngine {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Dispatch an interactive event and return the resulting playback state
+    /// plus any custom events the scene emitted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `event` is not a valid event object.
     pub fn process_event(&mut self, event: JsValue) -> Result<JsValue, JsValue> {
         let event: Event = from_value(event)?;
         // Returns an EventOutcome { actions, current_time, playing, emitted } so
@@ -405,6 +433,11 @@ impl LuminaEngine {
         }
     }
 
+    /// Register a TTF font under `id`, so text objects naming it can render.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the font data cannot be parsed.
     pub fn load_font(&mut self, id: &str, data: &[u8]) -> Result<(), JsValue> {
         self.renderer
             .load_font(id, data)
@@ -419,12 +452,15 @@ impl LuminaEngine {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
+    /// Scene duration in seconds, from the canvas block.
     pub fn duration(&self) -> f32 {
         self.scene.canvas.duration
     }
+    /// Canvas width in pixels.
     pub fn width(&self) -> u32 {
         self.scene.canvas.width
     }
+    /// Canvas height in pixels.
     pub fn height(&self) -> u32 {
         self.scene.canvas.height
     }

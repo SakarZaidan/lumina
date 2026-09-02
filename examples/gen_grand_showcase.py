@@ -20,7 +20,10 @@ import os
 
 FONT_REG = "examples/assets/fonts/LiberationSans-Regular.ttf"
 FONT_BOLD = "examples/assets/fonts/LiberationSans-Bold.ttf"
-LOGO = os.path.join(os.path.dirname(__file__), "assets", "lumina_node.svg")
+# Repo-relative, like FONT_REG/FONT_BOLD above. os.path.dirname(__file__)
+# resolves to an absolute path, which then gets baked into the committed
+# .lsf and only works on the machine that generated it.
+LOGO = "examples/assets/lumina_node.svg"
 
 SCALE = float(os.environ.get("LUMINA_SHOWCASE_SCALE", 2.0 / 3.0))  # 1.0=1080p, 2/3=720p
 W, H, FPS, DURATION = 1920, 1080, 30, 45.0

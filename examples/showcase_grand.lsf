@@ -26,7 +26,7 @@
     "images": [
       {
         "id": "node",
-        "path": "/home/horux/projects/lumina/examples/assets/lumina_node.svg"
+        "path": "examples/assets/lumina_node.svg"
       }
     ]
   },
