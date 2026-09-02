@@ -144,10 +144,11 @@ pub(crate) fn simulate_particles(
     opacity: f32,
     time: f32,
 ) -> Vec<ParticleDot> {
-    let mut dots = Vec::new();
     if lifetime <= 0.0 {
-        return dots;
+        return Vec::new();
     }
+    // The count is known before the loop, and this runs per emitter per frame.
+    let mut dots = Vec::with_capacity(count as usize);
     for i in 0..count {
         let seed = hash01(i);
         let seed2 = hash01(i.wrapping_mul(2_654_435_761) ^ 0x9E37_79B9);

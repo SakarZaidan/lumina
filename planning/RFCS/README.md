@@ -34,4 +34,4 @@ already covered by an accepted RFC.
 
 | RFC | Title | Status |
 |---|---|---|
-| — | *none yet* | |
+| [0001](0001-render-into.md) | `Renderer::render_into` — render without allocating the output | **Rejected** — measured no benefit; every caller needs owned bytes |
