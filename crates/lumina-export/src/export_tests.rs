@@ -310,3 +310,150 @@ mod pipelined_export {
         );
     }
 }
+
+/// Colour tagging and quality presets, asserted from the produced file rather
+/// than from the arguments we passed.
+///
+/// Checking the argument list would only prove we typed the flags; ffmpeg is
+/// free to ignore or override them. These run `ffprobe` on the output, so a
+/// silently dropped tag fails.
+#[cfg(test)]
+mod encoded_output {
+    use crate::{Exporter, Quality};
+    use lumina_renderer::skia_backend::SkiaRenderer;
+    use lumina_schema::Scene;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn tiny_scene() -> Scene {
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": {
+                "width": 64, "height": 48, "fps": 10,
+                "duration": 0.5, "background": "#101020"
+            },
+            "objects": {
+                "c": { "type": "Circle", "properties": {
+                    "cx": 32.0, "cy": 24.0, "radius": 14.0, "fill": "#FF8040" } }
+            },
+            "timeline": []
+        }))
+        .expect("fixture scene")
+    }
+
+    /// One `ffprobe` field from a produced file, or `None` when ffmpeg is
+    /// unavailable — the export tests already skip in that case rather than
+    /// failing on a machine without it.
+    fn probe(path: &Path, field: &str) -> Option<String> {
+        let out = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                &format!("stream={field}"),
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(path)
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    fn export(quality: Quality, ext: &str) -> Option<(tempfile::TempDir, std::path::PathBuf)> {
+        let dir = tempfile::tempdir().ok()?;
+        let path = dir.path().join(format!("out.{ext}"));
+        let mut exporter = Exporter::new(SkiaRenderer::new());
+        let scene = tiny_scene();
+        let result = match ext {
+            "webm" => exporter.export_webm_with(&scene, &path, quality),
+            _ => exporter.export_mp4_with(&scene, &path, quality),
+        };
+        // No ffmpeg on this machine: skip rather than fail.
+        result.ok()?;
+        Some((dir, path))
+    }
+
+    #[test]
+    fn mp4_carries_bt709_colour_tags() {
+        // Without these a player guesses how to interpret the pixels, and
+        // players guess differently — the same file looks different in
+        // QuickTime, VLC and Chrome.
+        let Some((_dir, path)) = export(Quality::Standard, "mp4") else {
+            return;
+        };
+        for (field, expected) in [
+            ("color_space", "bt709"),
+            ("color_primaries", "bt709"),
+            ("color_transfer", "bt709"),
+            ("color_range", "tv"),
+        ] {
+            assert_eq!(
+                probe(&path, field).as_deref(),
+                Some(expected),
+                "{field} must be tagged {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn webm_carries_colour_tags() {
+        let Some((_dir, path)) = export(Quality::Standard, "webm") else {
+            return;
+        };
+        assert_eq!(probe(&path, "color_space").as_deref(), Some("bt709"));
+    }
+
+    #[test]
+    fn final_quality_is_ten_bit() {
+        // 10 bits is what keeps banding out of a slow gradient, and it is the
+        // whole reason the preset exists.
+        let Some((_dir, path)) = export(Quality::Final, "mp4") else {
+            return;
+        };
+        assert_eq!(
+            probe(&path, "pix_fmt").as_deref(),
+            Some("yuv420p10le"),
+            "the final preset must produce 10-bit output"
+        );
+    }
+
+    #[test]
+    fn draft_and_standard_are_eight_bit() {
+        // 8-bit yuv420p is the format every player and editor accepts; only
+        // the explicit final preset departs from it.
+        for quality in [Quality::Draft, Quality::Standard] {
+            let Some((_dir, path)) = export(quality, "mp4") else {
+                return;
+            };
+            assert_eq!(probe(&path, "pix_fmt").as_deref(), Some("yuv420p"));
+        }
+    }
+
+    #[test]
+    fn mp4_is_streamable() {
+        // `+faststart` moves the index ahead of the payload so a browser can
+        // begin playing before the file has finished downloading.
+        let Some((_dir, path)) = export(Quality::Standard, "mp4") else {
+            return;
+        };
+        let bytes = std::fs::read(&path).expect("output readable");
+        let find = |needle: &[u8]| {
+            bytes
+                .windows(needle.len())
+                .position(|w| w == needle)
+                .unwrap_or(usize::MAX)
+        };
+        let (moov, mdat) = (find(b"moov"), find(b"mdat"));
+        assert!(
+            moov < mdat,
+            "moov at {moov} must precede mdat at {mdat} for progressive playback"
+        );
+    }
+}

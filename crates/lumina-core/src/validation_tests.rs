@@ -519,3 +519,81 @@ mod representable_numbers {
         );
     }
 }
+
+/// Colour strings the renderer cannot parse must be reported, not drawn white.
+#[cfg(test)]
+mod colours {
+    use crate::validation::validate_scene_data;
+    use lumina_schema::Scene;
+
+    fn scene_with_fill(fill: &str) -> Scene {
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "objects": {
+                "c": { "type": "Circle", "properties": {
+                    "cx": 10.0, "cy": 10.0, "radius": 5.0, "fill": fill } }
+            },
+            "timeline": []
+        }))
+        .expect("fixture")
+    }
+
+    fn codes(scene: &Scene) -> Vec<String> {
+        validate_scene_data(scene)
+            .errors
+            .into_iter()
+            .map(|e| e.code)
+            .collect()
+    }
+
+    #[test]
+    fn valid_hex_forms_are_accepted() {
+        for fill in ["#FFF", "#ffffff", "#FF00FF80", "#abc"] {
+            assert!(
+                validate_scene_data(&scene_with_fill(fill)).valid,
+                "{fill} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn unparseable_colours_are_rejected() {
+        // Each of these rendered as opaque white with no diagnostic.
+        for fill in ["red", "#GGGGGG", "#12345", "rgb(1,2,3)", ""] {
+            assert!(
+                codes(&scene_with_fill(fill))
+                    .iter()
+                    .any(|c| c == "INVALID_COLOR"),
+                "{fill:?} should be rejected, got {:?}",
+                codes(&scene_with_fill(fill))
+            );
+        }
+    }
+
+    #[test]
+    fn none_gets_a_specific_suggestion() {
+        // `fill="none"` is an SVG habit and the most likely mistake, so it is
+        // worth telling the author what to write instead.
+        let scene = scene_with_fill("none");
+        let errors = validate_scene_data(&scene).errors;
+        let e = errors
+            .iter()
+            .find(|e| e.code == "INVALID_COLOR")
+            .expect("rejected");
+        assert!(
+            e.fix_suggestion.contains("Omit") || e.fix_suggestion.contains("alpha"),
+            "should suggest the alternative: {}",
+            e.fix_suggestion
+        );
+    }
+
+    #[test]
+    fn an_invalid_background_is_rejected() {
+        let mut scene = scene_with_fill("#FFFFFF");
+        scene.canvas.background = "transparent".into();
+        assert!(codes(&scene).iter().any(|c| c == "INVALID_COLOR"));
+    }
+}

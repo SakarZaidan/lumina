@@ -28,6 +28,88 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// Colour-space tags written into every video Lumina produces.
+///
+/// Without these a player has to *guess* how to interpret the pixels, and
+/// players guess differently — the same file looks measurably different in
+/// `QuickTime`, VLC and Chrome, usually as a shift in saturation and gamma.
+///
+/// Lumina renders in sRGB, whose primaries and transfer function are those of
+/// Rec. 709, so tagging BT.709 is a statement of fact rather than a
+/// conversion. `-color_range tv` matches the limited range that `yuv420p`
+/// implies.
+const BT709_TAGS: &[&str] = &[
+    "-colorspace",
+    "bt709",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-color_range",
+    "tv",
+];
+
+/// How much time to spend on encoding, and how much precision to keep.
+///
+/// Rendering is deterministic at every setting; this trades encoder effort and
+/// bit depth, not pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Quality {
+    /// Fast, larger files. For iterating on a scene.
+    Draft,
+    /// The default: visually lossless at a sane bitrate.
+    #[default]
+    Standard,
+    /// Slow, 10-bit. For a master, or anything that will be re-encoded later —
+    /// 10 bits keeps banding out of gradients that 8 bits introduces.
+    Final,
+}
+
+impl Quality {
+    /// x264 preset: the effort/size trade, not a quality trade.
+    fn x264_preset(self) -> &'static str {
+        match self {
+            Quality::Draft => "veryfast",
+            Quality::Standard => "medium",
+            Quality::Final => "slow",
+        }
+    }
+
+    /// H.264 constant-rate factor. Lower is better quality.
+    fn crf_h264(self) -> u8 {
+        match self {
+            Quality::Draft => 23,
+            Quality::Standard => 18,
+            Quality::Final => 16,
+        }
+    }
+
+    /// VP9 constant-rate factor; its scale differs from x264's.
+    fn crf_vp9(self) -> u8 {
+        match self {
+            Quality::Draft => 36,
+            Quality::Standard => 30,
+            Quality::Final => 24,
+        }
+    }
+
+    /// Pixel format for H.264. 10-bit at `Final` to keep gradients smooth.
+    fn pix_fmt_h264(self) -> &'static str {
+        match self {
+            Quality::Final => "yuv420p10le",
+            _ => "yuv420p",
+        }
+    }
+
+    /// Pixel format for VP9.
+    fn pix_fmt_vp9(self) -> &'static str {
+        match self {
+            Quality::Final => "yuv420p10le",
+            _ => "yuv420p",
+        }
+    }
+}
+
 /// How many rendered frames may sit between the renderer and the encoder.
 ///
 /// Deep enough to keep ffmpeg fed through a slow frame, shallow enough that
@@ -279,33 +361,82 @@ impl<R: Renderer> Exporter<R> {
         Ok(())
     }
 
-    /// Export H.264 MP4 (`-crf 18`, yuv420p) — broad-compatibility default.
+    /// Export H.264 MP4 — the broad-compatibility default.
+    ///
+    /// See [`BT709_TAGS`] for why the colour flags matter, and
+    /// [`Exporter::export_mp4_with`] to choose quality.
     pub fn export_mp4(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
-        self.encode_with_ffmpeg(
-            scene,
-            output_path,
-            &[
-                "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
-            ],
-        )
+        self.export_mp4_with(scene, output_path, Quality::default())
     }
 
-    /// Export VP9 `WebM` (`-crf 30 -b:v 0`, yuv420p) — smaller, web-friendly.
+    /// Export H.264 MP4 at a chosen [`Quality`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_mp4_with(
+        &mut self,
+        scene: &Scene,
+        output_path: &Path,
+        quality: Quality,
+    ) -> Result<()> {
+        let crf = quality.crf_h264().to_string();
+        let mut args = vec![
+            "-c:v",
+            "libx264",
+            "-preset",
+            quality.x264_preset(),
+            // x264 has a tune built for exactly this content: flat regions,
+            // hard edges, and little sensor noise. It raises the deblocking
+            // strength and adjusts psychovisual settings, which for rendered
+            // animation is quality gained rather than traded.
+            "-tune",
+            "animation",
+            "-crf",
+            &crf,
+            "-pix_fmt",
+            quality.pix_fmt_h264(),
+        ];
+        args.extend_from_slice(BT709_TAGS);
+        // Moves the index to the front so a browser can start playing before
+        // the whole file has downloaded. Costs one extra pass over the output.
+        args.extend_from_slice(&["-movflags", "+faststart"]);
+        self.encode_with_ffmpeg(scene, output_path, &args)
+    }
+
+    /// Export VP9 `WebM` — smaller, web-friendly.
     pub fn export_webm(&mut self, scene: &Scene, output_path: &Path) -> Result<()> {
-        self.encode_with_ffmpeg(
-            scene,
-            output_path,
-            &[
-                "-c:v",
-                "libvpx-vp9",
-                "-b:v",
-                "0",
-                "-crf",
-                "30",
-                "-pix_fmt",
-                "yuv420p",
-            ],
-        )
+        self.export_webm_with(scene, output_path, Quality::default())
+    }
+
+    /// Export VP9 `WebM` at a chosen [`Quality`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if ffmpeg is missing or the encode fails.
+    pub fn export_webm_with(
+        &mut self,
+        scene: &Scene,
+        output_path: &Path,
+        quality: Quality,
+    ) -> Result<()> {
+        let crf = quality.crf_vp9().to_string();
+        let mut args = vec![
+            "-c:v",
+            "libvpx-vp9",
+            "-b:v",
+            "0",
+            "-crf",
+            &crf,
+            // VP9 is single-threaded per tile without this; on a wide frame it
+            // is the difference between using one core and using several.
+            "-row-mt",
+            "1",
+            "-pix_fmt",
+            quality.pix_fmt_vp9(),
+        ];
+        args.extend_from_slice(BT709_TAGS);
+        self.encode_with_ffmpeg(scene, output_path, &args)
     }
 
     /// Export an animated GIF using a single-pass palettegen/paletteuse filter

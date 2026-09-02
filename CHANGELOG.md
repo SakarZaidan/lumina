@@ -62,6 +62,30 @@ programme to reach reference quality in [plan/](plan/).
   Shared between backends and bounded, so an unvalidated caller cannot hang the
   renderer.
 
+### Added
+- **Full SVG path grammar.** `Q`/`q`, `S`/`s`, `T`/`t` and elliptical arcs
+  `A`/`a` are now understood; previously the parser handled `M L H V C Z` and
+  silently ignored the rest, so curves from any vector editor were dropped
+  without a word. Arcs are converted to cubic Béziers via the SVG 1.1
+  endpoint-to-centre parameterisation.
+- **Repeated coordinate sets.** `L 1 1 2 2 3 3` draws three lines, and a repeat
+  after `M` becomes an implicit line, as the specification requires. Both are
+  ubiquitous in real files and neither worked.
+- Numbers may run together without separators — `M0 0-1-1` and `1.5.5` are
+  legal SVG and both broke the previous whitespace-splitting lexer.
+- **Path errors name the offending token and its offset** rather than
+  discarding the whole shape.
+- **Colour-space tagging on every video.** Output carries BT.709 primaries,
+  transfer, matrix and `tv` range. Without them a player guesses, and players
+  guess differently — the same file looked different in QuickTime, VLC and
+  Chrome.
+- **`--quality draft|standard|final`.** Trades encoder effort and bit depth,
+  never pixels: `final` produces 10-bit output to keep banding out of
+  gradients. `-tune animation` and `+faststart` are on by default, and VP9
+  gains `-row-mt`.
+- `INVALID_COLOR` validation error. An unparseable colour — `"red"`, a typo, or
+  SVG's `"none"` — silently became **opaque white** in the renderer.
+
 ### Fixed
 - **Rendering was not deterministic between runs.** Objects sharing a `z_index`
   were ordered by a *stable* sort over a `HashMap`, whose iteration order Rust

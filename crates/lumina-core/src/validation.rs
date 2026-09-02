@@ -335,6 +335,30 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         }
     }
 
+    // Check 7e: Colours must parse. An unrecognised colour string silently
+    // becomes opaque white in the renderer, so a typo — or an SVG habit like
+    // `"none"` — renders as a white shape with nothing to say why.
+    check_colour(&scene.canvas.background, "$.canvas.background", &mut errors);
+    for (id, obj) in &scene.objects {
+        if let Ok(serde_json::Value::Object(props)) =
+            serde_json::to_value(obj).map(|v| v["properties"].clone())
+        {
+            for (name, value) in &props {
+                if matches!(name.as_str(), "fill" | "stroke" | "color") {
+                    // Gradients are objects, not strings; only literals are
+                    // checked here.
+                    if let Some(text) = value.as_str() {
+                        check_colour(
+                            text,
+                            &format!("$.objects.{id}.properties.{name}"),
+                            &mut errors,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // Check 7c: Per-object work that is repeated every frame.
     for (id, obj) in &scene.objects {
         validate_object_bounds(id, obj, &mut errors);
@@ -721,6 +745,34 @@ fn check_representable(value: &Value, path: &str, errors: &mut Vec<ValidationErr
         }
         _ => {}
     }
+}
+
+/// Reject colour strings the renderer cannot parse.
+///
+/// `parse_rgba8` falls back to opaque white for anything it does not
+/// recognise, so `"#GGG"`, `"red"`, or SVG's `"none"` all render as a white
+/// shape and nothing reports it.
+fn check_colour(value: &str, path: &str, errors: &mut Vec<ValidationError>) {
+    let hex = value.strip_prefix('#').unwrap_or("");
+    let ok = matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
+    if ok {
+        return;
+    }
+    errors.push(ValidationError {
+        code: "INVALID_COLOR".to_string(),
+        path: path.to_string(),
+        message: format!(
+            "{value:?} is not a colour. The renderer would draw it as opaque white without \
+             reporting anything."
+        ),
+        fix_suggestion: if value.eq_ignore_ascii_case("none") {
+            "There is no \"none\" value. Omit `fill` for a shape with no fill, or use an \
+             alpha of 00 (e.g. \"#00000000\")."
+                .to_string()
+        } else {
+            "Use #RGB, #RRGGBB, or #RRGGBBAA.".to_string()
+        },
+    });
 }
 
 fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<GroupWalk> {
