@@ -1,0 +1,47 @@
+# OpenSSF Scorecard: an outside opinion on this repository's supply-chain
+# posture, scored against checks we did not write.
+#
+# Worth having precisely because it is not self-assessment. The project keeps
+# its own quality scorecard in `planning/METRICS.md`, and a metric you grade
+# yourself is one you can talk yourself into. Scorecard checks branch
+# protection, pinned dependencies, token permissions, and whether a security
+# policy exists — mechanically, from the outside.
+name: Scorecard
+
+on:
+  schedule:
+    - cron: "30 7 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Publishing the result to the OpenSSF API, which is what makes the badge
+      # resolve. Nothing here writes to the repository.
+      id-token: write
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+      - uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        with:
+          sarif_file: results.sarif
