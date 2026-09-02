@@ -78,6 +78,12 @@ programme to reach reference quality in [plan/](plan/).
   Output is byte-identical. The buffer is cleared to the background before
   anything is drawn — the same operation that always began a frame — and it is
   reallocated whenever the requested frame size changes.
+- **Timeline evaluation is 34–42% faster.** Per-frame state was built into a
+  nested `HashMap` and then rebuilt into `serde_json::Map`s, walking and
+  reallocating every property twice; it is built once now. Keyframe lookup is a
+  binary search rather than a linear scan — the tracks were already sorted, and
+  the scan ran once per property, per object, per frame. Camera keyframe lookup
+  likewise.
 
 
 ### Added

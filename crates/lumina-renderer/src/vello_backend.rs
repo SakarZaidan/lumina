@@ -215,7 +215,7 @@ impl VelloRenderer {
             canvas: (width, height),
         };
         for id in crate::common::scene::sorted_root_ids(objects) {
-            self.draw_node(&mut scene, &id, &ctx, root, 0)?;
+            self.draw_node(&mut scene, id, &ctx, root, 0)?;
         }
 
         Ok(scene)

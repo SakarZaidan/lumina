@@ -48,13 +48,27 @@ on one runner instead, for the reason given below.
 | `plot_render/8x2000` | 7.88 ms | **2.99 ms** | −61.8% |
 | `frame_sequence/30` (720p) | 18.9 ms | **16.5 ms** | −12.8% |
 | `frame_sequence/120` (720p) | 75.8 ms | **65.2 ms** | −14.9% |
-| `timeline_eval/100` / `/1000` / `/2000` | 97.5 µs / 1.15 ms / 2.48 ms | unchanged | — |
+| `timeline_eval/100` | 97.5 µs | **56.2 µs** | −42.2% |
+| `timeline_eval/500` | 558 µs | **352 µs** | −35.8% |
+| `timeline_eval/1000` | 1.15 ms | **736 µs** | −36.0% |
+| `timeline_eval/2000` | 2.48 ms | **1.60 ms** | −34.6% |
 | `scene_walk/100` / `/1000` | 9.49 µs / 102 µs | unchanged | — |
 | `scene_walk/timeline_build_100` / `/1000` | 237 µs / 2.34 ms | unchanged | — |
 | `easing/get_easing_fn_lookup` | 4.35 ns | unchanged | — |
 | `easing/eval_easing_cubic_bezier` | 16.7 ns | unchanged | — |
 
-All changes above significant at p = 0.00. `frame_sequence` improves least
+`frame_sequence` improved a further **9%** on top of the buffer-reuse figure
+once timeline evaluation was cut, so the combined effect on the most
+realistic measurement is roughly **−22%** from baseline.
+
+Not everything moved the right way. Borrowing rather than cloning in
+`sorted_root_ids` left `skia_render/10` and `/100` about **1% slower**
+(p = 0.00, so systematic rather than noise) — the benchmark scenes have no
+groups, so there was little cloning to remove, and the change is likely code
+layout. It is far below the CI gate and far below the timeline win it came
+with, but it is recorded rather than omitted.
+
+All other changes above significant at p = 0.00. `frame_sequence` improves least
 because it runs at 720p — a smaller buffer faults in fewer pages — and because
 its remaining time is timeline evaluation plus the output copy, which are the
 next two targets (`AAA-P-04`, and the `render_into` half of `AAA-P-02`).
