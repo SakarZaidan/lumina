@@ -72,6 +72,6 @@ image = "0.25"
 clap = { version = "4.5", features = ["derive"] }
 axum = "0.7"
 rayon = "1.10"
-evalexpr = "11"
+evalexpr = "13"
 notify = "6"
 proptest = "1"
