@@ -24,6 +24,32 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-04 (evening) — The CLI grows verbs, and becomes testable
+
+- Subcommands: `render`, `validate`, `schema`, `objects`, `new`, `inspect`.
+  **The flag form still works** and routes through the same code. Every
+  example, CI job and book page invokes it, and breaking those to gain a nicer
+  noun-verb shape would be paying a real cost for a stylistic one.
+- The logic moved into a library target, which is what closes the 0% coverage
+  the previous session's measurement exposed (TD-10). 470 uncovered regions in
+  a `main` nobody could call; the library is at **82%** with 13 tests.
+- Two things the tests caught immediately, both because I wrote the template
+  from memory rather than from the schema:
+  - The starter scene used a per-property `keyframes` shape. The real
+    `TimelineEntry` is a time-sliced snapshot — `{time, object, state}`. A
+    template that does not parse is worse than no template.
+  - `ease_out_back` does not exist. The registry has 33 easings and that is not
+    one of them; the overshooting one is `ease_out_elastic`.
+- The easing plot scales to what the curve *produces*, not to the unit square.
+  Several easings leave [0, 1] deliberately, and clamping would draw
+  `ease_out_elastic` identically to `ease_out_cubic` — the single thing the
+  plot exists to distinguish. A test asserts the overshoot survives.
+- `--format mp4 -o out` now writes `out.mp4`. It used to write a file called
+  `out` that no player opens on a double-click.
+- `clap`'s `required_unless_present` takes an argument id and a subcommand is
+  not one, so it demanded `--scene` even for `lumina-cli schema`. The check is
+  explicit at runtime now, with an error naming both forms.
+
 ## 2026-09-04 (later) — Coverage stops being an assertion
 
 - `AAA-TEST-06`. `cargo-llvm-cov` runs in CI, reports the number, and fails
