@@ -22,6 +22,11 @@ fn backends_contain_no_duplicated_parser_code() {
         // Tick positions. `t += step` accumulates error; the `+ 1e-4` fudge
         // that used to guard the loop was the symptom.
         "while t <= end",
+        // Glyph placement (TD-18). Where a glyph goes is layout and belongs in
+        // `common::text`; the backends may only differ in how they composite
+        // it. This fragment is the fontdue baseline arithmetic that was
+        // written out in both files.
+        "metrics.ymin as f32",
     ];
     for file in ["src/skia_backend.rs", "src/vello_backend.rs"] {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(file);

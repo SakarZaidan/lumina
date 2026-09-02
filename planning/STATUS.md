@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 (later) — Text stops snapping, and TD-18 closes
+
+- `AAA-OUT-09` and `AAA-OUT-10`, which turned out to be one fix.
+- **Measured first.** Sweeping a two-glyph run across a single pixel produced
+  **four** distinct frames: `Pixmap::draw_pixmap` snaps a translation to whole
+  pixels whatever the filter quality (setting `FilterQuality::Bilinear` changed
+  not one byte — checked). So each glyph jumped a whole pixel at a time, at its
+  own moment, which is worse than a uniform snap: the spacing between letters
+  wobbled while the word moved.
+- The sub-pixel remainder is baked into the glyph coverage; only the whole-pixel
+  part reaches the transform, which is all the compositor would have honoured.
+  Ten positions inside a pixel now give ten distinct frames, and the centroid
+  travels 0.9px when x does.
+- That same change closed **TD-18**. Layout had been written twice and the GPU
+  backend resampled a whole-string bitmap — glyphs sampled twice against the CPU
+  backend's once. Layout is now `common::text`, the GPU backend draws one image
+  per glyph, and both composite the identical bitmap at the identical integer
+  offset. `04_text` dropped from `TEXT_TOL` to `DEFAULT_TOL`; `TEXT_TOL`
+  survives only for the combined fixture, tightened from 1.5% pixels / 1.5 mean
+  to 0.15% / 0.8, the mean borrowed from `GRADIENT_TOL` because the fixture
+  contains gradients rather than because it fits.
+- Cost: text-heavy scenes are ~4% slower (`text_render/40x40` 3.61 → 3.76 ms).
+  The gate allows 25%, and the trade is a genuine quality gain in both places.
+- 84 lines of the old whole-string path deleted; the duplication gate now
+  guards the glyph placement arithmetic too.
+- Tests 272 → 275.
+
 ## 2026-09-03 — Audio
 
 - `AAA-OUT-08`. `assets.audio`: a list of files with `start` (seconds, negative
