@@ -445,3 +445,77 @@ mod easing_preconditions {
         assert!(validate_scene_data(&spring).valid);
     }
 }
+
+/// The engine renders in `f32`. A number that does not survive that conversion
+/// does not fail loudly — `serde_json` encodes the resulting infinity as
+/// `null`, the property vanishes from the state map, and the renderer
+/// substitutes its own default. The animation is wrong and nothing says so.
+#[cfg(test)]
+mod representable_numbers {
+    use crate::validation::validate_scene_data;
+    use lumina_schema::{Scene, TimelineEntry};
+
+    fn scene_with_state(state: serde_json::Value) -> Scene {
+        let json = serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 100, "height": 100, "fps": 30, "duration": 2.0, "background": "#000000" },
+            "objects": {
+                "dot": { "type": "Circle", "properties": { "cx": 10, "cy": 10, "radius": 5 } }
+            },
+            "timeline": []
+        });
+        let mut scene: Scene = serde_json::from_value(json).expect("fixture");
+        scene.timeline.push(TimelineEntry {
+            time: 1.0,
+            object: "dot".to_string(),
+            state,
+            easing: "linear".to_string(),
+            easing_params: None,
+        });
+        scene
+    }
+
+    fn codes(scene: &Scene) -> Vec<String> {
+        validate_scene_data(scene)
+            .errors
+            .into_iter()
+            .map(|e| e.code)
+            .collect()
+    }
+
+    #[test]
+    fn a_keyframe_value_that_overflows_f32_is_rejected() {
+        // 1e39 parses as f64 without complaint and becomes inf as f32.
+        let s = scene_with_state(serde_json::json!({ "cx": 1e39 }));
+        assert!(
+            codes(&s).iter().any(|c| c == "NUMBER_NOT_REPRESENTABLE"),
+            "got {:?}",
+            codes(&s)
+        );
+    }
+
+    #[test]
+    fn overflow_inside_an_array_is_rejected() {
+        // Point lists and gradient stops are arrays, so the check recurses.
+        let s = scene_with_state(serde_json::json!({ "points": [[0.0, 0.0], [1e40, 3.0]] }));
+        assert!(
+            codes(&s).iter().any(|c| c == "NUMBER_NOT_REPRESENTABLE"),
+            "got {:?}",
+            codes(&s)
+        );
+    }
+
+    #[test]
+    fn ordinary_magnitudes_are_accepted() {
+        // Including values that are large but perfectly representable.
+        let s = scene_with_state(serde_json::json!({
+            "cx": 1920.0, "radius": 1e30, "opacity": 0.5, "points": [[-1e20, 1e20]]
+        }));
+        assert!(
+            validate_scene_data(&s).valid,
+            "got {:?}",
+            validate_scene_data(&s).errors
+        );
+    }
+}

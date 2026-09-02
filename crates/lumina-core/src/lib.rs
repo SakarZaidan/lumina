@@ -50,6 +50,8 @@ mod easing_tests;
 #[cfg(test)]
 mod events_tests;
 #[cfg(test)]
+mod interp_proptests;
+#[cfg(test)]
 mod interp_tests;
 #[cfg(test)]
 mod scene_patch_tests;

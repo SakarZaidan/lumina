@@ -30,8 +30,26 @@ programme to reach reference quality in [plan/](plan/).
 - **Particle positions shift slightly.** `hash01` divided by `u32::MAX`, which
   f32 rounds *up* to 2^32, so large inputs produced exactly `1.0` despite the
   documented `[0, 1)` range. It now divides by 2^32 using the top 24 bits.
+- **Colours interpolate in OKLab** rather than CIELAB. Both are perceptual, but
+  CIELAB's hue lines bend — blue to white drifts purple through the midpoint —
+  while OKLab was fitted so straight lines look straight. Endpoints are
+  unchanged; midpoints of a fade will look different, and better.
+- **Colour interpolation is alpha-aware.** `#RGBA` and `#RRGGBBAA` previously
+  failed to parse, so a fade between two eight-digit colours *snapped* to the
+  destination instead of blending. Alpha blends linearly, which is correct — it
+  is a coverage fraction, not a perceptual quantity. A colour written without
+  alpha still comes back without alpha.
+- Interpolation never yields `null`. `Value::from` maps non-finite floats to
+  `Value::Null`, which made the property disappear from the state map so the
+  renderer silently used its default.
 
 ### Added
+- `NUMBER_NOT_REPRESENTABLE` validation error. `1e39` parses as f64 without
+  complaint and becomes `inf` as f32 — the precision the engine renders with —
+  so the property would vanish. Checked recursively, since point lists and
+  gradient stops are arrays.
+- **Property tests** over interpolation: finiteness, exact endpoints,
+  boundedness, totality against mismatched types, and colour round-tripping.
 - **Property tests** (`proptest`) over the easing registry: endpoint pinning,
   finiteness, boundedness, monotonicity, determinism, and a distinct-value
   count that distinguishes a real curve from a quantised approximation. The

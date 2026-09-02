@@ -8,6 +8,7 @@
 use crate::easing::{is_valid_easing, suggest_easing};
 use lumina_schema::{Action, Object, Scene};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 // ── Resource bounds ─────────────────────────────────────────────────────────
@@ -313,6 +314,24 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                      {MAX_TOTAL_FRAMES} frames."
                 ),
             });
+        }
+    }
+
+    // Check 7d: Keyframe values must survive the f32 conversion the engine
+    // performs on every number. `1e39` parses happily as f64, becomes `inf`
+    // as f32, and `serde_json` then encodes that as `null` — so the property
+    // silently disappears from the state map and the renderer substitutes its
+    // own default. Telling the author is the whole point of a validator.
+    for (i, entry) in scene.timeline.iter().enumerate() {
+        if let Value::Object(state) = &entry.state {
+            for (prop, value) in state {
+                check_representable(
+                    value,
+                    &format!("$.timeline[{i}].state.{prop}"),
+                    &mut errors,
+                    0,
+                );
+            }
         }
     }
 
@@ -661,6 +680,47 @@ enum GroupWalk {
     /// trips on a straight chain — but recursing it would overflow the stack,
     /// which aborts the process rather than failing the request.
     TooDeep(String),
+}
+
+/// Reject numbers that cannot be represented as `f32`.
+///
+/// Recurses into arrays, since point lists and gradient stops are written that
+/// way. `depth` bounds the walk; `serde_json` caps nesting at 128, so this is
+/// belt and braces rather than a live vector.
+fn check_representable(value: &Value, path: &str, errors: &mut Vec<ValidationError>, depth: usize) {
+    const MAX_VALUE_DEPTH: usize = 32;
+    if depth > MAX_VALUE_DEPTH {
+        return;
+    }
+    match value {
+        Value::Number(n) => {
+            let Some(v) = n.as_f64() else { return };
+            if !v.is_finite() || (v as f32).is_finite() {
+                // Non-finite cannot appear in JSON, and anything that survives
+                // the cast is fine.
+                return;
+            }
+            errors.push(ValidationError {
+                code: "NUMBER_NOT_REPRESENTABLE".to_string(),
+                path: path.to_string(),
+                message: format!(
+                    "{v:e} overflows 32-bit float, which is the precision the engine renders \
+                     with. The property would silently vanish rather than animate."
+                ),
+                fix_suggestion: format!(
+                    "Use a value within +/-{:e}. Coordinates this large are almost always a \
+                     generated-scene bug.",
+                    f32::MAX
+                ),
+            });
+        }
+        Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                check_representable(item, &format!("{path}[{i}]"), errors, depth + 1);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn detect_group_cycle(objects: &HashMap<String, Object>) -> Option<GroupWalk> {
