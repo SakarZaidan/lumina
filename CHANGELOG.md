@@ -62,6 +62,24 @@ programme to reach reference quality in [plan/](plan/).
   Shared between backends and bounded, so an unvalidated caller cannot hang the
   renderer.
 
+### Fixed
+- **Rendering was not deterministic between runs.** Objects sharing a `z_index`
+  were ordered by a *stable* sort over a `HashMap`, whose iteration order Rust
+  randomises per process — so tied objects were drawn in a different sequence in
+  different runs, and wherever they overlapped, the pixels differed. Twelve
+  exports of `examples/unit_circle.lsf` produced two distinct results, 7 and 5.
+
+  Draw order is now `(z_index, id)`, a total order over the scene's contents
+  rather than over how they happen to be stored.
+
+  This violated the project's most load-bearing guarantee — VISION.md principle
+  2 and ENGINEERING_PRINCIPLES #1 — and no existing test could see it: the
+  golden-pixel and cross-backend parity suites both render inside a single
+  process, where a map's iteration order is fixed for its lifetime. The
+  divergence only appears *between* processes. `tests/draw_order.rs` asserts
+  the property directly instead, by building the same scene with different
+  insertion orders.
+
 ### Performance
 - **Rendering is 3.5–9× faster.** The renderer allocated a fresh frame buffer
   every frame. An 8.3 MB `Pixmap` at 1080p costs **5.3 ms** to allocate and

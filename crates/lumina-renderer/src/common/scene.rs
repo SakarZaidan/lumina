@@ -51,9 +51,22 @@ pub(crate) fn sorted_root_ids(objects: &HashMap<String, Object>) -> Vec<&str> {
         .map(|(id, obj)| (id.as_str(), z_index(obj)))
         .collect();
 
-    // Stable, so ties keep the map's iteration order — identical on both
-    // backends within a frame because they receive the same map.
-    roots.sort_by_key(|(_, z)| *z);
+    // Ties break on the object id, not on map order.
+    //
+    // A stable sort alone was not enough. `objects` is a `HashMap`, whose
+    // iteration order is randomised **per process** by `RandomState`, so a
+    // stable sort preserved an order that differed between runs. Two objects
+    // sharing a z-index would then be drawn in a different sequence in
+    // different processes, and wherever they overlapped, the pixels differed.
+    //
+    // That made `lumina-cli` non-deterministic across runs — two exports of
+    // the same scene producing different files — which the golden-pixel and
+    // parity suites could not see, because both render within a single
+    // process where the iteration order is fixed for the lifetime of the map.
+    //
+    // Sorting on `(z_index, id)` is a total order over the objects, so it does
+    // not depend on how they are stored or in what order they were inserted.
+    roots.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(b.0)));
     roots.into_iter().map(|(id, _)| id).collect()
 }
 
@@ -66,7 +79,11 @@ pub(crate) fn sorted_children<'a>(
         .iter()
         .map(|cid| (cid.as_str(), objects.get(cid).map(z_index).unwrap_or(0)))
         .collect();
-    out.sort_by_key(|(_, z)| *z);
+    // Total order, for the same reason as `sorted_root_ids`. Children come
+    // from a `Vec` so their order is already stable, but tying the sort to the
+    // id as well means the two functions cannot drift apart, and a group whose
+    // children are reordered by a scene patch still draws identically.
+    out.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(b.0)));
     out.into_iter().map(|(id, _)| id).collect()
 }
 
