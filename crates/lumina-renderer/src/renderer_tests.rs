@@ -927,3 +927,182 @@ mod hash_range {
         }
     }
 }
+
+/// The frame buffer is reused between renders. These assert that reuse cannot
+/// leak anything from one frame into the next.
+///
+/// This is the correctness risk the optimisation creates, and it is the kind
+/// that would not show up as a crash — it would show up as a faint ghost of a
+/// previous frame in one corner of a video, months later.
+#[cfg(test)]
+mod frame_buffer_reuse {
+    use crate::{skia_backend::SkiaRenderer, Renderer};
+    use lumina_schema::{CircleProps, Object, RectangleProps};
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    fn circle_scene() -> (HashMap<String, Object>, HashMap<String, serde_json::Value>) {
+        let mut objects = HashMap::new();
+        objects.insert(
+            "c".to_string(),
+            Object::Circle(CircleProps {
+                cx: 50.0,
+                cy: 50.0,
+                radius: 30.0,
+                z_index: 1,
+                fill: "#FF0000".into(),
+                stroke: None,
+                stroke_width: 0.0,
+                shadow: None,
+                opacity: 1.0,
+            }),
+        );
+        let mut states = HashMap::new();
+        states.insert(
+            "c".to_string(),
+            json!({"cx":50.0,"cy":50.0,"radius":30.0,"fill":"#FF0000","opacity":1.0,"z_index":1}),
+        );
+        (objects, states)
+    }
+
+    fn rect_scene() -> (HashMap<String, Object>, HashMap<String, serde_json::Value>) {
+        let mut objects = HashMap::new();
+        objects.insert(
+            "r".to_string(),
+            Object::Rectangle(RectangleProps {
+                x: 10.0,
+                y: 10.0,
+                width: 20.0,
+                height: 20.0,
+                rx: 0.0,
+                ry: 0.0,
+                z_index: 1,
+                fill: "#00FF00".into(),
+                stroke: None,
+                stroke_width: 0.0,
+                shadow: None,
+                opacity: 1.0,
+            }),
+        );
+        let mut states = HashMap::new();
+        states.insert(
+            "r".to_string(),
+            json!({"x":10.0,"y":10.0,"width":20.0,"height":20.0,"fill":"#00FF00",
+                   "opacity":1.0,"z_index":1,"rx":0.0,"ry":0.0}),
+        );
+        (objects, states)
+    }
+
+    #[test]
+    fn a_reused_buffer_renders_the_same_as_a_fresh_one() {
+        let (c_objects, c_states) = circle_scene();
+        let (r_objects, r_states) = rect_scene();
+
+        // A renderer that has drawn something else first.
+        let mut reused = SkiaRenderer::new();
+        let _ = reused
+            .render_frame(&c_objects, &c_states, 100, 100, "#000000", None)
+            .expect("first render");
+        let after_reuse = reused
+            .render_frame(&r_objects, &r_states, 100, 100, "#000000", None)
+            .expect("second render");
+
+        // A renderer that has drawn nothing.
+        let mut fresh = SkiaRenderer::new();
+        let from_fresh = fresh
+            .render_frame(&r_objects, &r_states, 100, 100, "#000000", None)
+            .expect("fresh render");
+
+        assert_eq!(
+            after_reuse, from_fresh,
+            "a reused buffer must produce byte-identical output to a fresh one; \
+             anything else is a previous frame bleeding through"
+        );
+    }
+
+    #[test]
+    fn a_large_frame_followed_by_a_small_one_leaves_nothing_behind() {
+        // The buffer is only reused when the dimensions match. Shrinking must
+        // reallocate rather than render into a corner of the larger buffer.
+        let (objects, states) = circle_scene();
+
+        let mut reused = SkiaRenderer::new();
+        let _ = reused
+            .render_frame(&objects, &states, 200, 200, "#123456", None)
+            .expect("large render");
+        let small = reused
+            .render_frame(&objects, &states, 60, 60, "#123456", None)
+            .expect("small render");
+
+        let mut fresh = SkiaRenderer::new();
+        let expected = fresh
+            .render_frame(&objects, &states, 60, 60, "#123456", None)
+            .expect("fresh small render");
+
+        assert_eq!(
+            small.len(),
+            60 * 60 * 4,
+            "wrong buffer size after shrinking"
+        );
+        assert_eq!(
+            small, expected,
+            "shrinking must not reuse the larger buffer"
+        );
+    }
+
+    #[test]
+    fn repeated_renders_stay_identical() {
+        // Determinism is the guarantee the whole engine rests on, and buffer
+        // reuse is exactly the kind of change that could quietly break it.
+        let (objects, states) = circle_scene();
+        let mut r = SkiaRenderer::new();
+        let first = r
+            .render_frame(&objects, &states, 120, 90, "#0F0F1A", None)
+            .expect("render");
+        for i in 0..8 {
+            let again = r
+                .render_frame(&objects, &states, 120, 90, "#0F0F1A", None)
+                .expect("render");
+            assert_eq!(first, again, "render {i} differed from the first");
+        }
+    }
+
+    #[test]
+    fn a_failed_render_does_not_lose_the_buffer() {
+        // An error path that dropped the buffer would make the next frame pay
+        // the allocation this exists to avoid — a silent performance
+        // regression with no test to catch it.
+        let mut objects = HashMap::new();
+        objects.insert(
+            "bad".to_string(),
+            Object::Arrow(lumina_schema::ArrowProps {
+                from: [0.0, 0.0],
+                to: [1.0, 1.0],
+                z_index: 1,
+                color: "#FFFFFF".into(),
+                stroke_width: 1.0,
+                opacity: 1.0,
+                label: None,
+            }),
+        );
+        let mut states = HashMap::new();
+        // A malformed `from` — the backends agree this is an error (#53).
+        states.insert("bad".to_string(), json!({"from":[0.0],"to":[1.0,1.0]}));
+
+        let mut r = SkiaRenderer::new();
+        assert!(r
+            .render_frame(&objects, &states, 64, 64, "#000000", None)
+            .is_err());
+
+        // The next render must still succeed and be correct.
+        let (c_objects, c_states) = circle_scene();
+        let after = r
+            .render_frame(&c_objects, &c_states, 64, 64, "#000000", None)
+            .expect("render after an error");
+        let mut fresh = SkiaRenderer::new();
+        let expected = fresh
+            .render_frame(&c_objects, &c_states, 64, 64, "#000000", None)
+            .expect("fresh render");
+        assert_eq!(after, expected);
+    }
+}
