@@ -654,12 +654,11 @@ impl VelloRenderer {
                 scene.stroke(&stroke, affine, color, None, &main);
 
                 let tick_h = 8.0;
-                let mut t = start;
-                while t <= end + 1e-4 {
+                for i in 0..crate::common::ticks::count(start as f32, end as f32, step as f32) {
+                    let t = f64::from(crate::common::ticks::at(start as f32, step as f32, i));
                     let px = x + (t - start) / range * length;
                     let tick = Line::new((px, y - tick_h), (px, y + tick_h));
                     scene.stroke(&stroke, affine, color, None, &tick);
-                    t += step;
                 }
             }
             Object::Axes(_) => {
@@ -720,9 +719,10 @@ impl VelloRenderer {
                 );
 
                 // X ticks and optional vertical grid lines
-                let x_count = ((x_max - x_min) / x_step).ceil() as i32;
-                for i in 0..=x_count {
-                    let tx = x_min + i as f64 * x_step;
+                let x_count =
+                    crate::common::ticks::count(x_min as f32, x_max as f32, x_step as f32);
+                for i in 0..x_count {
+                    let tx = f64::from(crate::common::ticks::at(x_min as f32, x_step as f32, i));
                     if tx > x_max + 1e-4 {
                         break;
                     }
@@ -746,9 +746,10 @@ impl VelloRenderer {
                 }
 
                 // Y ticks and optional horizontal grid lines
-                let y_count = ((y_max - y_min) / y_step).ceil() as i32;
-                for i in 0..=y_count {
-                    let ty = y_min + i as f64 * y_step;
+                let y_count =
+                    crate::common::ticks::count(y_min as f32, y_max as f32, y_step as f32);
+                for i in 0..y_count {
+                    let ty = f64::from(crate::common::ticks::at(y_min as f32, y_step as f32, i));
                     if ty > y_max + 1e-4 {
                         break;
                     }
@@ -780,9 +781,8 @@ impl VelloRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
                 let color =
                     parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let total_samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
+                let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
                 let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0) as f32;
-                let samples = ((total_samples as f32 * draw_fraction) as usize).max(1);
 
                 let axes_s = match states.get(axes_id) {
                     Some(s) => s,
@@ -813,48 +813,22 @@ impl VelloRenderer {
                 let oy = y - (0.0 - y_min) * scale;
                 let x_end = x_min + (x_max - x_min) * draw_fraction as f64;
 
-                // Normalize bare math functions to evalexpr math:: namespace
-                let normalized;
-                let function_str: &str = if function_str.contains("math::") {
-                    function_str
-                } else {
-                    normalized = function_str
-                        .replace("sin(", "math::sin(")
-                        .replace("cos(", "math::cos(")
-                        .replace("tan(", "math::tan(")
-                        .replace("sqrt(", "math::sqrt(")
-                        .replace("abs(", "math::abs(")
-                        .replace("exp(", "math::exp(")
-                        .replace("ln(", "math::ln(");
-                    &normalized
-                };
+                // Sampling is shared with the CPU backend so both draw the
+                // same curve from the same points (TD-02): where to sample is a
+                // rendering decision, and only the emitting differs.
+                let segments =
+                    crate::common::plot::sample(function_str, x_min, x_end, y_min, y_max, samples);
 
                 let mut path = BezPath::new();
-                let mut started = false;
-                for i in 0..=samples {
-                    let mx = x_min + (i as f64 / samples as f64) * (x_end - x_min);
-                    let eval_ctx = evalexpr::context_map! { "x" => mx };
-                    let my = match eval_ctx
-                        .and_then(|c| evalexpr::eval_number_with_context(function_str, &c))
-                    {
-                        Ok(v) => v,
-                        Err(_) => {
-                            started = false;
-                            continue;
+                for segment in &segments {
+                    for (i, (mx, my)) in segment.iter().enumerate() {
+                        let sx = ox + mx * scale;
+                        let sy = oy - my * scale;
+                        if i == 0 {
+                            path.move_to((sx, sy));
+                        } else {
+                            path.line_to((sx, sy));
                         }
-                    };
-                    let y_margin = (y_max - y_min).abs();
-                    if !my.is_finite() || my < y_min - y_margin || my > y_max + y_margin {
-                        started = false;
-                        continue;
-                    }
-                    let sx = ox + mx * scale;
-                    let sy = oy - my * scale;
-                    if !started {
-                        path.move_to((sx, sy));
-                        started = true;
-                    } else {
-                        path.line_to((sx, sy));
                     }
                 }
                 if !path.is_empty() {

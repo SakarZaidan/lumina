@@ -6,9 +6,23 @@ use std::path::Path;
 
 #[test]
 fn backends_contain_no_duplicated_parser_code() {
-    // Signature strings of the logic that was deduplicated: hex color
-    // parsing, and the per-variant z-index match.
-    let forbidden = ["from_str_radix", "=> p.z_index"];
+    // Signature strings of the logic that was deduplicated. Each entry is a
+    // fragment that can only appear if that decision has been reimplemented in
+    // a backend rather than consumed from `common/`.
+    let forbidden = [
+        // Hex colour parsing.
+        "from_str_radix",
+        // The per-variant z-index match.
+        "=> p.z_index",
+        // Plot sampling: where to evaluate a function is a rendering decision,
+        // and it was previously written twice — including the substring
+        // rewrite that turned `asin(` into `amath::sin(`.
+        "math::sin(",
+        "eval_number_with_context",
+        // Tick positions. `t += step` accumulates error; the `+ 1e-4` fudge
+        // that used to guard the loop was the symptom.
+        "while t <= end",
+    ];
     for file in ["src/skia_backend.rs", "src/vello_backend.rs"] {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(file);
         let src =
