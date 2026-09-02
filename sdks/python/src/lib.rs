@@ -11,11 +11,11 @@
 // it cannot be silenced by an `allow` further down, so a future `unsafe` block
 // has to be argued for by removing this line, in a diff a reviewer will see.
 #![forbid(unsafe_code)]
-use lumina_export::Exporter;
-use lumina_renderer::skia_backend::SkiaRenderer;
-use lumina_renderer::Renderer;
-use lumina_schema::Scene;
-use lumina_server::validate_scene_data;
+use luminafx_export::Exporter;
+use luminafx_renderer::skia_backend::SkiaRenderer;
+use luminafx_renderer::Renderer;
+use luminafx_schema::Scene;
+use luminafx_server::validate_scene_data;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 

@@ -14,9 +14,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::{skia_backend::SkiaRenderer, Renderer};
-use lumina_schema::Scene;
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
+use luminafx_schema::Scene;
 
 /// Four overlapping rectangles sharing one z-index, plus two that do not.
 ///
@@ -117,7 +117,7 @@ fn z_index_still_wins_over_id() {
     // The tie-break must only apply to ties.
     let mut scene = tied_scene(&["a", "b", "c", "d"]);
     // Give "a" — first alphabetically — the highest z, so it must win.
-    if let Some(lumina_schema::Object::Rectangle(p)) = scene.objects.get_mut("a") {
+    if let Some(luminafx_schema::Object::Rectangle(p)) = scene.objects.get_mut("a") {
         p.z_index = 99;
     }
     let pixels = render(&scene);

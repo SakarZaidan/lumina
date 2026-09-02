@@ -1,0 +1,86 @@
+# Publish the library crates and the CLI to crates.io.
+#
+# Triggered by pushing a `v*` tag, or run manually with `dry_run: true` to
+# rehearse the whole thing without uploading anything.
+#
+# The order below is the dependency order and is not negotiable: a crate cannot
+# be published until everything it depends on is already on the registry, so
+# `luminafx-schema` goes first and `luminafx-cli` last. `cargo publish` waits
+# for each crate to appear in the index before returning, so no sleeps are
+# needed between steps.
+#
+# `luminafx-server`, `luminafx-wasm`, `luminafx-bench` and `xtask` are
+# `publish = false` and deliberately absent: the server is not yet hardened for
+# public deployment (TD-09), the wasm crate ships to npm through wasm-pack
+# rather than to crates.io, and the other two are development tools.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Package and verify without uploading"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install FFmpeg (lumina-export tests shell out to it)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # The tag must match the version in Cargo.toml, or the release publishes
+      # something other than what the tag names. Checked before anything is
+      # uploaded, because a publish cannot be undone — only yanked.
+      - name: Tag matches the workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          manifest=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$manifest" != "$tag" ]; then
+            echo "::error::tag v$tag does not match workspace version $manifest"
+            exit 1
+          fi
+          echo "publishing $manifest"
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          DRY: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          set -euo pipefail
+          for crate in \
+            luminafx-schema \
+            luminafx-text \
+            luminafx-core \
+            luminafx-renderer \
+            luminafx-export \
+            luminafx-cli
+          do
+            echo "::group::$crate"
+            # Already at this version from a re-run or a partial failure: skip
+            # rather than fail the whole release. crates.io rejects a duplicate
+            # version, and a half-published release should be resumable.
+            version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+            if curl -sf -A "lumina-release" \
+                 "https://crates.io/api/v1/crates/$crate/$version" >/dev/null; then
+              echo "$crate $version is already published — skipping"
+              echo "::endgroup::"
+              continue
+            fi
+            cargo publish -p "$crate" $DRY
+            echo "::endgroup::"
+          done

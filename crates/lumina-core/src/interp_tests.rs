@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod interp_tests {
-    use lumina_schema::{Canvas, Meta, Scene, TimelineEntry};
+    use luminafx_schema::{Canvas, Meta, Scene, TimelineEntry};
     use serde_json::json;
 
     #[test]
@@ -9,7 +9,7 @@ mod interp_tests {
         let mut objects = std::collections::HashMap::new();
         objects.insert(
             "c1".into(),
-            lumina_schema::Object::Circle(lumina_schema::CircleProps {
+            luminafx_schema::Object::Circle(luminafx_schema::CircleProps {
                 cx: 0.0,
                 cy: 0.0,
                 radius: 10.0,
@@ -164,7 +164,7 @@ mod interp_tests {
         let mut objects = std::collections::HashMap::new();
         objects.insert(
             "c1".into(),
-            lumina_schema::Object::Circle(lumina_schema::CircleProps {
+            luminafx_schema::Object::Circle(luminafx_schema::CircleProps {
                 cx: 0.0,
                 cy: 0.0,
                 radius: 10.0,
@@ -176,14 +176,14 @@ mod interp_tests {
                 opacity: 1.0,
             }),
         );
-        let scene = lumina_schema::Scene {
+        let scene = luminafx_schema::Scene {
             version: "1.0".into(),
-            meta: lumina_schema::Meta {
+            meta: luminafx_schema::Meta {
                 title: "T".into(),
                 author: "x".into(),
                 created_at: "now".into(),
             },
-            canvas: lumina_schema::Canvas {
+            canvas: luminafx_schema::Canvas {
                 width: 100,
                 height: 100,
                 fps: 30,
@@ -194,7 +194,7 @@ mod interp_tests {
             },
             assets: Default::default(),
             objects,
-            timeline: vec![lumina_schema::TimelineEntry {
+            timeline: vec![luminafx_schema::TimelineEntry {
                 time: 2.0,
                 object: "c1".into(),
                 state: json!({"cx": 100.0}),

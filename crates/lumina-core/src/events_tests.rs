@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{Event, EventBus, Timeline};
-    use lumina_schema::{Action, Canvas, EventEntry, Meta, Scene};
+    use luminafx_schema::{Action, Canvas, EventEntry, Meta, Scene};
     use serde_json::json;
 
     fn scene_with_events(events: Vec<EventEntry>) -> Scene {

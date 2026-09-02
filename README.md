@@ -143,7 +143,7 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 
 - **Schema validation** — Errors include structured `fix_suggestion` fields for LLM correction loops.
 - **Event bus** — Interactive events (click, double-click, hover, drag) drive `jump_to_time`, `play_from`, `pause`, `set_property`, `tween_to`, `show_tooltip` and `emit_custom` actions. `$drag.*` payload placeholders are substituted at dispatch; `process_event` returns playback state + emitted custom events.
-- **Semantic scene patching** — `lumina_core::scene_patch` applies domain-level ops (`add_object`, `add_keyframe`, `update_property`, `update_canvas`, …) with cascade deletes; exposed at `POST /scene_patch`.
+- **Semantic scene patching** — `luminafx_core::scene_patch` applies domain-level ops (`add_object`, `add_keyframe`, `update_property`, `update_canvas`, …) with cascade deletes; exposed at `POST /scene_patch`.
 - **WASM runtime** — Full engine in WebAssembly. `render_frame(time)` → raw RGBA; `hit_test(x, y, time)` → top object ID across all 17 types.
 - **Headless server** — Axum HTTP: `/render` (mp4/webm/gif), `/validate`, `/patch` (RFC 6902), `/scene_patch` (semantic), `/schema`, `/objects`.
 - **Live reload** — `lumina-cli --watch` re-renders a preview frame on every file change.
@@ -375,12 +375,12 @@ Use `cubic_bezier` with `easing_params` to match any CSS `cubic-bezier()` curve 
 **120 test functions — 117 native plus 3 wasm, and zero flakes.** That count includes the 16-fixture cross-backend parity suite, which renders every fixture on both backends and compares them pixel by pixel.
 
 ```
-lumina-core       51 tests   easing (incl. spline), timeline, interpolation (path morph + cubic_bezier),
+luminafx-core       51 tests   easing (incl. spline), timeline, interpolation (path morph + cubic_bezier),
                               events (jump/play/pause/emit + $drag), scene_patch (add/remove/update), stress
-lumina-renderer   25 tests   pixel-level: z-index, opacity, draw_fraction, determinism, image/SVG/GIF,
+luminafx-renderer   25 tests   pixel-level: z-index, opacity, draw_fraction, determinism, image/SVG/GIF,
                               gradient, rounded rect, shadow, particles, Vello parity (particles + image),
                               LaTeX→Unicode (superscripts, \frac, subscripts, command stripping)
-lumina-export      6 tests   PNG sequence, dimensions, brightness, MP4/WebM/GIF export, FFmpeg graceful failure
+luminafx-export      6 tests   PNG sequence, dimensions, brightness, MP4/WebM/GIF export, FFmpeg graceful failure
 lumina-server     10 tests   validation, schema, JSON Patch, semantic scene_patch, group cycle, object registry
 ```
 
@@ -396,6 +396,7 @@ cargo test --workspace --exclude lumina-wasm
 lumina/
 ├── crates/
 │   ├── lumina-schema/     LSF type definitions, JSON Schema generation (schemars)
+│   │                      (published as `luminafx-schema`; see ADR-0014)
 │   ├── lumina-core/       Scene graph, timeline, 28 easings (+ cubic_bezier/spline), LAB interp, event bus, scene_patch
 │   ├── lumina-renderer/   Renderer trait → SkiaRenderer (CPU) + VelloRenderer (GPU/wgpu); shared raster module
 │   ├── lumina-text/       Fontdue TTF rasterization, glyph layout, per-character font fallback
@@ -517,7 +518,7 @@ Validation errors are structured for LLM re-injection:
 ### React
 
 ```tsx
-import { LuminaPlayer } from '@lumina/sdk';
+import { LuminaPlayer } from 'luminafx';
 
 <LuminaPlayer
   scene={myScene}
@@ -532,7 +533,7 @@ import { LuminaPlayer } from '@lumina/sdk';
 ### Vanilla JS
 
 ```js
-import { createPlayer } from '@lumina/sdk';
+import { createPlayer } from 'luminafx';
 
 const player = await createPlayer(document.getElementById('canvas'), scene, { autoplay: true });
 player.seek(3.5);
@@ -615,7 +616,7 @@ tests. If you want to know *why* something is scheduled, it is explained there.
 Documenting limitations as prominently as features is
 [a project principle](ENGINEERING_PRINCIPLES.md), not a disclaimer.
 
-- Nothing is published to crates.io, PyPI, or npm. Building from source is the
+- Nothing is published to crates.io, PyPI, or npm yet. Building from source is the
   only installation path today.
 - The Vello backend runs on a CPU fallback adapter, so it is not yet exercising
   a GPU.

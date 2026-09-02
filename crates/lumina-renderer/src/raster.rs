@@ -7,7 +7,7 @@
 //! the Skia backend. Particle simulation is shared so both backends emit
 //! byte-identical, scrub-reproducible output.
 
-use lumina_text::TextEngine;
+use luminafx_text::TextEngine;
 use tiny_skia::{ColorU8, Pixmap};
 
 /// One glyph of a run as a standalone straight-alpha bitmap, positioned

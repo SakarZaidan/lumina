@@ -24,7 +24,7 @@ function ensureWasm(): Promise<void> {
  *
  * @example
  * ```tsx
- * import { LuminaPlayer } from '@lumina/sdk';
+ * import { LuminaPlayer } from 'luminafx';
  *
  * <LuminaPlayer scene={myScene} autoplay loop />
  * ```

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::scene::SceneGraph;
-    use lumina_schema::{Canvas, CircleProps, Meta, Object, Scene};
+    use luminafx_schema::{Canvas, CircleProps, Meta, Object, Scene};
     use std::collections::HashMap;
 
     #[test]
@@ -10,7 +10,7 @@ mod tests {
         for i in 0..2000 {
             objects.insert(
                 format!("circle_{i}"),
-                lumina_schema::Object::Circle(CircleProps {
+                luminafx_schema::Object::Circle(CircleProps {
                     cx: 0.0,
                     cy: 0.0,
                     radius: 5.0,
@@ -63,7 +63,7 @@ mod tests {
         for i in 0..2000 {
             objects.insert(
                 format!("obj_{i}"),
-                lumina_schema::Object::Circle(CircleProps {
+                luminafx_schema::Object::Circle(CircleProps {
                     cx: 0.0,
                     cy: 0.0,
                     radius: 1.0,
@@ -148,10 +148,10 @@ mod tests {
             assets: Default::default(),
             objects,
             timeline: vec![],
-            events: vec![lumina_schema::EventEntry {
+            events: vec![luminafx_schema::EventEntry {
                 object: "eyes".into(),
                 trigger: "mouse_move".into(),
-                action: lumina_schema::Action::SetProperty {
+                action: luminafx_schema::Action::SetProperty {
                     target: "eyes".into(),
                     property: "rotation".into(),
                     value: serde_json::json!(45.0),

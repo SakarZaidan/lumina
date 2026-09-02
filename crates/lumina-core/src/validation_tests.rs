@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::validation::validate_scene_data;
-    use lumina_schema::{Camera, CameraState, CameraTimelineEntry, Scene, TimelineEntry};
+    use luminafx_schema::{Camera, CameraState, CameraTimelineEntry, Scene, TimelineEntry};
 
     fn scene_with_easing(easing: &str) -> Scene {
         let json = serde_json::json!({
@@ -89,7 +89,7 @@ mod tests {
 #[cfg(test)]
 mod resource_bounds {
     use crate::validation::validate_scene_data;
-    use lumina_schema::Scene;
+    use luminafx_schema::Scene;
 
     /// Build a scene from JSON, merging `canvas` and `objects` overrides.
     ///
@@ -342,7 +342,7 @@ mod resource_bounds {
 #[cfg(test)]
 mod easing_preconditions {
     use crate::validation::validate_scene_data;
-    use lumina_schema::{Scene, TimelineEntry};
+    use luminafx_schema::{Scene, TimelineEntry};
 
     fn scene_with_params(easing: &str, params: serde_json::Value) -> Scene {
         let json = serde_json::json!({
@@ -455,7 +455,7 @@ mod easing_preconditions {
 #[cfg(test)]
 mod representable_numbers {
     use crate::validation::validate_scene_data;
-    use lumina_schema::{Scene, TimelineEntry};
+    use luminafx_schema::{Scene, TimelineEntry};
 
     fn scene_with_state(state: serde_json::Value) -> Scene {
         let json = serde_json::json!({
@@ -526,7 +526,7 @@ mod representable_numbers {
 #[cfg(test)]
 mod colours {
     use crate::validation::validate_scene_data;
-    use lumina_schema::Scene;
+    use luminafx_schema::Scene;
 
     fn scene_with_fill(fill: &str) -> Scene {
         serde_json::from_value(serde_json::json!({

@@ -152,6 +152,18 @@ programme to reach reference quality in [plan/](plan/).
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **The crates are named `luminafx-*` on crates.io**, and a release workflow
+  publishes them. `lumina`, `lumina-core`, and `lumina-cli` were all already
+  taken — `lumina-core` by an unrelated *wgpu* renderer, which would have sat
+  beside ours in every search and, worse, would have collided outright: two
+  crates cannot both offer `use lumina_core::` in one dependency graph.
+  `luminafx` is free on crates.io, npm, and PyPI. See ADR-0014.
+
+  The project is still Lumina — repository, docs, book, and scene format are
+  unchanged, and the command is still `lumina-cli`, now pinned in an explicit
+  `[[bin]]` so the package rename could not silently rename it. Internal path
+  dependencies also gained the `version` fields `cargo publish` requires and
+  never had.
 - **`--format exr`**: an OpenEXR frame sequence in linear light with associated
   (premultiplied) alpha — the intermediate a compositor wants, with a documented
   colour space so nothing downstream has to guess a transfer function or

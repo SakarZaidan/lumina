@@ -1,5 +1,5 @@
 [package]
-name = "lumina-cli"
+name = "luminafx-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,11 +12,19 @@ keywords = ["animation", "cli", "rendering", "video"]
 categories = ["command-line-utilities", "multimedia::video"]
 readme = "../../README.md"
 
+[[bin]]
+# Explicit, because the binary name defaults to the package name. The package
+# had to become `luminafx-cli` (crates.io has a `lumina-cli` already, an
+# unrelated Celestia node), and without this the command every doc and example
+# invokes would have been renamed along with it.
+name = "lumina-cli"
+path = "src/main.rs"
+
 [dependencies]
-lumina-core = { path = "../../crates/lumina-core" }
-lumina-renderer = { path = "../../crates/lumina-renderer" }
-lumina-schema = { path = "../../crates/lumina-schema" }
-lumina-export = { path = "../../crates/lumina-export" }
+luminafx-core = { path = "../../crates/lumina-core", version = "0.4.0" }
+luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.4.0" }
+luminafx-schema = { path = "../../crates/lumina-schema", version = "0.4.0" }
+luminafx-export = { path = "../../crates/lumina-export", version = "0.4.0" }
 clap = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

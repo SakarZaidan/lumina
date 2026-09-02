@@ -12,5 +12,5 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     // Returning None for unparseable input is fine; panicking is not.
-    let _ = lumina_renderer::testing::path::parse_svg_path(text);
+    let _ = luminafx_renderer::testing::path::parse_svg_path(text);
 });

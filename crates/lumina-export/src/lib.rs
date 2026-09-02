@@ -1,6 +1,6 @@
 //! Export pipeline for the Lumina animation engine.
 //!
-//! [`Exporter`] drives any [`lumina_renderer::Renderer`] frame by frame and
+//! [`Exporter`] drives any [`luminafx_renderer::Renderer`] frame by frame and
 //! writes the result as:
 //!
 //! - a PNG frame sequence (via the `image` crate), or
@@ -20,9 +20,9 @@
 
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgba};
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::Renderer;
-use lumina_schema::Scene;
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::Renderer;
+use luminafx_schema::Scene;
 use rayon::prelude::*;
 use std::io::Write;
 use std::path::Path;
@@ -219,10 +219,10 @@ pub struct AudioTrack {
 }
 
 impl AudioTrack {
-    /// Build a track from a scene's [`lumina_schema::AudioAsset`] and a path
+    /// Build a track from a scene's [`luminafx_schema::AudioAsset`] and a path
     /// the caller has already resolved and authorised.
     #[must_use]
-    pub fn new(path: std::path::PathBuf, asset: &lumina_schema::AudioAsset) -> Self {
+    pub fn new(path: std::path::PathBuf, asset: &luminafx_schema::AudioAsset) -> Self {
         Self {
             path,
             start: asset.start,
@@ -295,7 +295,7 @@ impl<R: Renderer> Exporter<R> {
     fn render_blurred(
         &mut self,
         scene: &Scene,
-        objects: &std::collections::HashMap<String, lumina_schema::Object>,
+        objects: &std::collections::HashMap<String, luminafx_schema::Object>,
         timeline: &Timeline,
         frame_idx: u32,
         out: &mut Vec<u8>,
@@ -326,7 +326,7 @@ impl<R: Renderer> Exporter<R> {
         if samples == 1 {
             *out = render_at(&mut self.renderer, base)?;
             if alpha == AlphaMode::Straight {
-                lumina_renderer::demultiply_in_place(out);
+                luminafx_renderer::demultiply_in_place(out);
             }
             return Ok(());
         }
@@ -359,7 +359,7 @@ impl<R: Renderer> Exporter<R> {
         // happen — and it has to happen *after* the averaging above, which is
         // only correct on premultiplied values.
         if alpha == AlphaMode::Straight {
-            lumina_renderer::demultiply_in_place(out);
+            luminafx_renderer::demultiply_in_place(out);
         }
         Ok(())
     }
