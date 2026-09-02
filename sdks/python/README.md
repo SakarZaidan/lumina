@@ -17,7 +17,7 @@ maturin develop --release      # builds the `lumina` extension into your venv
 ## Usage
 
 ```python
-import lumina
+import luminafx
 
 scene = {
     "version": "1.0",
@@ -32,11 +32,11 @@ scene = {
     ],
 }
 
-report = lumina.validate(scene)      # {"valid": True, "errors": [], "warnings": [...]}
+report = luminafx.validate(scene)      # {"valid": True, "errors": [], "warnings": [...]}
 assert report["valid"], report["errors"]
 
-lumina.render(scene, "hello.mp4", format="mp4")   # or format="png" → frame dir
-schema = lumina.schema()             # the LSF JSON Schema as a dict
+luminafx.render(scene, "hello.mp4", format="mp4")   # or format="png" → frame dir
+schema = luminafx.schema()             # the LSF JSON Schema as a dict
 ```
 
 See [`examples/from_anthropic.py`](examples/from_anthropic.py) for the
@@ -46,6 +46,6 @@ LLM → validate → render round-trip.
 
 | Function | Description |
 |---|---|
-| `lumina.validate(scene: dict) -> dict` | Semantic validation; returns `{valid, errors, warnings}` with `fix_suggestion` strings. |
-| `lumina.render(scene: dict, output_path: str, format="mp4")` | Render to MP4 or a PNG sequence directory. |
-| `lumina.schema() -> dict` | The LSF JSON Schema, for IDE/agent autocompletion and pre-validation. |
+| `luminafx.validate(scene: dict) -> dict` | Semantic validation; returns `{valid, errors, warnings}` with `fix_suggestion` strings. |
+| `luminafx.render(scene: dict, output_path: str, format="mp4")` | Render to MP4 or a PNG sequence directory. |
+| `luminafx.schema() -> dict` | The LSF JSON Schema, for IDE/agent autocompletion and pre-validation. |

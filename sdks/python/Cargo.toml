@@ -11,7 +11,13 @@ license = "MIT"
 description = "Python bindings for the Lumina animation engine"
 
 [lib]
-name = "lumina"
+# The extension module's name, which is what `import` sees. `luminafx`, not
+# `lumina`: PyPI's `lumina` installs a top-level `Lumina`, which is a distinct
+# name on Linux and the *same* name on macOS and Windows, where filesystems are
+# case-insensitive. Shipping a collision that only appears on two of three
+# platforms is worse than not shipping one. Matches the distribution name too,
+# so `pip install luminafx` then `import luminafx` reads as one thing.
+name = "luminafx"
 crate-type = ["cdylib"]
 
 [dependencies]

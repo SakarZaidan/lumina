@@ -24,6 +24,29 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-04 — PyPI, and a collision that only shows on two platforms
+
+- Owner supplied a PyPI token; stored as the `PYPI_API_TOKEN` secret. The
+  release workflow now builds wheels on all three OSes plus an sdist and
+  uploads them with `--skip-existing`, for the same reason the crates.io step
+  checks first: a re-run after a partial failure should finish the release.
+- **Checked what the existing PyPI `lumina` actually installs before assuming
+  the module name was safe.** It installs a top-level `Lumina` — a distinct
+  name on Linux, the *same* name on macOS and Windows where filesystems are
+  case-insensitive. So `import lumina` would have worked in CI and collided on
+  a contributor's Mac.
+- Module renamed to `luminafx`, matching the distribution. `pip install
+  luminafx` then `import luminafx` also reads as one thing rather than two;
+  the `pip install X, import Y` papercut was never worth keeping.
+- The sdist job `needs` the crates.io job on purpose: packaging strips the path
+  from a path dependency and leaves the version, so an sdist cannot build until
+  the crates it names exist on the registry.
+- Wheels use `manylinux: auto`. A Linux wheel built bare against the runner's
+  glibc claims a compatibility it does not have and fails at import on the
+  user's machine.
+- npm remains unpublished — no token, and TD-12 says the JS SDK does not build
+  from a clean checkout yet.
+
 ## 2026-09-03 (night, later) — The MCP server
 
 - `AAA-AI-02`. A new crate, `luminafx-mcp`, exposing the engine as MCP tools

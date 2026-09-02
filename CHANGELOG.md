@@ -162,6 +162,16 @@ rather than three, and the server's defaults are closed rather than open.
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **The Python SDK publishes to PyPI** as `luminafx`: wheels for Linux, macOS
+  and Windows plus an sdist fallback, built by maturin and uploaded by the
+  release workflow.
+
+  The module is `luminafx` too, not `lumina`. Module names are not
+  registry-controlled, so two packages may both install one — and PyPI's
+  `lumina` (an unrelated object-detection library) installs a top-level
+  `Lumina`, which is a distinct name on Linux and the *same* name on macOS and
+  Windows, where filesystems are case-insensitive. Shipping a collision that
+  appears on two platforms out of three is worse than not shipping one.
 - **An MCP server** (`lumina-mcp`), so any MCP-capable agent can drive the
   engine with no glue code: `lumina_objects` to learn the format,
   `lumina_validate` to check a scene, `lumina_patch` to repair it, and
