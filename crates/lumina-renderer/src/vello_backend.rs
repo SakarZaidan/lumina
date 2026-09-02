@@ -870,7 +870,10 @@ impl VelloRenderer {
                     ),
                 };
 
-                if let Some(tb) = raster::rasterize_text(
+                // One image per glyph, at the position the shared layout
+                // gives — the same bitmap the CPU backend composites, in the
+                // same place, resampled once rather than twice (TD-18).
+                for g in raster::rasterize_glyphs(
                     &self.text_engine,
                     &rendered,
                     font_size,
@@ -879,13 +882,11 @@ impl VelloRenderer {
                     align,
                     letter_spacing,
                     opacity,
+                    x,
+                    y,
                 ) {
-                    let img = rgba_to_image(tb.rgba, tb.width, tb.height);
-                    let t = affine
-                        * Affine::translate(Vec2::new(
-                            (x + tb.place_x) as f64,
-                            (y + tb.place_y) as f64,
-                        ));
+                    let img = rgba_to_image(g.rgba, g.width, g.height);
+                    let t = affine * Affine::translate(Vec2::new(f64::from(g.ix), f64::from(g.iy)));
                     scene.draw_image(&img, t);
                 }
             }

@@ -14,4 +14,5 @@ pub(crate) mod plot;
 pub(crate) mod scene;
 pub(crate) mod shadow;
 pub(crate) mod stroke;
+pub(crate) mod text;
 pub(crate) mod ticks;
