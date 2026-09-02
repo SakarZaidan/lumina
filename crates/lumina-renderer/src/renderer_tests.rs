@@ -1106,3 +1106,27 @@ mod frame_buffer_reuse {
         assert_eq!(after, expected);
     }
 }
+
+/// The renderer must stay movable between threads.
+///
+/// Nothing in the renderer needs threading today, so nothing would fail if it
+/// stopped being `Send` — until somebody tries to pipeline an export and finds
+/// the type has been un-sendable for months, with no commit obviously to
+/// blame. A caching change during Wave 3 did exactly this by reaching for `Rc`
+/// where `Arc` was needed, and it compiled and passed every test.
+#[cfg(test)]
+mod thread_safety {
+    use crate::skia_backend::SkiaRenderer;
+
+    fn assert_send<T: Send>() {}
+
+    #[test]
+    fn the_cpu_renderer_is_send() {
+        assert_send::<SkiaRenderer>();
+    }
+
+    #[test]
+    fn the_text_engine_is_send() {
+        assert_send::<lumina_text::TextEngine>();
+    }
+}

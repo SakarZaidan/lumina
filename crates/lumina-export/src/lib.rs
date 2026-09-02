@@ -23,9 +23,37 @@ use image::{ImageBuffer, Rgba};
 use lumina_core::{SceneGraph, Timeline};
 use lumina_renderer::Renderer;
 use lumina_schema::Scene;
+use rayon::prelude::*;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+/// How many rendered frames may sit between the renderer and the encoder.
+///
+/// Deep enough to keep ffmpeg fed through a slow frame, shallow enough that
+/// memory stays bounded: four 1080p frames is about 33 MB. Rendering blocks
+/// when the queue is full, so a fast renderer throttles itself to the
+/// encoder's rate instead of buffering the whole video.
+const PIPELINE_DEPTH: usize = 4;
+
+/// Memory the PNG encoder queue may hold, in bytes.
+///
+/// Sized in bytes rather than frames because a frame is not a fixed cost:
+/// 32 frames is 265 MB at 1080p but over a gigabyte at 4K.
+const PNG_QUEUE_BYTES: usize = 256 * 1024 * 1024;
+
+/// How many frames of `width * height` fit in [`PNG_QUEUE_BYTES`].
+///
+/// Depth matters more here than for the ffmpeg pipeline because there are many
+/// consumers rather than one: at a depth of 4 the pool never has more than four
+/// frames to work on and most of it sits idle.
+fn png_queue_depth(width: u32, height: u32) -> usize {
+    let frame_bytes = (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(4)
+        .max(1);
+    (PNG_QUEUE_BYTES / frame_bytes).clamp(4, 64)
+}
 
 /// Drives a [`Renderer`] frame by frame to produce image sequences or
 /// video files (video encoding is delegated to an external `ffmpeg`).
@@ -50,36 +78,70 @@ impl<R: Renderer> Exporter<R> {
             std::fs::create_dir_all(output_dir)?;
         }
 
-        for frame_idx in 0..total_frames {
-            let time = frame_idx as f32 / scene.canvas.fps as f32;
-            let states = timeline.get_state_at(time);
-            let camera_state = timeline.get_camera_at(time, scene);
-            let camera = scene.camera.as_ref().map(|_| &camera_state);
+        // Render here, compress on a rayon pool.
+        //
+        // Which half to parallelise was measured, not assumed. Rendering all
+        // 1 560 frames of a 52-second 1080p scene took 2.3 s while the PNG
+        // export took 4.5 s — so about half the time was compression, and
+        // compression needs no renderer. Parallelising that half needs no
+        // per-thread renderer, no font reloading, and no way for two threads to
+        // disagree about a glyph.
+        //
+        // Files are independent and each carries its frame number, so the
+        // order they are written in is not observable. Their *contents* come
+        // from one renderer on one thread, in order, exactly as before.
+        let (width, height) = (scene.canvas.width, scene.canvas.height);
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<(u32, Vec<u8>)>(png_queue_depth(width, height));
+        let dir = output_dir.to_path_buf();
 
-            self.renderer.set_time(time);
-            let frame_data = self
-                .renderer
-                .render_frame(
-                    &scene_graph.objects,
-                    &states,
-                    scene.canvas.width,
-                    scene.canvas.height,
-                    &scene.canvas.background,
-                    camera,
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
-                ImageBuffer::from_raw(scene.canvas.width, scene.canvas.height, frame_data)
-                    .ok_or_else(|| {
+        let writer = std::thread::spawn(move || -> Result<()> {
+            rx.into_iter().par_bridge().try_for_each(|(idx, data)| {
+                let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
+                    ImageBuffer::from_raw(width, height, data).ok_or_else(|| {
                         anyhow::anyhow!("Failed to create image buffer from frame data")
                     })?;
+                img.save(dir.join(format!("frame_{idx:04}.png")))?;
+                Ok(())
+            })
+        });
 
-            let filename = format!("frame_{frame_idx:04}.png");
-            img.save(output_dir.join(filename))?;
+        let render_result = (|| -> Result<()> {
+            for frame_idx in 0..total_frames {
+                let time = frame_idx as f32 / scene.canvas.fps as f32;
+                let states = timeline.get_state_at(time);
+                let camera_state = timeline.get_camera_at(time, scene);
+                let camera = scene.camera.as_ref().map(|_| &camera_state);
 
-            log::info!("Exported frame {}/{}", frame_idx + 1, total_frames);
-        }
+                self.renderer.set_time(time);
+                let frame_data = self
+                    .renderer
+                    .render_frame(
+                        &scene_graph.objects,
+                        &states,
+                        width,
+                        height,
+                        &scene.canvas.background,
+                        camera,
+                    )
+                    .map_err(|e| anyhow::anyhow!(e))?;
+
+                if tx.send((frame_idx, frame_data)).is_err() {
+                    break; // encoders stopped; the join below reports why
+                }
+                if frame_idx % 10 == 0 {
+                    log::info!("Rendered frame {}/{}", frame_idx + 1, total_frames);
+                }
+            }
+            Ok(())
+        })();
+        drop(tx);
+
+        let write_result = writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("PNG encoder thread panicked"))?;
+        write_result.context("writing PNG frames")?;
+        render_result?;
 
         Ok(())
     }
@@ -161,9 +223,54 @@ impl<R: Renderer> Exporter<R> {
             .context("Failed to spawn ffmpeg — is it installed and on PATH?")?;
 
         let mut stdin = child.stdin.take().context("Failed to open ffmpeg stdin")?;
-        self.stream_frames(scene, |frame| stdin.write_all(frame).map_err(Into::into))?;
 
-        drop(stdin);
+        // Render and encode overlap instead of taking turns.
+        //
+        // The loop used to render a frame, write it to ffmpeg's stdin, and
+        // only then render the next. Writing blocks once the pipe fills, so
+        // the two stages effectively ran in sequence: a 52-second 1080p scene
+        // measured 2.3 s of rendering plus ~6.6 s of encoding and took 12.9 s
+        // end to end. Overlapping them bounds the total by the slower stage
+        // instead of their sum, and encoding is by far the slower one.
+        //
+        // The channel is bounded, so memory stays capped at
+        // PIPELINE_DEPTH frames (about 33 MB at 1080p) and rendering
+        // self-throttles to whatever rate ffmpeg can consume rather than
+        // racing ahead and buffering the whole video in RAM.
+        //
+        // Order is preserved by construction: one producer sends frames in
+        // sequence and one consumer writes them in the order received. There
+        // is no reordering for determinism to worry about.
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(PIPELINE_DEPTH);
+
+        let writer = std::thread::spawn(move || -> Result<()> {
+            for frame in rx {
+                stdin.write_all(&frame)?;
+            }
+            // Closing stdin is what tells ffmpeg the stream has ended.
+            drop(stdin);
+            Ok(())
+        });
+
+        let render_result = self.stream_frames(scene, |frame| {
+            // A send error means the writer stopped — almost always because
+            // ffmpeg died. Stop rendering and let the join below report why,
+            // rather than rendering thousands more frames into a closed pipe.
+            tx.send(frame.to_vec())
+                .map_err(|_| anyhow::anyhow!("ffmpeg stopped accepting frames"))
+        });
+        drop(tx);
+
+        let write_result = writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("frame writer thread panicked"))?;
+
+        // Report the writer's error first: when ffmpeg fails, the render side
+        // only sees "the pipe closed", which is the symptom rather than the
+        // cause.
+        write_result.context("writing frames to ffmpeg")?;
+        render_result?;
+
         let status = child.wait()?;
         if !status.success() {
             anyhow::bail!("FFmpeg exited with non-zero status: {status}");

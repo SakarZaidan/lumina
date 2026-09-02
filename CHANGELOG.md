@@ -96,6 +96,22 @@ programme to reach reference quality in [plan/](plan/).
   Output is byte-identical. The buffer is cleared to the background before
   anything is drawn — the same operation that always began a frame — and it is
   reallocated whenever the requested frame size changes.
+- **Export is 24–33% faster.** Rendering and encoding used to take turns: the
+  loop rendered a frame, wrote it to ffmpeg's stdin, and only then rendered the
+  next, so a 1 560-frame 1080p scene spent 2.3 s rendering and ~6.6 s encoding
+  and took 12.9 s. They overlap now, through a bounded queue that caps memory
+  and lets rendering self-throttle to the encoder's rate. PNG compression runs
+  on a rayon pool — the dependency has been declared since v0.1 and imported
+  nowhere until now (TD-05).
+
+  | | before | after |
+  |---|---|---|
+  | MP4, 1 560 frames at 1080p | 12.86 s | **9.82 s** |
+  | PNG sequence, same | 4.54 s | **3.04 s** |
+
+  Video export is bound by ffmpeg, not by rendering — rendering was 2.3 s of
+  the original 12.9 s — so overlapping the stages is worth far more there than
+  parallel rendering would be.
 - **Text rendering is ~10% faster** on top of the above. Glyphs were rasterised
   from their outlines on every frame, and `font_for_char` walked every loaded
   font per character — twice, once to measure and once to draw. Rasterised
