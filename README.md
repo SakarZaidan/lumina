@@ -186,6 +186,10 @@ cargo build --release
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.webm --format webm-alpha
 ./target/release/lumina-cli --scene examples/unit_circle.lsf --output over.mov  --format mov
 
+# Linear-light float frames for a compositor: no second quantisation, no
+# guessed gamma, associated alpha as OpenEXR specifies.
+./target/release/lumina-cli --scene examples/unit_circle.lsf --output frames/ --format exr
+
 # GPU (Vello) backend — renders text, LaTeX, images and particles too
 ./target/release/lumina-cli --scene examples/showcase_grand.lsf --output grand.mp4 --format mp4 --backend vello
 ```

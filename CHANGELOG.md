@@ -152,6 +152,16 @@ programme to reach reference quality in [plan/](plan/).
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **`--format exr`**: an OpenEXR frame sequence in linear light with associated
+  (premultiplied) alpha — the intermediate a compositor wants, with a documented
+  colour space so nothing downstream has to guess a transfer function or
+  re-quantise on the way in.
+
+  It does **not** add precision the renderer did not have. The CPU rasteriser
+  has one pixel type, 8-bit sRGB, so these floats carry 8-bit values converted
+  exactly; a test pins that, and will start failing the day a deeper buffer
+  lands. What it buys is that nothing is lost *after* this point. No new
+  dependency — `exr` was already in the tree through `image`'s defaults, unused.
 - **Audio.** A scene declares `assets.audio` and video exports carry it, mixed
   and trimmed to the animation's length. Each track takes a `start` in seconds
   (negative begins part-way into the file) and a linear `gain`. MP4 gets AAC,
