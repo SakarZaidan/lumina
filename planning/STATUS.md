@@ -24,6 +24,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late, critical) — **Rendering was not deterministic.** Fixed.
+
+- Found while investigating why a parallel-export experiment changed pixels.
+  It turned out the *base* was unstable: **12 exports of `unit_circle.lsf` from
+  released v0.4.0 produced two different results**, 7 one way and 5 the other,
+  diverging from frame 991 onward.
+- Cause: objects sharing a `z_index` were ordered by a **stable** sort over a
+  `HashMap`. Rust randomises `HashMap` iteration order per process, so a stable
+  sort faithfully preserved an order that differed between runs. Tied objects
+  drew in a different sequence each run and, where they overlapped, produced
+  different pixels. `unit_circle` has five z-index values with ties.
+- Fix: sort on `(z_index, id)` — a total order over what the scene *contains*
+  rather than over how it happens to be stored. Verified: 12 runs, one hash;
+  the full 1 560-frame export byte-identical across processes.
+- **No existing test could have caught this**, and that is the more important
+  finding. The golden-pixel suite and the 18-fixture cross-backend parity suite
+  both render inside a single process, where a map's iteration order is fixed
+  for its lifetime. The divergence only exists *between* processes. Registered
+  as TD-25; `tests/draw_order.rs` asserts the property directly by building the
+  same scene with different insertion orders, which does catch it in-process.
+- This contradicted VISION.md principle 2 ("Determinism is sacred") and
+  ENGINEERING_PRINCIPLES #1 — the guarantee the project rests scrubbing,
+  caching, golden-pixel testing and frame-parallel export on. It shipped in
+  v0.4.0.
+- Worth recording how it surfaced: only by comparing two full exports byte for
+  byte. Every cheaper check — the suite, the parity fixtures, rendering a frame
+  twice in one process — reported success.
+
 ## 2026-09-02 (late, end) — Wave 3: glyph cache, and an estimate that was 5x off
 
 - Rasterised glyphs are cached per `(font index, character, exact size)`. The
