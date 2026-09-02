@@ -384,6 +384,16 @@ fn parity_18_dashed_lines() {
     assert_parity("18_dashed_lines", PATH_TOL);
 }
 
+#[test]
+fn parity_19_draw_fraction_paths() {
+    // `draw_fraction` used to mean three different things: a dash pattern on a
+    // Line, a curve-parameter cut on a BezierCurve, and nothing at all on a
+    // Path, whose schema had the field and whose renderer never read it. All
+    // three now trim by arc length through one shared helper, so the two
+    // backends reveal the same portion of the same geometry.
+    assert_parity("19_draw_fraction_paths", PATH_TOL);
+}
+
 // ── Behavioural parity ──────────────────────────────────────────────────────
 //
 // The pixel suite above compares frames that *both* backends produced. When

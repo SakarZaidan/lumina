@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (evening, later) — `draw_fraction` finally means one thing
+
+- `AAA-MOT-02`. It meant three different things depending on the object:
+  - **`Line`**: a dash pattern. Exact for a straight line; for anything else
+    the dash phase is measured by the rasteriser's own flattening, so the
+    answer depended on which backend was drawing.
+  - **`BezierCurve`**: a cut at curve *parameter*. Exact arithmetic measuring
+    the wrong quantity — a cubic traversed at uniform `t` does not move at
+    uniform speed, so a steady `draw_fraction` produced a reveal that visibly
+    accelerated and slowed along the curve.
+  - **`Path`**: nothing at all. The field is in `PathProps` and the renderer
+    never read it, so a Path with a reveal animation simply appeared whole.
+    Same class as `LineProps.dash` — a schema promise with no implementation
+    behind it.
+- All three now trim by **arc length** through one shared helper in
+  `common/path.rs`: flatten to a polyline with adaptive subdivision, accumulate
+  distance, cut where the fraction lands. At 0.5, half the ink is drawn.
+- Multi-subpath shapes measure across all subpaths, so two strokes reveal one
+  after the other as a single drawing rather than racing each other at
+  independent rates.
+- Parity fixture 19 covers curve and path reveals on both backends; 20 fixtures
+  now. Tests 241 → 247.
+- The test that matters asserts *proportionality*, not endpoints: eight equal
+  steps of the fraction must each add an eighth of the length, on a curve whose
+  control points are deliberately bunched at one end. Parameter-space cutting
+  passes an endpoints check and fails that one.
+
 ## 2026-09-02 (evening) — Motion blur
 
 - `AAA-MOT-06`. `canvas.motion_blur_samples` and `canvas.shutter`; each frame

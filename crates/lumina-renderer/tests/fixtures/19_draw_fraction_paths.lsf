@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "meta": { "title": "Arc-length draw-on", "author": "parity", "created_at": "2026-09-02" },
+  "canvas": { "width": 300, "height": 200, "fps": 30, "duration": 1.0, "background": "#101020" },
+  "objects": {
+    "curve_quarter": {
+      "type": "BezierCurve",
+      "properties": {
+        "p0": [20, 40], "p1": [180, 40], "p2": [190, 50], "p3": [200, 90],
+        "stroke": "#4A9EFF", "stroke_width": 4, "draw_fraction": 0.35, "z_index": 1
+      }
+    },
+    "curve_most": {
+      "type": "BezierCurve",
+      "properties": {
+        "p0": [20, 100], "p1": [180, 100], "p2": [190, 110], "p3": [200, 150],
+        "stroke": "#00FFAA", "stroke_width": 4, "draw_fraction": 0.8, "z_index": 2
+      }
+    },
+    "staircase": {
+      "type": "Path",
+      "properties": {
+        "d": "M 30 170 L 120 170 L 120 190 L 270 190",
+        "fill": "#00000000", "stroke": "#FFD93D", "stroke_width": 4,
+        "draw_fraction": 0.55, "z_index": 3
+      }
+    }
+  },
+  "timeline": []
+}

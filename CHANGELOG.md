@@ -83,6 +83,18 @@ programme to reach reference quality in [plan/](plan/).
   never pixels: `final` produces 10-bit output to keep banding out of
   gradients. `-tune animation` and `+faststart` are on by default, and VP9
   gains `-row-mt`.
+- **`draw_fraction` now trims by arc length**, and means the same thing on
+  every object. It previously meant three different things: a dash pattern on a
+  `Line` (exact for a straight line, rasteriser-dependent otherwise), a cut at
+  curve *parameter* on a `BezierCurve` (exact arithmetic measuring the wrong
+  quantity — a cubic traversed at uniform `t` does not move at uniform speed,
+  so the reveal accelerated and slowed while the fraction climbed steadily),
+  and **nothing at all on a `Path`**, whose schema had the field and whose
+  renderer never read it.
+
+  At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
+  continuous drawing rather than several racing each other. Both backends share
+  one implementation, covered by parity fixture 19.
 - **Motion blur**, via `canvas.motion_blur_samples` and `canvas.shutter`. Each
   frame is rendered several times across the shutter interval and averaged, so
   anything moving smears the way a camera's shutter makes it. `shutter` defaults

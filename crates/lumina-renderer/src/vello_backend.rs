@@ -511,24 +511,19 @@ impl VelloRenderer {
                     parse_vello_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
                 let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0);
 
-                let t = draw_fraction.clamp(0.0, 1.0);
-                let lerp = |a: f64, b: f64| a + (b - a) * t;
-                let ax = lerp(x0, x1);
-                let ay = lerp(y0, y1);
-                let bx = lerp(x1, x2);
-                let by_ = lerp(y1, y2);
-                let cx_ = lerp(x2, x3);
-                let cy_ = lerp(y2, y3);
-                let dx = lerp(ax, bx);
-                let dy = lerp(ay, by_);
-                let ex = lerp(bx, cx_);
-                let ey = lerp(by_, cy_);
-                let fx = lerp(dx, ex);
-                let fy = lerp(dy, ey);
-
-                let mut path = BezPath::new();
-                path.move_to((x0, y0));
-                path.curve_to((ax, ay), (dx, dy), (fx, fy));
+                // Trimmed by arc length through the shared helper, so both
+                // backends reveal the same portion of the same curve. Cutting
+                // at parameter `t` was exact but measured the wrong quantity:
+                // a cubic traversed at uniform `t` does not move at uniform
+                // speed.
+                let curve = crate::common::path::PathData::cubic(
+                    (x0 as f32, y0 as f32),
+                    (x1 as f32, y1 as f32),
+                    (x2 as f32, y2 as f32),
+                    (x3 as f32, y3 as f32),
+                );
+                let curve = crate::common::path::trim(&curve, draw_fraction as f32);
+                let path = crate::common::path::to_kurbo_path(&curve);
                 scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
             }
             Object::Polygon(_) => {
@@ -610,6 +605,11 @@ impl VelloRenderer {
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
                 if let Some(data) = crate::common::path::parse_svg_path(d) {
+                    // Shared arc-length trim, matching the CPU backend.
+                    let data = match state["draw_fraction"].as_f64() {
+                        Some(frac) => crate::common::path::trim(&data, frac as f32),
+                        None => data,
+                    };
                     let path = crate::common::path::to_kurbo_path(&data);
                     let bbox = crate::common::path::bbox(&data).unwrap_or((0.0, 0.0, 0.0, 0.0));
                     if let Some(spec) = crate::common::shadow::parse_shadow(state) {

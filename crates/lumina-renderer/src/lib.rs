@@ -44,7 +44,7 @@ pub mod testing {
     /// SVG path parsing — see `common::path`.
     pub mod path {
         pub use crate::common::path::{
-            parse_svg_path, parse_svg_path_detailed, PathData, PathError,
+            length, parse_svg_path, parse_svg_path_detailed, trim, PathData, PathError,
         };
     }
 
