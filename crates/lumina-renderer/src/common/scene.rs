@@ -31,22 +31,28 @@ pub(crate) fn z_index(obj: &Object) -> i32 {
 /// by z-index ascending. The sort is stable, so ties keep the map's
 /// iteration order — identical for both backends within a frame because
 /// they receive the same map.
-pub(crate) fn sorted_root_ids(objects: &HashMap<String, Object>) -> Vec<String> {
-    let mut child_ids = std::collections::HashSet::new();
+///
+/// Borrows from `objects` rather than cloning. This runs once per frame, and
+/// it used to clone every child id into a `HashSet` and every root id into a
+/// `Vec<(String, i32)>` before collecting into a third `Vec<String>` — three
+/// sets of string allocations per frame for a result that cannot change while
+/// a frame is being drawn.
+pub(crate) fn sorted_root_ids(objects: &HashMap<String, Object>) -> Vec<&str> {
+    let mut child_ids: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for obj in objects.values() {
         if let Object::Group(group) = obj {
-            for child_id in &group.children {
-                child_ids.insert(child_id.clone());
-            }
+            child_ids.extend(group.children.iter().map(String::as_str));
         }
     }
 
-    let mut roots: Vec<(String, i32)> = objects
+    let mut roots: Vec<(&str, i32)> = objects
         .iter()
-        .filter(|(id, _)| !child_ids.contains(*id))
-        .map(|(id, obj)| (id.clone(), z_index(obj)))
+        .filter(|(id, _)| !child_ids.contains(id.as_str()))
+        .map(|(id, obj)| (id.as_str(), z_index(obj)))
         .collect();
 
+    // Stable, so ties keep the map's iteration order — identical on both
+    // backends within a frame because they receive the same map.
     roots.sort_by_key(|(_, z)| *z);
     roots.into_iter().map(|(id, _)| id).collect()
 }

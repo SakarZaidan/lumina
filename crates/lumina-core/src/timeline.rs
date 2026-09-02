@@ -102,29 +102,41 @@ impl Timeline {
     }
 
     /// Evaluate every object's full property state at `time`.
+    ///
+    /// Builds the `serde_json::Map` for each object directly rather than
+    /// filling a `HashMap` and converting it afterwards. The old shape walked
+    /// and reallocated every property twice per frame; this walks them once.
     pub fn get_state_at(&self, time: f32) -> HashMap<String, Value> {
-        let mut state: HashMap<String, HashMap<String, Value>> = HashMap::new();
+        let mut state: HashMap<String, Value> =
+            HashMap::with_capacity(self.tracks.len() + self.overrides.len());
 
-        // Evaluate keyframe tracks
         for (obj_id, object_tracks) in &self.tracks {
-            let obj_state = state.entry(obj_id.clone()).or_default();
+            let mut props = serde_json::Map::with_capacity(object_tracks.len());
             for (prop_name, track) in object_tracks {
-                obj_state.insert(prop_name.clone(), self.evaluate_track(track, time));
+                props.insert(prop_name.clone(), self.evaluate_track(track, time));
             }
+            state.insert(obj_id.clone(), Value::Object(props));
         }
 
-        // Apply interactive overrides (take precedence over keyframes)
+        // Interactive overrides take precedence over keyframes.
         for (obj_id, obj_overrides) in &self.overrides {
-            let obj_state = state.entry(obj_id.clone()).or_default();
-            for (prop_name, value) in obj_overrides {
-                obj_state.insert(prop_name.clone(), value.clone());
+            match state.get_mut(obj_id) {
+                Some(Value::Object(props)) => {
+                    for (prop_name, value) in obj_overrides {
+                        props.insert(prop_name.clone(), value.clone());
+                    }
+                }
+                _ => {
+                    let mut props = serde_json::Map::with_capacity(obj_overrides.len());
+                    for (prop_name, value) in obj_overrides {
+                        props.insert(prop_name.clone(), value.clone());
+                    }
+                    state.insert(obj_id.clone(), Value::Object(props));
+                }
             }
         }
 
         state
-            .into_iter()
-            .map(|(k, v)| (k, Value::Object(v.into_iter().collect())))
-            .collect()
     }
 
     /// Evaluate the camera state at `time` (identity when the scene has no
@@ -155,20 +167,28 @@ impl Timeline {
             return last.state.clone();
         }
 
-        for i in 0..kfs.len() - 1 {
-            let k0 = &kfs[i];
-            let k1 = &kfs[i + 1];
-            if time >= k0.time && time < k1.time {
-                let t_raw = (time - k0.time) / (k1.time - k0.time);
-                let t = get_easing_fn(&k1.easing)(t_raw);
-                return CameraState {
-                    x: k0.state.x + (k1.state.x - k0.state.x) * t,
-                    y: k0.state.y + (k1.state.y - k0.state.y) * t,
-                    zoom: k0.state.zoom + (k1.state.zoom - k0.state.zoom) * t,
-                };
-            }
+        // Binary search, matching `evaluate_track`. The clamps above put the
+        // split point strictly inside the slice.
+        let idx = kfs.partition_point(|k| k.time <= time);
+        let k0 = &kfs[idx - 1];
+        let k1 = &kfs[idx];
+        if k1.time <= k0.time {
+            return k0.state.clone();
         }
-        last.state.clone()
+
+        let t_raw = (time - k0.time) / (k1.time - k0.time);
+        // NOTE: `get_easing_fn`, not `eval_easing`, because
+        // `CameraTimelineEntry` has no `easing_params` field — so a camera
+        // keyframe naming `cubic_bezier` or `spline` currently falls through
+        // to `linear` without saying so. Fixing that means adding a defaulted
+        // schema field; tracked separately rather than smuggled into a
+        // performance change (`AAA-MOT-01`).
+        let t = get_easing_fn(&k1.easing)(t_raw);
+        CameraState {
+            x: k0.state.x + (k1.state.x - k0.state.x) * t,
+            y: k0.state.y + (k1.state.y - k0.state.y) * t,
+            zoom: k0.state.zoom + (k1.state.zoom - k0.state.zoom) * t,
+        }
     }
 
     fn evaluate_track(&self, track: &[Keyframe], time: f32) -> Value {
@@ -186,17 +206,16 @@ impl Timeline {
             return track[track.len() - 1].value.clone();
         }
 
-        // Find surrounding keyframes
-        let mut lower = &track[0];
-        let mut upper = &track[0];
-
-        for i in 0..track.len() - 1 {
-            if time >= track[i].time && time < track[i + 1].time {
-                lower = &track[i];
-                upper = &track[i + 1];
-                break;
-            }
-        }
+        // Find the bracketing pair. Tracks are sorted at construction, so this
+        // is a binary search rather than the linear scan it used to be — it
+        // runs once per property, per object, per frame.
+        //
+        // The clamps above have already established
+        // `track[0].time < time < track[last].time`, so the split point is
+        // strictly inside the slice and both indices are in range.
+        let idx = track.partition_point(|k| k.time <= time);
+        let lower = &track[idx - 1];
+        let upper = &track[idx];
 
         if lower.time == upper.time {
             return lower.value.clone();

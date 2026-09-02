@@ -7,7 +7,7 @@ linking the fixing PR. New debt gets the next TD-id immediately when found.
 |----|-------|----------|--------------|--------|--------|
 | TD-01 | Vello backend missing gradients/shadows/rounded-rects/dashes | High | Silent CPU↔GPU visual divergence | v0.4 | **Closed** ([#13](https://github.com/SakarZaidan/lumina/pull/13), [#14](https://github.com/SakarZaidan/lumina/pull/14)) |
 | TD-02 | SVG-path + color parsers duplicated across backends | High | Every parity fix implemented twice | v0.4 | **Closed** ([#12](https://github.com/SakarZaidan/lumina/pull/12)) |
-| TD-03 | `Timeline::get_state_at` clones every property every frame | Medium | Render/export throughput | v0.5 | Open |
+| TD-03 | `Timeline::get_state_at` clones every property every frame | Medium | Render/export throughput | v0.5 | Partly addressed ([#68](https://github.com/SakarZaidan/lumina/pull/68) — one build instead of two, binary keyframe search, −34–42%). The per-property `Value` clone remains: eliminating it needs caching across frames, which is the larger half |
 | TD-04 | evalexpr context built inside Plot sample loop | Medium | Plot-heavy scene throughput | v0.5 | **Closed** ([#63](https://github.com/SakarZaidan/lumina/pull/63) — expression parsed once per plot in shared `common/plot.rs`) |
 | TD-05 | `rayon` declared-but-unused; export fully serial | Medium | Export wall-time (embarrassingly parallel) | v0.5 | Open |
 | TD-06 | `mitex` declared-but-unused; LaTeX is Unicode substitution | Medium | Math-typesetting fidelity; honest docs | v0.6 | **Closed** ([#19](https://github.com/SakarZaidan/lumina/pull/19) — dependency removed, ADR-0012) |

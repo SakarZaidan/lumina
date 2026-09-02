@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late, last) — Wave 3: timeline evaluation 34–42% faster
+
+- `get_state_at` built a nested `HashMap` and then rebuilt it into
+  `serde_json::Map`s, walking and reallocating every property twice per frame.
+  Built once now.
+- Keyframe lookup is a binary search. The tracks were already sorted at
+  construction and the scan ran once per property, per object, per frame
+  (`AAA-P-05`). Camera lookup likewise. Boundary semantics kept exactly: the
+  explicit clamps stay, so a keyframe's own value is still returned at its own
+  time rather than interpolated toward the next — which matters for properties
+  that snap rather than blend.
+- `sorted_root_ids` borrows instead of cloning every id twice per frame.
+- Measured: `timeline_eval` **−42% / −36% / −36% / −35%** at 100/500/1000/2000
+  objects; `frame_sequence` a further **−9%** on top of buffer reuse, so about
+  **−22%** from baseline on the most realistic measurement.
+- **Not everything improved.** `skia_render/10` and `/100` came out ~1% slower
+  (p = 0.00, so systematic rather than noise) — those scenes have no groups, so
+  there was little cloning for the borrow change to remove. Recorded in METRICS
+  rather than omitted; it is far below the gate and far below the win it came
+  with, but reporting only the favourable half is how benchmark suites stop
+  being believed.
+- Found while rewriting `get_camera_at`: `CameraTimelineEntry` has no
+  `easing_params` field at all, so a camera keyframe naming `cubic_bezier` or
+  `spline` validates cleanly and then animates **linearly**. Filed as #67 with
+  a comment at the call site, rather than fixed inside a performance change —
+  it needs a defaulted schema field.
+
 ## 2026-09-02 (late, latest) — Wave 3: rendering is 3.5–9x faster
 
 - `AAA-P-02` first half landed: the renderer keeps its frame buffer between

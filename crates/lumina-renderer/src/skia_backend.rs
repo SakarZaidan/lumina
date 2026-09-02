@@ -1001,7 +1001,7 @@ impl Renderer for SkiaRenderer {
             crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
         for id in crate::common::scene::sorted_root_ids(objects) {
-            if let Err(e) = self.draw_node(&mut pixmap, &id, objects, states, root_transform, 0) {
+            if let Err(e) = self.draw_node(&mut pixmap, id, objects, states, root_transform, 0) {
                 // Put the buffer back before returning, or the next frame pays
                 // the allocation this exists to avoid.
                 self.frame = Some(pixmap);
