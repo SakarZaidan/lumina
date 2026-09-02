@@ -1766,6 +1766,7 @@ version = "0.4.0"
 dependencies = [
  "axum",
  "env_logger",
+ "http-body-util",
  "json-patch",
  "log",
  "luminafx-core",
@@ -1777,6 +1778,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tower",
  "tower-http",
 ]
 
