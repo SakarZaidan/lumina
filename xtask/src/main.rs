@@ -242,8 +242,12 @@ fn run_one(s: &Step) -> ExitCode {
 /// Comparison is only meaningful when both sides are measured on the same
 /// machine in the same session. CI runner performance varies enough between
 /// jobs that a cross-run comparison would report double-digit swings on
-/// identical code — so the CI workflow measures the merge base and the pull
-/// request back to back in one job, and this is the command it uses for both.
+/// identical code, so the workflow measures the merge base and the pull request
+/// back to back in one job.
+///
+/// The workflow calls `cargo bench` directly rather than going through here:
+/// the merge base is arbitrary older code and cannot be assumed to have this
+/// task. Keep the flags below in step with `.github/workflows/ci.yml`.
 fn run_bench(args: &[String]) -> ExitCode {
     let mut cmd = Command::new("cargo");
     cmd.args(["bench", "-p", "lumina-bench", "--"]);
