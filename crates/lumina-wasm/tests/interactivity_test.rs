@@ -1,5 +1,8 @@
 //! Browser/Node interactivity tests for the WASM engine. Run with:
 //!   wasm-pack test --node crates/lumina-wasm
+
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use lumina_wasm::LuminaEngine;
 use serde_json::json;
 use wasm_bindgen::JsValue;
@@ -10,8 +13,8 @@ use wasm_bindgen_test::*;
 /// The JS SDK passes a plain object (`new LuminaEngine(scene as object)`), which
 /// is what `JSON.parse` produces. `serde_wasm_bindgen::to_value` would instead
 /// emit a JS `Map`, and `Scene` does not deserialize from one — every field
-/// reads as absent, so construction fails on `missing field \`version\``.
-fn to_js(v: serde_json::Value) -> JsValue {
+/// reads as absent, so construction fails with a missing-`version` error.
+fn to_js(v: &serde_json::Value) -> JsValue {
     js_sys::JSON::parse(&v.to_string()).expect("scene JSON parses")
 }
 
@@ -26,7 +29,7 @@ fn test_hit_test_circle_inside_and_outside() {
         },
         "timeline": []
     });
-    let engine = LuminaEngine::new(to_js(scene)).unwrap();
+    let engine = LuminaEngine::new(to_js(&scene)).unwrap();
     assert_eq!(engine.hit_test(100.0, 100.0, 0.0).as_deref(), Some("c"));
     assert_eq!(engine.hit_test(5.0, 5.0, 0.0), None);
 }
@@ -42,7 +45,7 @@ fn test_hit_test_polygon_ray_casting() {
         },
         "timeline": []
     });
-    let engine = LuminaEngine::new(to_js(scene)).unwrap();
+    let engine = LuminaEngine::new(to_js(&scene)).unwrap();
     // Inside the triangle.
     assert_eq!(engine.hit_test(30.0, 30.0, 0.0).as_deref(), Some("tri"));
     // Outside (beyond the hypotenuse).
@@ -61,7 +64,7 @@ fn test_hit_test_group_child_through_transform() {
         },
         "timeline": []
     });
-    let engine = LuminaEngine::new(to_js(scene)).unwrap();
+    let engine = LuminaEngine::new(to_js(&scene)).unwrap();
     // The child sits at group-local (0,0) → world (100,100).
     assert_eq!(engine.hit_test(100.0, 100.0, 0.0).as_deref(), Some("dot"));
 }

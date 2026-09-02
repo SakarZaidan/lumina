@@ -75,6 +75,19 @@ programme to reach reference quality in [plan/](plan/).
   Shared between backends and bounded, so an unvalidated caller cannot hang the
   renderer.
 
+- **Hit-testing is deterministic.** The WASM engine sorted candidate objects by
+  z-index with a *stable* sort over `HashMap` keys, so two overlapping objects
+  sharing a z-index resolved to whichever the map happened to yield first —
+  and Rust randomises that per process, so the same click on the same scene
+  could report different objects between runs. Ties now break by id, in exactly
+  the reverse of the renderer's draw order, so the object reported is the
+  object visibly on top. Inside a group the ordering was stable but still
+  disagreed with the renderer, which could name the object *underneath*.
+
+  This is the defect fixed in the renderer as TD-25, present a second time
+  because the ordering was reimplemented rather than shared. It survived
+  because `lumina-wasm` was excluded from clippy; it is not any more, in both
+  `cargo xtask ci` and CI.
 - **Transparency leaves the engine undarkened.** Frames were handed to PNG,
   ffmpeg, and the WASM canvas with **premultiplied** alpha, and all three store
   straight alpha. A half-opaque pure red left the rasteriser as

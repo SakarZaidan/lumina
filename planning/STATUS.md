@@ -24,6 +24,26 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, last) — A crate nothing lints is a crate nothing checks
+
+- Clippy now covers `lumina-wasm`, in `cargo xtask ci` and in CI. It had been
+  excluded in both (TD-24), and adding it immediately reported a live bug.
+- `hit_test` sorted candidates by z-index with a **stable** sort over
+  `HashMap` keys. Ties therefore resolved in map iteration order, which Rust
+  randomises per process — the same click on the same scene could name
+  different objects between runs. This is TD-25 exactly, present a second time
+  because the WASM engine reimplemented the ordering instead of sharing it.
+- Fixed to descending `(z_index, id)`, the precise reverse of the renderer's
+  ascending draw order, so "tested first" and "drawn last" name one object.
+  Group children had the same disagreement in a quieter form: ties were stable
+  but in *author* order while the renderer draws them in id order, so a hit
+  could report the object underneath the one visibly on top.
+- TD-24 is now mostly closed. `cargo test` still excludes the crate, because
+  those tests need the wasm target and run under `wasm-pack test --node`.
+- The general lesson is TD-25's, restated: the ordering rule lives in
+  `lumina-renderer::common::scene` and is crate-private, so every other
+  consumer reimplements it. Sharing it is TD-21's blocker too.
+
 ## 2026-09-02 (night, latest) — Alpha output, and the bug under it
 
 - `AAA-OUT-06`. `--format webm-alpha` (VP9, `yuva420p`) and `--format mov`
