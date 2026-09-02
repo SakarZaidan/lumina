@@ -1,0 +1,109 @@
+# Scheduled supply-chain audit.
+#
+# The point is the *schedule*. `cargo-deny` already runs on push and pull
+# request, which means a repository nobody touches is a repository nobody
+# scans: two advisories landed while the v0.4 stack sat unmerged for seven
+# weeks, and both surfaced only because that stack happened to run CI again
+# (RUSTSEC-2026-0235 in `mitex`, a dependency imported by nothing, and
+# RUSTSEC-2026-0206 in `rustybuzz` via resvg — now TD-22). Another quiet month
+# and neither would have been noticed.
+#
+# A red cron job on a quiet repository is also something nobody notices, so a
+# failure opens an issue rather than only turning the badge red.
+name: Audit
+
+on:
+  schedule:
+    # 07:00 UTC daily. Advisories are published on no schedule, and a day is
+    # short enough that the gap that hid the two above cannot reopen.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+  # Also on changes to the dependency graph itself, so a PR that introduces a
+  # vulnerable crate is told immediately rather than the next morning.
+  pull_request:
+    paths:
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    name: Advisories and licences
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          command: check advisories bans licenses sources
+
+  osv:
+    name: OSV scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      # A second opinion on the same lockfile. OSV aggregates more sources than
+      # the RustSec advisory database alone, so the two disagree often enough
+      # to be worth running both.
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            https://github.com/google/osv-scanner/releases/download/v2.2.4/osv-scanner_linux_amd64
+          chmod +x /usr/local/bin/osv-scanner
+      # `osv-scanner.toml` carries the same accepted advisories as `deny.toml`.
+      # Two tools reading two lists would drift, and the drift would surface as
+      # a scheduled job going red for a decision somebody already made.
+      - run: osv-scanner scan source --lockfile=Cargo.lock --config=osv-scanner.toml
+
+  unused:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      # `mitex`, `rayon` and `glam` were all declared and unimported, and all
+      # three survived until somebody read the manifests by hand. `mitex` was
+      # also the crate that carried RUSTSEC-2026-0235 into the workspace, so an
+      # unused-dependency check is an advisory check by another route.
+      - run: cargo install cargo-machete --locked
+      - run: cargo machete
+
+  # A cron failure on a quiet repository is a red badge nobody looks at. This
+  # turns one into an issue, and reuses the open one rather than filing a
+  # duplicate every morning until it is fixed.
+  report:
+    name: Open an issue on failure
+    needs: [advisories, osv, unused]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: File or update the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Scheduled audit is failing"
+          existing=$(gh issue list --state open --label kind/security --search "$title in:title" \
+                       --json number --jq '.[0].number // empty')
+          body=$(printf '%s\n' \
+            "The scheduled supply-chain audit failed." \
+            "" \
+            "Run: $RUN" \
+            "" \
+            "One of \`cargo deny\`, \`osv-scanner\`, or \`cargo machete\` reported a problem." \
+            "This issue is reused rather than reopened daily; it stays open until the" \
+            "scheduled run is green again.")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label kind/security --label area/ci --body "$body"
+          fi

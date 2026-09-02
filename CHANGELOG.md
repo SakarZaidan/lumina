@@ -152,6 +152,26 @@ programme to reach reference quality in [plan/](plan/).
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **The advisory scan runs on a schedule**, not only when someone opens a pull
+  request. Two advisories landed while the v0.4 stack sat unmerged for seven
+  weeks and surfaced only because that stack happened to run CI again; another
+  quiet month and neither would have been noticed. A failure now opens a
+  labelled issue rather than only turning a badge red on a repository nobody is
+  looking at, and reuses the open one instead of filing a duplicate every
+  morning.
+- **`osv-scanner` and `cargo-machete` run alongside `cargo-deny`**, and machete
+  immediately found **twelve unused dependencies** across seven crates —
+  including `glam`, which is now gone from the dependency graph entirely. An
+  unused-dependency check is an advisory check by another route: `mitex`, which
+  carried RUSTSEC-2026-0235 into this workspace, was imported by nothing.
+- **Every GitHub Action is pinned to a commit SHA**, so a compromised or
+  retagged action cannot silently change what CI runs. `dtolnay/rust-toolchain`
+  derives its toolchain from the ref it is used at, so each use gained an
+  explicit `toolchain:` at the same time — pinning it alone would have quietly
+  changed which compiler builds the project.
+- **CodeQL and OpenSSF Scorecard** run on a schedule. Scorecard is deliberately
+  an outside opinion: the project grades itself in `planning/METRICS.md`, and a
+  metric you grade yourself is one you can talk yourself into.
 - **The crates are named `luminafx-*` on crates.io**, and a release workflow
   publishes them. `lumina`, `lumina-core`, and `lumina-cli` were all already
   taken — `lumina-core` by an unrelated *wgpu* renderer, which would have sat
