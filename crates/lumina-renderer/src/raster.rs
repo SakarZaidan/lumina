@@ -62,11 +62,15 @@ pub(crate) fn rasterize_text(
 
     let mut x_cursor = left_pad;
     for c in content.chars() {
-        let font = match engine.font_for_char(c, font_id) {
-            Some(f) => f,
+        // Cached: the same glyph at the same size is rasterised from its
+        // outline once, not once per frame, and the coverage is shared across
+        // every colour it is ever drawn in.
+        let glyph = match engine.glyph(c, font_size, font_id) {
+            Some(g) => g,
             None => continue,
         };
-        let (metrics, alpha) = font.rasterize(c, font_size);
+        let metrics = glyph.metrics;
+        let alpha = &glyph.alpha;
         if metrics.width == 0 || metrics.height == 0 {
             x_cursor += metrics.advance_width + letter_spacing;
             continue;

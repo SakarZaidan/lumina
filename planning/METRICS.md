@@ -41,8 +41,8 @@ on one runner instead, for the reason given below.
 | `skia_render/10` (1080p) | 5.21 ms | **0.569 ms** | −89.1% |
 | `skia_render/100` | 5.42 ms | **0.744 ms** | −86.3% |
 | `skia_render/500` | 6.54 ms | **1.78 ms** | −72.8% |
-| `text_render/10x40` (1080p) | 6.27 ms | **1.44 ms** | −76.7% |
-| `text_render/40x40` | 8.31 ms | **4.15 ms** | −52.7% |
+| `text_render/10x40` (1080p) | 6.27 ms | **1.31 ms** | −79.1% |
+| `text_render/40x40` | 8.31 ms | **3.59 ms** | −56.8% |
 | `plot_render/1x200` | 5.79 ms | **1.12 ms** | −80.2% |
 | `plot_render/8x200` | 7.04 ms | **2.23 ms** | −68.8% |
 | `plot_render/8x2000` | 7.88 ms | **2.99 ms** | −61.8% |
@@ -67,6 +67,16 @@ Not everything moved the right way. Borrowing rather than cloning in
 groups, so there was little cloning to remove, and the change is likely code
 layout. It is far below the CI gate and far below the timeline win it came
 with, but it is recorded rather than omitted.
+
+**The glyph atlas returned about a fifth of what the plan predicted.**
+`plan/02-performance.md` estimated 2–3 ms on a text-heavy scene; caching
+rasterised glyphs delivered **−10.8%** of an already-reduced 4.15 ms, so
+roughly **0.45 ms**. The estimate was made before buffer reuse had removed the
+allocation that dominated everything, and it assumed outline rasterisation was
+the cost. Measured, the remaining per-glyph cost is the temporary `Pixmap`
+allocated for each glyph's mask plus the per-pixel colour conversion — both of
+which happen per glyph per frame whether or not the outline is cached. That is
+the next thing to attack in text, and it is a different change.
 
 All other changes above significant at p = 0.00. `frame_sequence` improves least
 because it runs at 720p — a smaller buffer faults in fewer pages — and because
