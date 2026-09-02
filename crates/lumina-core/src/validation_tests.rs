@@ -599,3 +599,148 @@ mod colours {
         assert!(codes(&scene).iter().any(|c| c == "INVALID_COLOR"));
     }
 }
+
+/// Unknown-identifier diagnostics (`AAA-AI-08`).
+///
+/// Two of these references were not validated at all, and both failed in the
+/// quietest way available: the object simply did not appear, and the render
+/// succeeded. Every other dangling reference in a scene is an error; these two
+/// were silence.
+#[cfg(test)]
+mod unknown_references {
+    use crate::validation::validate_scene_data;
+    use luminafx_schema::Scene;
+
+    fn scene(objects: &serde_json::Value, assets: &serde_json::Value) -> Scene {
+        serde_json::from_value(serde_json::json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "assets": assets,
+            "objects": objects,
+            "timeline": []
+        }))
+        .expect("scene")
+    }
+
+    fn find<'a>(
+        r: &'a crate::validation::ValidationResponse,
+        code: &str,
+    ) -> Option<&'a crate::validation::ValidationError> {
+        r.errors.iter().find(|e| e.code == code)
+    }
+
+    #[test]
+    fn a_typoed_asset_id_is_an_error_rather_than_an_invisible_object() {
+        let s = scene(
+            &serde_json::json!({
+                "logo": { "type": "Image",
+                          "properties": { "asset_id": "brnd", "x": 0, "y": 0 } }
+            }),
+            &serde_json::json!({ "images": [{ "id": "brand", "path": "brand.png" }] }),
+        );
+        let r = validate_scene_data(&s);
+        let e = find(&r, "UNKNOWN_ASSET_ID").expect("must be reported");
+        assert!(
+            e.fix_suggestion.contains("brand"),
+            "no suggestion for a one-character typo: {}",
+            e.fix_suggestion
+        );
+    }
+
+    #[test]
+    fn a_correct_asset_reference_passes() {
+        let s = scene(
+            &serde_json::json!({
+                "logo": { "type": "Image",
+                          "properties": { "asset_id": "brand", "x": 0, "y": 0 } }
+            }),
+            &serde_json::json!({ "images": [{ "id": "brand", "path": "brand.png" }] }),
+        );
+        assert!(find(&validate_scene_data(&s), "UNKNOWN_ASSET_ID").is_none());
+    }
+
+    #[test]
+    fn a_plot_pointing_at_nothing_is_an_error() {
+        let s = scene(
+            &serde_json::json!({
+                "ax": { "type": "Axes",
+                        "properties": { "x_range": [0, 10], "y_range": [0, 10],
+                                        "x": 0, "y": 0 } },
+                "p": { "type": "Plot",
+                       "properties": { "function_str": "x", "axes_id": "axes" } }
+            }),
+            &serde_json::json!({}),
+        );
+        let r = validate_scene_data(&s);
+        let e = find(&r, "UNKNOWN_AXES_ID").expect("must be reported");
+        assert!(e.fix_suggestion.contains("ax"), "{}", e.fix_suggestion);
+    }
+
+    #[test]
+    fn a_plot_pointing_at_the_wrong_kind_of_object_says_which_kind() {
+        // Distinct from "not declared": the id resolves, so telling the author
+        // to add an object would send them to fix the wrong thing.
+        let s = scene(
+            &serde_json::json!({
+                "c": { "type": "Circle",
+                       "properties": { "cx": 1, "cy": 1, "radius": 1 } },
+                "p": { "type": "Plot",
+                       "properties": { "function_str": "x", "axes_id": "c" } }
+            }),
+            &serde_json::json!({}),
+        );
+        let r = validate_scene_data(&s);
+        let e = find(&r, "AXES_ID_IS_NOT_AXES").expect("must be reported");
+        assert!(e.message.contains("Circle"), "{}", e.message);
+    }
+
+    #[test]
+    fn a_transposed_object_id_is_now_suggested() {
+        // The old prefix match compared the first three characters, so a
+        // transposition in that range produced no suggestion at all.
+        let mut s = scene(
+            &serde_json::json!({
+                "circle_one": { "type": "Circle",
+                                "properties": { "cx": 1, "cy": 1, "radius": 1 } }
+            }),
+            &serde_json::json!({}),
+        );
+        s.timeline = serde_json::from_value(serde_json::json!([
+            { "time": 0.0, "object": "cricle_one", "state": { "radius": 2.0 } }
+        ]))
+        .expect("timeline");
+        let r = validate_scene_data(&s);
+        let e = find(&r, "UNKNOWN_OBJECT_ID").expect("must be reported");
+        assert!(
+            e.fix_suggestion.contains("circle_one"),
+            "a transposition went unsuggested: {}",
+            e.fix_suggestion
+        );
+    }
+
+    #[test]
+    fn an_unrelated_id_is_not_confidently_mismatched() {
+        // The other half of the old behaviour: a shared three-character prefix
+        // was enough to propose a completely different object.
+        let mut s = scene(
+            &serde_json::json!({
+                "titan_orbit_diagram": { "type": "Circle",
+                                         "properties": { "cx": 1, "cy": 1, "radius": 1 } }
+            }),
+            &serde_json::json!({}),
+        );
+        s.timeline = serde_json::from_value(serde_json::json!([
+            { "time": 0.0, "object": "title", "state": { "radius": 2.0 } }
+        ]))
+        .expect("timeline");
+        let r = validate_scene_data(&s);
+        let e = find(&r, "UNKNOWN_OBJECT_ID").expect("must be reported");
+        assert!(
+            !e.fix_suggestion.contains("titan_orbit_diagram"),
+            "an unrelated object was suggested: {}",
+            e.fix_suggestion
+        );
+    }
+}

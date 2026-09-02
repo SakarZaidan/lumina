@@ -172,6 +172,23 @@ rather than three, and the server's defaults are closed rather than open.
   `Lumina`, which is a distinct name on Linux and the *same* name on macOS and
   Windows, where filesystems are case-insensitive. Shipping a collision that
   appears on two platforms out of three is worse than not shipping one.
+- **Dangling asset and axes references are errors.** Neither was validated at
+  all, and both failed in the quietest way available: an `Image` with a
+  misspelled `asset_id` drew nothing, a `Plot` pointing at a missing `axes_id`
+  drew nothing, and the render succeeded either way. Every other unknown
+  reference in a scene was an error; these two were silence. A `Plot` pointed
+  at an object that exists but is not an `Axes` gets a distinct code, because
+  telling the author to add an object would send them to fix the wrong thing.
+- **"Did you mean …?" on every unknown identifier**, not just easings. Object
+  ids used a three-character prefix match, which misses every transposition
+  (`cricle_one` never suggested `circle_one`) and confidently proposed anything
+  sharing a prefix (`title` → `titan_orbit_diagram`). All references now use
+  the same edit-distance suggester, with a threshold that scales with name
+  length rather than a flat three — at a flat three, `abc` matches `xyz`.
+
+  Nothing close now suggests nothing. A confident wrong suggestion is worse
+  than none: it sends the reader, or the agent acting on `fix_suggestion`, to
+  fix the wrong thing.
 - **CLI subcommands**: `render`, `validate`, `schema`, `objects`, `new`,
   `inspect`. The original flag form (`--scene x.lsf --output y --format mp4`)
   still works and routes through the same code — every example, CI job, and

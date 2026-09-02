@@ -230,29 +230,10 @@ pub fn is_valid_easing(name: &str) -> bool {
 /// The closest known easing name (edit distance ≤ 3), for
 /// "did you mean …?" validation messages.
 pub fn suggest_easing(name: &str) -> Option<&'static str> {
-    EASING_NAMES
-        .iter()
-        .map(|candidate| (edit_distance(name, candidate), *candidate))
-        .min_by_key(|(d, _)| *d)
-        .filter(|(d, _)| *d <= 3)
-        .map(|(_, c)| c)
-}
-
-/// Classic dynamic-programming Levenshtein distance.
-fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    let mut cur = vec![0usize; b.len() + 1];
-    for (i, ca) in a.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            cur[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1);
-        }
-        std::mem::swap(&mut prev, &mut cur);
-    }
-    prev[b.len()]
+    // Delegates to `crate::suggest`, which every other unknown identifier now
+    // uses too. The threshold there scales with name length rather than being
+    // a flat three, so `ease` no longer matches `spline`.
+    crate::suggest::nearest(name, EASING_NAMES.iter().copied())
 }
 
 /// Look up a non-parameterized easing by name. Unknown names log a
