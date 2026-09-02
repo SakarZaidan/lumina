@@ -37,6 +37,17 @@ pub(crate) fn rounded_rect(x: f32, y: f32, w: f32, h: f32, rx: f32, ry: f32) -> 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PathData(pub(crate) Vec<PathCmd>);
 
+impl PathData {
+    /// A single cubic Bézier as a path, so curve objects can share the
+    /// arc-length machinery with `Path`.
+    pub(crate) fn cubic(p0: (f32, f32), p1: (f32, f32), p2: (f32, f32), p3: (f32, f32)) -> Self {
+        PathData(vec![
+            PathCmd::MoveTo(p0.0, p0.1),
+            PathCmd::CubicTo(p1.0, p1.1, p2.0, p2.1, p3.0, p3.1),
+        ])
+    }
+}
+
 /// Control-point bounding box `(x, y, w, h)` of a path — the same
 /// conservative bounds tiny-skia reports for the equivalent `Path`, so
 /// gradient geometry derived from it matches across backends.
@@ -535,4 +546,160 @@ pub(crate) fn to_kurbo_path(p: &PathData) -> vello::kurbo::BezPath {
         }
     }
     path
+}
+
+// ── Arc length ──────────────────────────────────────────────────────────────
+
+/// Flatness of the polyline used to measure and cut curves, in pixels.
+///
+/// A quarter of a pixel is well below what antialiasing can show, and the cost
+/// is linear in the number of segments rather than in the canvas size.
+const FLATTEN_TOLERANCE: f32 = 0.25;
+
+/// Subdivisions for one curve segment.
+///
+/// Chosen from the control polygon's length rather than fixed, so a short
+/// curve is not over-sampled and a long one is not visibly faceted. Bounded at
+/// both ends: enough to stay smooth, few enough that a pathological path
+/// cannot explode.
+fn curve_steps(points: &[(f32, f32)]) -> usize {
+    let polygon: f32 = points
+        .windows(2)
+        .map(|w| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt())
+        .sum();
+    ((polygon / FLATTEN_TOLERANCE).sqrt().ceil() as usize).clamp(4, 128)
+}
+
+/// Approximate a path as a polyline.
+///
+/// Subpaths are separated by `MoveTo`, and `trim` measures across all of them
+/// so a multi-subpath shape reveals as one continuous drawing rather than
+/// several racing each other.
+fn flatten(path: &PathData) -> Vec<Vec<(f32, f32)>> {
+    let mut subpaths: Vec<Vec<(f32, f32)>> = Vec::new();
+    let mut current: Vec<(f32, f32)> = Vec::new();
+    let mut start = (0.0f32, 0.0f32);
+    let mut cursor = (0.0f32, 0.0f32);
+
+    for cmd in &path.0 {
+        match *cmd {
+            PathCmd::MoveTo(x, y) => {
+                if current.len() > 1 {
+                    subpaths.push(std::mem::take(&mut current));
+                } else {
+                    current.clear();
+                }
+                current.push((x, y));
+                cursor = (x, y);
+                start = (x, y);
+            }
+            PathCmd::LineTo(x, y) => {
+                current.push((x, y));
+                cursor = (x, y);
+            }
+            PathCmd::QuadTo(cx, cy, x, y) => {
+                let pts = [cursor, (cx, cy), (x, y)];
+                let n = curve_steps(&pts);
+                for i in 1..=n {
+                    let t = i as f32 / n as f32;
+                    let u = 1.0 - t;
+                    current.push((
+                        u * u * cursor.0 + 2.0 * u * t * cx + t * t * x,
+                        u * u * cursor.1 + 2.0 * u * t * cy + t * t * y,
+                    ));
+                }
+                cursor = (x, y);
+            }
+            PathCmd::CubicTo(x1, y1, x2, y2, x, y) => {
+                let pts = [cursor, (x1, y1), (x2, y2), (x, y)];
+                let n = curve_steps(&pts);
+                for i in 1..=n {
+                    let t = i as f32 / n as f32;
+                    let u = 1.0 - t;
+                    current.push((
+                        u * u * u * cursor.0
+                            + 3.0 * u * u * t * x1
+                            + 3.0 * u * t * t * x2
+                            + t * t * t * x,
+                        u * u * u * cursor.1
+                            + 3.0 * u * u * t * y1
+                            + 3.0 * u * t * t * y2
+                            + t * t * t * y,
+                    ));
+                }
+                cursor = (x, y);
+            }
+            PathCmd::Close => {
+                current.push(start);
+                cursor = start;
+            }
+        }
+    }
+    if current.len() > 1 {
+        subpaths.push(current);
+    }
+    subpaths
+}
+
+/// Total arc length of a path, in canvas units.
+pub fn length(path: &PathData) -> f32 {
+    flatten(path)
+        .iter()
+        .flat_map(|sub| sub.windows(2))
+        .map(|w| ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt())
+        .sum()
+}
+
+/// Truncate a path to the leading `frac` of its **arc length**.
+///
+/// This is what `draw_fraction` should mean: at 0.5, half the ink is on the
+/// canvas. Two earlier approaches got it wrong in different ways.
+///
+/// A dash pattern of `[length * frac, length * 2]` gets the right answer only
+/// for a straight line — on a multi-segment path the dash phase is measured
+/// per the rasteriser's own flattening, and the result depends on which
+/// rasteriser is drawing.
+///
+/// Cutting a Bézier at parameter `t` is worse in a subtler way: a cubic
+/// traversed at uniform `t` does **not** move at uniform speed, so the reveal
+/// visibly accelerates and slows along the curve even though the fraction
+/// climbs steadily.
+pub fn trim(path: &PathData, frac: f32) -> PathData {
+    let frac = frac.clamp(0.0, 1.0);
+    if frac >= 1.0 {
+        return path.clone();
+    }
+    let subpaths = flatten(path);
+    let total = length(path);
+    if frac <= 0.0 || total <= f32::EPSILON {
+        return PathData(Vec::new());
+    }
+
+    let target = total * frac;
+    let mut walked = 0.0f32;
+    let mut out: Vec<PathCmd> = Vec::new();
+
+    for sub in &subpaths {
+        let Some(first) = sub.first() else { continue };
+        out.push(PathCmd::MoveTo(first.0, first.1));
+        for w in sub.windows(2) {
+            let seg = ((w[1].0 - w[0].0).powi(2) + (w[1].1 - w[0].1).powi(2)).sqrt();
+            if walked + seg >= target {
+                // The cut lands inside this segment: interpolate to the point.
+                let t = if seg > f32::EPSILON {
+                    (target - walked) / seg
+                } else {
+                    0.0
+                };
+                out.push(PathCmd::LineTo(
+                    w[0].0 + (w[1].0 - w[0].0) * t,
+                    w[0].1 + (w[1].1 - w[0].1) * t,
+                ));
+                return PathData(out);
+            }
+            walked += seg;
+            out.push(PathCmd::LineTo(w[1].0, w[1].1));
+        }
+    }
+    PathData(out)
 }

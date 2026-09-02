@@ -440,7 +440,17 @@ impl SkiaRenderer {
                 let d = state["d"].as_str().unwrap_or("");
                 let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
 
-                if let Some(path) = parse_svg_path(d) {
+                if let Some(mut path) = crate::common::path::parse_svg_path(d) {
+                    // `draw_fraction` is in `PathProps` and was never read
+                    // here, so a Path with a reveal animation simply appeared
+                    // whole. Trimming by arc length is what the field means.
+                    if let Some(frac) = state["draw_fraction"].as_f64() {
+                        path = crate::common::path::trim(&path, frac as f32);
+                    }
+                    let path = match crate::common::path::to_tiny_path(&path) {
+                        Some(p) => p,
+                        None => return Ok(()),
+                    };
                     let fill = crate::common::fill::parse_fill(&state["fill"], opacity);
                     let stroke = crate::common::fill::parse_stroke(state, opacity);
                     let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
@@ -642,30 +652,18 @@ impl SkiaRenderer {
                     parse_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
                 let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
 
-                let mut pb = PathBuilder::new();
-                if let Some(frac) = draw_fraction {
-                    // De Casteljau subdivision: clip cubic at parameter t=frac
-                    let t = frac.clamp(0.0, 1.0);
-                    let lerp = |a: f32, b: f32| a + (b - a) * t;
-                    let ax = lerp(x0, x1);
-                    let ay = lerp(y0, y1);
-                    let bx = lerp(x1, x2);
-                    let by = lerp(y1, y2);
-                    let cx_ = lerp(x2, x3);
-                    let cy_ = lerp(y2, y3);
-                    let dx = lerp(ax, bx);
-                    let dy = lerp(ay, by);
-                    let ex = lerp(bx, cx_);
-                    let ey = lerp(by, cy_);
-                    let fx = lerp(dx, ex);
-                    let fy = lerp(dy, ey);
-                    pb.move_to(x0, y0);
-                    pb.cubic_to(ax, ay, dx, dy, fx, fy);
-                } else {
-                    pb.move_to(x0, y0);
-                    pb.cubic_to(x1, y1, x2, y2, x3, y3);
-                }
-                if let Some(path) = pb.finish() {
+                // Trimmed by arc length, shared with Path. De Casteljau at
+                // parameter `t` was exact but measured the wrong thing: a cubic
+                // traversed at uniform `t` does not move at uniform speed, so
+                // the reveal visibly accelerated and slowed along the curve
+                // while `draw_fraction` climbed steadily.
+                let curve =
+                    crate::common::path::PathData::cubic((x0, y0), (x1, y1), (x2, y2), (x3, y3));
+                let curve = match draw_fraction {
+                    Some(frac) => crate::common::path::trim(&curve, frac),
+                    None => curve,
+                };
+                if let Some(path) = crate::common::path::to_tiny_path(&curve) {
                     let mut paint = Paint::default();
                     paint.set_color(stroke_color);
                     paint.anti_alias = true;
@@ -1553,11 +1551,6 @@ fn draw_particles(
             pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
         }
     }
-}
-
-/// Parse SVG path data into a tiny-skia `Path` via the shared parser.
-fn parse_svg_path(d: &str) -> Option<Path> {
-    crate::common::path::to_tiny_path(&crate::common::path::parse_svg_path(d)?)
 }
 
 /// Apply a `FillSpec` to a paint, deriving gradient geometry from the shape
