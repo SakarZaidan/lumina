@@ -40,8 +40,16 @@ pub fn interpolate_value(
             }
         }
         (Value::Array(a1), Value::Array(a2)) => {
-            // Pad shorter array with its last element so paths of different
-            // vertex counts can morph into each other.
+            // Point lists of differing length are resampled so the vertices
+            // correspond evenly. Anything else falls back to padding, because
+            // resampling a gradient-stop list or a `[x1, y1, x2, y2]` parameter
+            // array would be meaningless.
+            if a1.len() != a2.len() {
+                if let (Some(p1), Some(p2)) = (as_point_list(a1), as_point_list(a2)) {
+                    return morph_points(&p1, &p2, t);
+                }
+            }
+            // Pad the shorter array with its last element.
             let len = a1.len().max(a2.len());
             let null = Value::Null;
             let mut result = Vec::with_capacity(len);
@@ -68,6 +76,101 @@ pub fn interpolate_value(
         }
         _ => v2.clone(),
     }
+}
+
+/// Read an array as a list of `[x, y]` points, or `None` if it is not one.
+///
+/// Deliberately strict: every element must be a two-element numeric array. A
+/// gradient-stop list is `[[0.0, "#hex"], …]` and fails on the string; a
+/// bezier parameter array is `[x1, y1, x2, y2]` and fails on the flat numbers.
+/// Both must keep the padding behaviour, because resampling them by "arc
+/// length" would be nonsense.
+fn as_point_list(items: &[Value]) -> Option<Vec<(f32, f32)>> {
+    if items.len() < 2 {
+        return None;
+    }
+    items
+        .iter()
+        .map(|v| {
+            let pair = v.as_array()?;
+            if pair.len() != 2 {
+                return None;
+            }
+            Some((pair[0].as_f64()? as f32, pair[1].as_f64()? as f32))
+        })
+        .collect()
+}
+
+/// Morph one closed point list into another of a different vertex count.
+///
+/// Both are resampled to the same number of vertices, spaced evenly **by arc
+/// length** around their perimeters, and then interpolated pairwise.
+///
+/// The previous behaviour padded the shorter list by repeating its last
+/// element. That is a correct definition and wrong motion: morphing a
+/// four-point square into a sixty-four-point circle mapped sixty-one of the
+/// circle's vertices onto a single corner of the square, so the shape appeared
+/// to collapse into that corner and unfold rather than to flow.
+///
+/// Vertices are matched by index after resampling, without searching for the
+/// best rotational alignment. Alignment would be O(n^2) per property per frame
+/// and mostly matters for shapes whose "first" vertices are far apart; when
+/// that bites, the fix belongs at authoring time — start both lists at
+/// corresponding corners — rather than in a per-frame search.
+fn morph_points(from: &[(f32, f32)], to: &[(f32, f32)], t: f32) -> Value {
+    let n = from.len().max(to.len());
+    let a = resample_closed(from, n);
+    let b = resample_closed(to, n);
+    Value::Array(
+        a.iter()
+            .zip(&b)
+            .map(|(p, q)| {
+                Value::Array(vec![
+                    Value::from(p.0 + (q.0 - p.0) * t),
+                    Value::from(p.1 + (q.1 - p.1) * t),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// Place `n` vertices evenly by arc length around a closed polygon.
+fn resample_closed(points: &[(f32, f32)], n: usize) -> Vec<(f32, f32)> {
+    if points.len() < 2 || n == 0 {
+        return points.to_vec();
+    }
+    // Cumulative length around the perimeter, returning to the start.
+    let mut cumulative = Vec::with_capacity(points.len() + 1);
+    let mut total = 0.0f32;
+    cumulative.push(0.0);
+    for i in 0..points.len() {
+        let p = points[i];
+        let q = points[(i + 1) % points.len()];
+        total += ((q.0 - p.0).powi(2) + (q.1 - p.1).powi(2)).sqrt();
+        cumulative.push(total);
+    }
+    if total <= f32::EPSILON {
+        return vec![points[0]; n];
+    }
+
+    let mut out = Vec::with_capacity(n);
+    let mut seg = 0usize;
+    for k in 0..n {
+        let target = total * (k as f32 / n as f32);
+        while seg + 1 < cumulative.len() - 1 && cumulative[seg + 1] < target {
+            seg += 1;
+        }
+        let span = cumulative[seg + 1] - cumulative[seg];
+        let local = if span > f32::EPSILON {
+            (target - cumulative[seg]) / span
+        } else {
+            0.0
+        };
+        let p = points[seg % points.len()];
+        let q = points[(seg + 1) % points.len()];
+        out.push((p.0 + (q.0 - p.0) * local, p.1 + (q.1 - p.1) * local));
+    }
+    out
 }
 
 /// Blend two colours perceptually, returning linear-light RGB plus alpha.
