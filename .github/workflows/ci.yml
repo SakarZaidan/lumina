@@ -123,6 +123,56 @@ jobs:
         run: wasm-pack test --node crates/lumina-wasm
 
   # ── cargo-deny ────────────────────────────────────────────────────────────────
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    # Only on pull requests: the comparison is PR-versus-merge-base, so there
+    # is nothing to compare on a push to main.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Need the merge base to measure against.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install critcmp
+        run: cargo install critcmp --locked
+      # Both sides are measured back to back on the *same* runner. Comparing
+      # against a stored baseline from an earlier job would report double-digit
+      # swings on identical code, because GitHub runner performance varies far
+      # more between jobs than most real regressions do.
+      - name: Measure the merge base
+        run: |
+          git checkout --detach ${{ github.event.pull_request.base.sha }}
+          cargo xtask bench --save base
+      - name: Measure this pull request
+        run: |
+          git checkout --detach ${{ github.sha }}
+          cargo xtask bench --save pr
+      - name: Compare
+        run: |
+          critcmp base pr | tee bench-comparison.txt
+      - name: Fail on a large regression
+        run: |
+          # The threshold is 25%, not the 5% the programme originally proposed.
+          # Same-runner comparison removes most cross-job variance, but not all
+          # of it: a shared CI machine still drifts by more than 5% between two
+          # runs of the same code. A gate that fires on noise gets disabled, and
+          # ENGINEERING_PRINCIPLES #6 treats a flaky test as a bug.
+          #
+          # 25% is comfortably above that floor and comfortably below the size
+          # of the regressions this is meant to catch — removing a cache or
+          # reintroducing a per-frame allocation costs far more than a quarter.
+          python3 .github/scripts/check_bench_regression.py bench-comparison.txt 25
+      - name: Upload comparison
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: benchmark-comparison
+          path: bench-comparison.txt
+          if-no-files-found: ignore
+
   examples:
     name: Examples render
     runs-on: ubuntu-latest

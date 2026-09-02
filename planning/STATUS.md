@@ -24,6 +24,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (late, later) — Wave 3 opens: baselines, and the plan was wrong
+
+- Four new benchmark groups, because the existing three could not see the
+  engine's largest costs: nothing drew a character, nothing plotted a function,
+  and nothing rendered frames in sequence.
+- **The first reading contradicted the plan.** `skia_render` costs 5.21 ms for
+  ten objects and 6.54 ms for five hundred — nearly flat, so almost none of it
+  is drawing. Measured directly: allocating an 8.3 MB `Pixmap` per frame costs
+  **5.3 ms**, reusing one costs **0.57 ms**. The allocator hands the block back
+  to the OS and every frame faults in fresh pages.
+- So `AAA-P-02` (buffer reuse, ~4.7 ms on *every* scene) outranks `AAA-P-01`
+  (glyph atlas, 2–3 ms on text-heavy scenes), which `plan/02-performance.md`
+  had called the largest single win. The plan is corrected, with the numbers.
+  This is what principle #5 is for — the plan was wrong about its own priority
+  until something measured it.
+- One false start worth recording: the first profile showed 1 object rendering
+  7× *faster* than 0 objects. That was not a cost curve, it was warm-up — the
+  first two allocations in a process reuse a warm free list. Repeating each
+  measurement three times made it obvious. A single-pass measurement would have
+  produced a confident, wrong conclusion.
+- Benchmarks now run in CI (TD-14's remaining item) comparing a pull request
+  against **its own merge base, on the same runner, in the same job**. A stored
+  cross-job baseline would report double-digit swings on identical code.
+- The gate is 25%, not the 5% the programme proposed: same-runner comparison
+  removes most variance but not all, and a gate that fires on noise gets
+  disabled. 25% is above the noise floor and far below the size of the
+  regressions it exists to catch.
+
 ## 2026-09-02 (late) — Wave 2 closes: fuzzing, and why it is not only fuzzing
 
 - Four `cargo-fuzz` targets over every parser that reads untrusted input:

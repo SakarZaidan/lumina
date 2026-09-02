@@ -29,6 +29,37 @@ comparable.
 | CLI binary size (release, unstripped) | 22.9 MB | 22.1 MB |
 | Memory profile | n/a — tooling planned v0.5 | n/a — `AAA-P-*` baselines, Wave 3 |
 
+## Performance baselines
+
+Captured on the maintainer's machine (WSL2) before any Wave 3 optimisation, so
+later work has something to be measured against. Comparable release-over-release
+only on the same hardware; CI compares a pull request against its own merge base
+on one runner instead, for the reason given below.
+
+| Benchmark | v0.4.x baseline |
+|---|---|
+| `timeline_eval/100` / `/1000` / `/2000` | 97.5 µs / 1.15 ms / 2.48 ms |
+| `skia_render/10` / `/100` / `/500` (1080p) | 5.21 ms / 5.42 ms / 6.54 ms |
+| `text_render/10x40` / `/40x40` (1080p) | 6.27 ms / 8.31 ms |
+| `plot_render/1x200` / `/8x200` / `/8x2000` | 5.79 ms / 7.04 ms / 7.88 ms |
+| `frame_sequence/30` / `/120` (720p) | 18.9 ms / 75.8 ms |
+| `scene_walk/100` / `/1000` | 9.49 µs / 102 µs |
+| `scene_walk/timeline_build_100` / `/1000` | 237 µs / 2.34 ms |
+| `easing/get_easing_fn_lookup` | 4.35 ns |
+| `easing/eval_easing_cubic_bezier` | 16.7 ns |
+
+**What the first reading of these numbers changed.** `skia_render` costs
+5.21 ms for ten objects and 6.54 ms for five hundred — almost flat, so nearly
+all of it is fixed per-frame cost rather than drawing. Measured directly, an
+8.3 MB `Pixmap` allocated and dropped every frame costs **5.3 ms/frame**, while
+reusing one costs **0.57 ms/frame**: the allocator returns the block to the
+operating system and every frame faults in fresh pages.
+
+That reorders Wave 3. `plan/02-performance.md` named the glyph atlas
+(`AAA-P-01`) the largest single win; it is worth 2–3 ms on a text-heavy scene,
+while buffer reuse (`AAA-P-02`) is worth ~4.7 ms on **every** scene. The plan
+has been corrected rather than followed.
+
 ## Methodology
 
 - **LOC**: `find crates tools sdks -name "*.rs" -not -path "*/target/*" | xargs wc -l`
