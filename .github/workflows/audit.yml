@@ -53,7 +53,10 @@ jobs:
           curl -sSfL -o /usr/local/bin/osv-scanner \
             https://github.com/google/osv-scanner/releases/download/v2.2.4/osv-scanner_linux_amd64
           chmod +x /usr/local/bin/osv-scanner
-      - run: osv-scanner scan source --lockfile=Cargo.lock
+      # `osv-scanner.toml` carries the same accepted advisories as `deny.toml`.
+      # Two tools reading two lists would drift, and the drift would surface as
+      # a scheduled job going red for a decision somebody already made.
+      - run: osv-scanner scan source --lockfile=Cargo.lock --config=osv-scanner.toml
 
   unused:
     name: Unused dependencies
