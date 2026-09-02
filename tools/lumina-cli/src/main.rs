@@ -20,7 +20,7 @@
 
 use anyhow::Context;
 use clap::Parser;
-use lumina_export::Exporter;
+use lumina_export::{Exporter, Quality};
 use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
 use lumina_schema::Scene;
 use std::path::PathBuf;
@@ -58,6 +58,14 @@ struct Args {
     /// Print per-frame timing at the end of a render
     #[arg(long)]
     verbose: bool,
+
+    /// Encoding quality: draft (fast), standard (default), or final (10-bit).
+    ///
+    /// Affects encoder effort and bit depth only — rendering is identical at
+    /// every setting, so a draft render and a final render show the same
+    /// pixels before compression.
+    #[arg(long, default_value = "standard")]
+    quality: String,
 
     /// Render a single frame to PNG instead of the full animation.
     ///
@@ -163,17 +171,23 @@ fn do_export<R: Renderer>(
     args: &Args,
 ) -> anyhow::Result<Vec<Duration>> {
     let mut timings = Vec::new();
+    let quality = match args.quality.as_str() {
+        "draft" => Quality::Draft,
+        "standard" => Quality::Standard,
+        "final" => Quality::Final,
+        other => anyhow::bail!("unknown --quality '{other}'; expected draft, standard, or final"),
+    };
     match args.format.as_str() {
         "mp4" => {
             log::info!("Exporting MP4 to {:?}", args.output);
             let t0 = Instant::now();
-            exporter.export_mp4(scene, &args.output)?;
+            exporter.export_mp4_with(scene, &args.output, quality)?;
             timings.push(t0.elapsed());
         }
         "webm" => {
             log::info!("Exporting WebM to {:?}", args.output);
             let t0 = Instant::now();
-            exporter.export_webm(scene, &args.output)?;
+            exporter.export_webm_with(scene, &args.output, quality)?;
             timings.push(t0.elapsed());
         }
         "gif" => {

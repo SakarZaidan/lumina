@@ -24,6 +24,36 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (later) — Wave 4 opens: output fidelity
+
+- **Encode quality** (`AAA-OUT-03/04/05/13`). Every video now carries BT.709
+  primaries, transfer, matrix and `tv` range — without them a player guesses,
+  and players guess differently, so the same file looked different in
+  QuickTime, VLC and Chrome. Plus `-tune animation` (x264 has a tune built for
+  flat regions and hard edges), `+faststart` so a browser can play before the
+  download finishes, and `-row-mt` for VP9.
+- `--quality draft|standard|final`. Trades encoder effort and bit depth, never
+  pixels. `final` is 10-bit. Verified from the produced file with `ffprobe`
+  rather than from the arguments passed — ffmpeg is free to ignore a flag.
+- **The SVG path parser was missing most of the grammar** (`AAA-OUT-11/12`).
+  It handled `M L H V C Z` and silently ignored `Q S T A`, so curves from any
+  vector editor were dropped. It also never implemented **repeated coordinate
+  sets**, so `L 1 1 2 2` drew one line instead of two — which truncates
+  essentially every real path. Rewritten with a proper lexer (numbers may run
+  together: `M0 0-1-1` and `1.5.5` are legal), full command set, arcs converted
+  via the SVG 1.1 endpoint-to-centre parameterisation, and errors that name the
+  offending token and offset instead of discarding the shape.
+- Found while testing that with a hand-written SVG: **`fill="none"` rendered as
+  opaque white.** `parse_rgba8` falls back to 255 for anything unrecognised, so
+  a typo and an SVG habit both produced a solid white shape silently. Now an
+  `INVALID_COLOR` validation error with a specific suggestion for `"none"`.
+  The whole corpus was checked first — every colour in it is a valid hex
+  literal, so nothing breaks.
+- That leaves a real gap: there is **no way to express "no fill"** at all. TD-26
+  and #74, worth deciding alongside TD-19 (`LineProps.dash`) since both are the
+  schema promising drawing behaviour the renderer does not provide.
+- Tests 207 → 224.
+
 ## 2026-09-02 (end, final) — Wave 3 done: three items dropped, one RFC rejected
 
 Wave 3 finishes with more items *not* done than done, and each refusal has a

@@ -43,7 +43,9 @@ pub mod testing {
 
     /// SVG path parsing — see `common::path`.
     pub mod path {
-        pub use crate::common::path::{parse_svg_path, PathData};
+        pub use crate::common::path::{
+            parse_svg_path, parse_svg_path_detailed, PathData, PathError,
+        };
     }
 
     /// LaTeX transliteration — see `skia_backend`.
