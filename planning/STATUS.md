@@ -71,6 +71,16 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
     rounding rather than ours.
 - An opaque scene is byte-for-byte what it was; a test asserts it.
 - Tests 259 → 265.
+- **The benchmark gate cried wolf and was fixed rather than ignored.** It
+  failed this branch on `timeline_eval/2000 +52.9%` — for a function
+  (`get_state_at`) byte-identical to `main`, on a bench that never touches the
+  camera. One run on a shared runner cannot separate that from a real
+  regression by threshold alone, so a regression must now corroborate across
+  the sizes of its own family: shared code slows at every size, a bad
+  neighbour on the host moves one. Uncorroborated ones are still printed
+  loudly. Verified against three cases — noise, a genuine across-the-board
+  regression, and a single-member family, which is judged on the threshold as
+  before.
 
 ## 2026-09-02 (night, later) — The camera can turn
 
