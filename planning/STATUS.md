@@ -24,6 +24,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (later, still) — Gradients blend perceptually; linear light is blocked
+
+- **`AAA-OUT-01` (linear-light compositing) cannot be done**, and the obstacle
+  is earlier than the effort. `tiny-skia` exposes exactly one pixel type,
+  `PremultipliedColorU8` — 8-bit, sRGB, premultiplied. No linear buffer, no f32
+  surface, no blend-space option, so there is nothing to composite *into*. It
+  would mean replacing the CPU rasteriser, which abandons "Skia defines the
+  pixels" (DESIGN.md) and is a much larger decision than an output item.
+  Recorded in the plan with the reasoning rather than quietly dropped: the
+  programme proposed something the chosen dependency cannot express, and
+  nothing but reading the pixel type would have shown it.
+- **`AAA-OUT-02` was reachable and is done.** The timeline blended colours in
+  `OKLab` while both rasterisers interpolated gradient stops linearly in sRGB —
+  two colour models in one frame, so red to blue dipped through a dark muddy
+  purple in a gradient and a bright one in a fade.
+- Neither backend lets a caller choose an interpolation space, but both accept
+  arbitrarily many stops. So the perceptual curve is sampled and the samples
+  handed over as intermediate stops: the right answer through an API that
+  cannot be asked for it directly. Eight segments per pair keeps the
+  approximation error under one 8-bit step.
+- The mixing function is **exposed from `lumina-core` and shared**, so a
+  gradient and a fade agree by construction rather than by two implementations
+  happening to match. `interpolate_value` now calls it too.
+- Tests assert the actual claim — gradient midpoint equals fade midpoint across
+  four transitions — plus that the author's own stops survive refinement, and
+  that the result is *not* indistinguishable from a naive sRGB blend, which
+  would silently pass if the refinement did nothing.
+
 ## 2026-09-02 (later, more) — Wave 4: two schema promises finally kept
 
 - **`LineProps.dash` implemented** on both backends (TD-19 closed). It had sat

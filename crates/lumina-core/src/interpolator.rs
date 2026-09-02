@@ -58,25 +58,61 @@ pub fn interpolate_value(
             // fade passes through the colours a viewer expects rather than
             // through a muddy or drifting midpoint.
             if let (Some(c1), Some(c2)) = (parse_hex_color(s1), parse_hex_color(s2)) {
-                let lab1 = linear_to_oklab(c1.linear);
-                let lab2 = linear_to_oklab(c2.linear);
-                let lab = [
-                    lab1[0] + (lab2[0] - lab1[0]) * t,
-                    lab1[1] + (lab2[1] - lab1[1]) * t,
-                    lab1[2] + (lab2[2] - lab1[2]) * t,
-                ];
-                // Alpha is a linear quantity — blending it perceptually would
-                // be a category error.
-                let alpha = c1.alpha + (c2.alpha - c1.alpha) * t;
+                let (linear, alpha) = mix_linear(&c1, &c2, t);
                 // Widen to eight digits only if either side asked for it, so
                 // `#FF0000` stays `#RRGGBB` through a fade.
                 let with_alpha = c1.has_alpha || c2.has_alpha;
-                return Value::String(to_hex(oklab_to_linear(lab), alpha, with_alpha));
+                return Value::String(to_hex(linear, alpha, with_alpha));
             }
             v2.clone()
         }
         _ => v2.clone(),
     }
+}
+
+/// Blend two colours perceptually, returning linear-light RGB plus alpha.
+///
+/// Colour blends in `OKLab`; alpha blends linearly, because alpha is a coverage
+/// fraction rather than a perceptual quantity and running it through a
+/// perceptual space would be a category error.
+fn mix_linear(a: &Rgba, b: &Rgba, t: f32) -> ([f32; 3], f32) {
+    let lab1 = linear_to_oklab(a.linear);
+    let lab2 = linear_to_oklab(b.linear);
+    let lab = [
+        lab1[0] + (lab2[0] - lab1[0]) * t,
+        lab1[1] + (lab2[1] - lab1[1]) * t,
+        lab1[2] + (lab2[2] - lab1[2]) * t,
+    ];
+    (oklab_to_linear(lab), a.alpha + (b.alpha - a.alpha) * t)
+}
+
+/// Blend two straight-alpha RGBA8 colours the way a keyframe fade does.
+///
+/// Exposed so the renderer can build gradient stops through the **same**
+/// implementation the timeline uses. Gradients previously interpolated in
+/// sRGB while keyframes interpolated perceptually, so the same two colours
+/// produced two different midpoints depending on whether they met in a
+/// gradient or in an animation. Sharing the function makes them agree by
+/// construction rather than by coincidence.
+#[must_use]
+pub fn mix_rgba8(a: [u8; 4], b: [u8; 4], t: f32) -> [u8; 4] {
+    let to_rgba = |c: [u8; 4]| Rgba {
+        linear: [
+            srgb_to_linear(f32::from(c[0]) / 255.0),
+            srgb_to_linear(f32::from(c[1]) / 255.0),
+            srgb_to_linear(f32::from(c[2]) / 255.0),
+        ],
+        alpha: f32::from(c[3]) / 255.0,
+        has_alpha: true,
+    };
+    let (linear, alpha) = mix_linear(&to_rgba(a), &to_rgba(b), t.clamp(0.0, 1.0));
+    let ch = |v: f32| (linear_to_srgb(v.clamp(0.0, 1.0)).clamp(0.0, 1.0) * 255.0).round() as u8;
+    [
+        ch(linear[0]),
+        ch(linear[1]),
+        ch(linear[2]),
+        (alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
+    ]
 }
 
 /// A parsed colour: linear-light RGB plus alpha, and whether the source

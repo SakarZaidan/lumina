@@ -83,6 +83,14 @@ programme to reach reference quality in [plan/](plan/).
   never pixels: `final` produces 10-bit output to keep banding out of
   gradients. `-tune animation` and `+faststart` are on by default, and VP9
   gains `-row-mt`.
+- **Gradients blend perceptually**, in the same space as keyframe fades. The
+  timeline blended colours in `OKLab` while both rasterisers interpolated
+  gradient stops linearly in sRGB, so the same two colours produced two
+  different midpoints in a single frame — red to blue dipped through a dark
+  muddy purple in a gradient and a bright one in a fade. Neither backend
+  exposes an interpolation space, so the perceptual curve is sampled and the
+  samples are handed over as intermediate stops. The author's own stops are
+  preserved exactly; only the path between them changes.
 - **`LineProps.dash` is implemented** on both backends (TD-19). The field had
   been in the schema since v0.1 and neither backend drew it, so a dashed line
   rendered solid. Odd-length patterns repeat to make them even, as SVG and

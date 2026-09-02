@@ -61,8 +61,8 @@ holds still.
 
 | ID | Item | Acceptance |
 |---|---|---|
-| `AAA-OUT-01` | Composite in linear light; dither on the way down to 8-bit | Edge fringing gone; a reference gradient matches a linear-light reference |
-| `AAA-OUT-02` | Gradient stops interpolate in the same space as the timeline | Gradient midpoint equals the two-keyframe fade midpoint |
+| ~~`AAA-OUT-01`~~ | ~~Composite in linear light~~ | **Blocked by the rasteriser, not by effort.** `tiny-skia` has exactly one pixel type, `PremultipliedColorU8` — 8-bit, sRGB. There is no linear-light or higher-precision buffer to composite into, so this cannot be done without replacing the CPU backend, which would abandon the rule that Skia defines the pixels. Reopen only alongside a rasteriser decision |
+| `AAA-OUT-02` | Gradient stops interpolate in the same space as the timeline | Gradient midpoint equals the two-keyframe fade midpoint. **Done** — neither backend exposes an interpolation space, but both accept arbitrarily many stops, so the perceptual curve is sampled and the samples handed over |
 | `AAA-OUT-03` | BT.709 colour tagging on every encode | `ffprobe` reports primaries, transfer, matrix, and range |
 | `AAA-OUT-04` | `-tune animation`, `+faststart`, configurable preset/CRF | Same visual quality at a measurably smaller file |
 | `AAA-OUT-05` | 10-bit output (`yuv420p10le`) | Banding on slow gradients measurably reduced |
@@ -75,14 +75,31 @@ holds still.
 | `AAA-OUT-12` | A malformed path token reports which token and where | No silent whole-path drop |
 | `AAA-OUT-13` | `--quality draft\|standard\|final` presets | One flag trades render time for output quality predictably |
 
-## A note on `AAA-OUT-01`
+## `AAA-OUT-01` is blocked by the rasteriser
 
-Moving to linear-light compositing changes almost every pixel in almost every
-fixture. It is the single largest golden-image churn in this program, and it
-must land as one PR that regenerates every golden with a written justification
-(ENGINEERING_PRINCIPLES #1: intentional visual changes update the goldens
-explicitly). Doing it piecemeal would make the parity suite useless for the
-duration.
+This document originally called linear-light compositing the flagship item and
+warned that it would churn every golden image. The obstacle turned out to be
+earlier than that.
+
+`tiny-skia` exposes exactly one pixel type: `PremultipliedColorU8`. Eight bits
+per channel, sRGB, premultiplied. There is no linear-light buffer, no f32 or
+16-bit surface, and no blend-space option — so there is nothing to composite
+*into*. Doing this means replacing the CPU rasteriser, which abandons the rule
+that Skia defines the pixels and Vello matches them (DESIGN.md), and that is a
+decision far larger than an output-fidelity item.
+
+Recorded rather than quietly dropped, because the reasoning is the useful part:
+the plan proposed something the chosen dependency cannot express, and no amount
+of effort inside this wave would have surfaced that except reading the pixel
+type.
+
+**What is reachable, and was done instead:** gradient stops (`AAA-OUT-02`).
+Neither backend lets a caller choose an interpolation space, but both accept
+arbitrarily many stops — so sampling the perceptual curve and handing over the
+samples gets the right answer through an API that cannot be asked for it
+directly. That closes the specific inconsistency worth closing: the timeline
+blended colours perceptually while gradients blended them in sRGB, so the same
+two colours produced two different midpoints in one frame.
 
 ## Metrics moved
 
