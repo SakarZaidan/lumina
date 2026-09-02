@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md), and the
 programme to reach reference quality in [plan/](plan/).
 
+## [0.5.0] — 2026-09-03
+
+The first release published to a registry, and the release that had to change
+its own name to get there: `lumina`, `lumina-core`, and `lumina-cli` were all
+taken on crates.io — `lumina-core` by an unrelated wgpu renderer. See ADR-0014.
+
+Behaviour changed in ways existing scenes will notice: `ease` and `spring` are
+different curves, colour interpolates in OKLab, `draw_fraction` means one thing
+rather than three, and the server's defaults are closed rather than open.
+
 ### Changed
 - **`spring` is now solved rather than integrated.** It was 100 fixed steps of
   semi-implicit Euler indexed by `(t / dt).round()` — which made it *quantised*
