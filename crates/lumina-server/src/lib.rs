@@ -328,6 +328,20 @@ fn render_blocking(payload: &RenderRequest, ext: &str) -> RenderOutcome {
     }
     let mut exporter = Exporter::new(renderer);
 
+    // Audio, unlike fonts and images, is handed to ffmpeg as a *path* rather
+    // than as bytes we read ourselves — so an unchecked path here would make
+    // /render an arbitrary-file read whose result the caller downloads. Every
+    // track goes through the same asset-root check, and a path outside it
+    // fails the request rather than being skipped.
+    let mut tracks = Vec::new();
+    for audio in &payload.scene.assets.audio {
+        match resolve_asset_path(&audio.path) {
+            Ok(p) => tracks.push(lumina_export::AudioTrack::new(p, audio)),
+            Err(msg) => return RenderOutcome::BadRequest(msg),
+        }
+    }
+    exporter.set_audio(tracks);
+
     let temp_dir = match tempfile::tempdir() {
         Ok(d) => d,
         Err(e) => return RenderOutcome::Failed(format!("Temp dir error: {e}")),
@@ -440,6 +454,36 @@ mod tests {
         assert!(resolve_asset_path("../../etc/passwd").is_err());
         assert!(resolve_asset_path("/etc/passwd").is_err());
         assert!(resolve_asset_path("../lumina-core/Cargo.toml").is_err());
+    }
+
+    /// Audio is the one asset kind handed to ffmpeg as a *path* rather than as
+    /// bytes the server read itself, so it is the one that could turn `/render`
+    /// into an arbitrary-file read whose result the caller downloads.
+    ///
+    /// Asserted structurally, like the `spawn_blocking` test above: the check
+    /// is that `render_blocking` routes every declared audio path through
+    /// `resolve_asset_path` before it reaches the exporter. A behavioural test
+    /// would need a real out-of-root audio file and a working ffmpeg, and
+    /// would pass on a machine with neither.
+    #[test]
+    fn audio_paths_go_through_the_asset_root_check() {
+        let src = include_str!("lib.rs");
+        let body = src
+            .split("fn render_blocking")
+            .nth(1)
+            .expect("render_blocking must exist");
+        let body = &body[..body.find("\nfn ").unwrap_or(body.len())];
+
+        assert!(
+            body.contains("assets.audio"),
+            "render_blocking must pass the scene's declared audio to the exporter"
+        );
+        let audio_at = body.find("assets.audio").expect("checked above");
+        assert!(
+            body[audio_at..].contains("resolve_asset_path"),
+            "every audio path must go through resolve_asset_path before reaching ffmpeg — \
+             it is given to the encoder as a path, not read as bytes here"
+        );
     }
 
     fn minimal_scene() -> Scene {

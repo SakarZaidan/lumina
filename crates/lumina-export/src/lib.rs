@@ -134,6 +134,72 @@ const PIPELINE_DEPTH: usize = 4;
 /// 32 frames is 265 MB at 1080p but over a gigabyte at 4K.
 const PNG_QUEUE_BYTES: usize = 256 * 1024 * 1024;
 
+/// ffmpeg arguments for audio, split by position on the command line.
+#[derive(Debug, Default)]
+struct AudioArgs {
+    /// Input-stage arguments: `-ss`/`-i` pairs, before the output options.
+    inputs: Vec<String>,
+    /// Output-stage arguments: the filter graph, stream maps, and codec.
+    output: Vec<String>,
+}
+
+/// One audio file to mix into a video export, with its path already resolved.
+///
+/// The path is resolved *by the caller*, not from `scene.assets.audio`, and
+/// that is the point. ffmpeg needs a filesystem path rather than bytes, so an
+/// exporter that read the scene's own path strings would let any caller name
+/// any file — and one of the callers is an HTTP server accepting scenes from
+/// the network. The CLI resolves against the working directory; the server
+/// resolves against `LUMINA_ASSET_ROOT` and rejects anything outside it. The
+/// sandbox stays where the trust boundary is.
+#[derive(Debug, Clone)]
+pub struct AudioTrack {
+    /// Resolved path to an audio file ffmpeg can decode.
+    pub path: std::path::PathBuf,
+    /// Seconds into the video at which the track starts. Negative values start
+    /// the video part-way into the track.
+    pub start: f32,
+    /// Linear gain; `1.0` is the file as recorded.
+    pub gain: f32,
+}
+
+impl AudioTrack {
+    /// Build a track from a scene's [`lumina_schema::AudioAsset`] and a path
+    /// the caller has already resolved and authorised.
+    #[must_use]
+    pub fn new(path: std::path::PathBuf, asset: &lumina_schema::AudioAsset) -> Self {
+        Self {
+            path,
+            start: asset.start,
+            gain: asset.gain,
+        }
+    }
+}
+
+/// Audio codec for a container, or `None` for containers that carry no sound.
+#[derive(Debug, Clone, Copy)]
+enum AudioCodec {
+    /// MP4: AAC is the only codec every player is guaranteed to decode.
+    Aac,
+    /// `WebM`: the container admits Opus and Vorbis, and Opus is better at
+    /// every bitrate.
+    Opus,
+    /// `MOV` intermediates: uncompressed, because a master should not carry a
+    /// generation of lossy audio into whatever re-encodes it.
+    Pcm,
+}
+
+impl AudioCodec {
+    /// The `-c:a` value and any codec-specific arguments that follow it.
+    fn args(self) -> &'static [&'static str] {
+        match self {
+            AudioCodec::Aac => &["-c:a", "aac", "-b:a", "192k"],
+            AudioCodec::Opus => &["-c:a", "libopus", "-b:a", "128k"],
+            AudioCodec::Pcm => &["-c:a", "pcm_s16le"],
+        }
+    }
+}
+
 /// How many frames of `width * height` fit in [`PNG_QUEUE_BYTES`].
 ///
 /// Depth matters more here than for the ffmpeg pipeline because there are many
@@ -151,6 +217,8 @@ fn png_queue_depth(width: u32, height: u32) -> usize {
 /// video files (video encoding is delegated to an external `ffmpeg`).
 pub struct Exporter<R: Renderer> {
     renderer: R,
+    /// Audio to mix into video exports; see [`Exporter::set_audio`].
+    audio: Vec<AudioTrack>,
 }
 
 impl<R: Renderer> Exporter<R> {
@@ -238,7 +306,20 @@ impl<R: Renderer> Exporter<R> {
 
     /// Wrap a renderer for export.
     pub fn new(renderer: R) -> Self {
-        Self { renderer }
+        Self {
+            renderer,
+            audio: Vec::new(),
+        }
+    }
+
+    /// Set the audio tracks mixed into subsequent video exports.
+    ///
+    /// The exporter deliberately does **not** read `scene.assets.audio`
+    /// itself: see [`AudioTrack`] for why the path resolution belongs to the
+    /// caller. Tracks are ignored by [`Exporter::export_png_sequence`] and by
+    /// GIF export, neither of which has anywhere to put sound.
+    pub fn set_audio(&mut self, tracks: Vec<AudioTrack>) {
+        self.audio = tracks;
     }
 
     /// Render every frame of `scene` as `frame_NNNN.png` files in
@@ -345,6 +426,97 @@ impl<R: Renderer> Exporter<R> {
         Ok(())
     }
 
+    /// ffmpeg arguments for the declared audio tracks, split by where they go.
+    ///
+    /// Two lists because ffmpeg's command line is positional: input options
+    /// must precede the output-stage options, and the video's own encoder
+    /// flags sit between them.
+    fn build_audio_args(&self, codec: AudioCodec) -> Result<AudioArgs> {
+        let mut inputs: Vec<String> = Vec::new();
+        let mut chains: Vec<String> = Vec::new();
+        let mut labels: Vec<String> = Vec::new();
+
+        for (i, track) in self.audio.iter().enumerate() {
+            let path = track.path.to_str().ok_or_else(|| {
+                anyhow::anyhow!("audio path is not valid UTF-8: {:?}", track.path)
+            })?;
+
+            // A negative start means "the video begins part-way into this
+            // track", which is a seek on the *input* rather than anything the
+            // filter graph can express: filters cannot produce audio from
+            // before the file started.
+            if track.start < 0.0 {
+                inputs.push("-ss".to_string());
+                inputs.push(format!("{:.6}", -f64::from(track.start)));
+            }
+            inputs.push("-i".to_string());
+            inputs.push(path.to_string());
+
+            // Input 0 is the raw video pipe, so the tracks are 1..=n.
+            let stream = i + 1;
+            let mut chain = format!("[{stream}:a]");
+            let mut stages: Vec<String> = Vec::new();
+            if (track.gain - 1.0).abs() > f32::EPSILON {
+                stages.push(format!("volume={:.6}", track.gain));
+            }
+            if track.start > 0.0 {
+                // `adelay` takes milliseconds, and without `all=1` it delays
+                // only the first channel — which turns a stereo track into one
+                // channel of silence against one of sound.
+                let ms = (f64::from(track.start) * 1000.0).round() as i64;
+                stages.push(format!("adelay={ms}:all=1"));
+            }
+            if stages.is_empty() {
+                // A filter chain may not be empty, and `anull` is the
+                // documented way to say "pass through".
+                stages.push("anull".to_string());
+            }
+            let label = format!("a{i}");
+            chain.push_str(&stages.join(","));
+            chain.push_str(&format!("[{label}]"));
+            chains.push(chain);
+            labels.push(label);
+        }
+
+        if labels.is_empty() {
+            return Ok(AudioArgs::default());
+        }
+
+        // `normalize=0` keeps each track at the gain the scene asked for.
+        // amix normalises by input count by default, so declaring a second
+        // track would silently halve the volume of the first.
+        let mixed = if labels.len() == 1 {
+            format!("[{}]apad[aout]", labels[0])
+        } else {
+            format!(
+                "{}amix=inputs={}:duration=longest:normalize=0,apad[aout]",
+                labels.iter().map(|l| format!("[{l}]")).collect::<String>(),
+                labels.len()
+            )
+        };
+        chains.push(mixed);
+
+        // `apad` above pads with silence indefinitely and `-shortest` then
+        // cuts at the end of the video. Together they make the output exactly
+        // as long as the animation, whether the audio is shorter or longer —
+        // `-shortest` alone would truncate the video to a short track, and
+        // neither alone handles both directions.
+        let output = vec![
+            "-filter_complex".to_string(),
+            chains.join(";"),
+            "-map".to_string(),
+            "0:v".to_string(),
+            "-map".to_string(),
+            "[aout]".to_string(),
+        ]
+        .into_iter()
+        .chain(codec.args().iter().map(|s| (*s).to_string()))
+        .chain(std::iter::once("-shortest".to_string()))
+        .collect();
+
+        Ok(AudioArgs { inputs, output })
+    }
+
     /// Pipe rendered frames into `FFmpeg` with the given output-stage arguments
     /// (everything after the rawvideo `-i -` input, up to the output path).
     fn encode_with_ffmpeg(
@@ -352,6 +524,7 @@ impl<R: Renderer> Exporter<R> {
         scene: &Scene,
         output_path: &Path,
         output_args: &[&str],
+        audio: Option<AudioCodec>,
     ) -> Result<()> {
         let out = output_path
             .to_str()
@@ -372,7 +545,22 @@ impl<R: Renderer> Exporter<R> {
             "-i",
             "-",
         ];
+
+        // Audio inputs come after the video pipe, so the video is always
+        // input 0 and the tracks are inputs 1..=n. `build_audio_args` relies
+        // on that numbering.
+        let audio_plan = audio
+            .map(|codec| self.build_audio_args(codec))
+            .transpose()?;
+        if let Some(plan) = &audio_plan {
+            args.extend(plan.inputs.iter().map(String::as_str));
+        }
+
         args.extend_from_slice(output_args);
+
+        if let Some(plan) = &audio_plan {
+            args.extend(plan.output.iter().map(String::as_str));
+        }
         args.push(out);
 
         let mut child = Command::new("ffmpeg")
@@ -488,7 +676,7 @@ impl<R: Renderer> Exporter<R> {
         // Moves the index to the front so a browser can start playing before
         // the whole file has downloaded. Costs one extra pass over the output.
         args.extend_from_slice(&["-movflags", "+faststart"]);
-        self.encode_with_ffmpeg(scene, output_path, &args)
+        self.encode_with_ffmpeg(scene, output_path, &args, Some(AudioCodec::Aac))
     }
 
     /// Export VP9 `WebM` — smaller, web-friendly.
@@ -523,7 +711,7 @@ impl<R: Renderer> Exporter<R> {
             quality.pix_fmt_vp9(),
         ];
         args.extend_from_slice(BT709_TAGS);
-        self.encode_with_ffmpeg(scene, output_path, &args)
+        self.encode_with_ffmpeg(scene, output_path, &args, Some(AudioCodec::Opus))
     }
 
     /// Export VP9 `WebM` **with an alpha channel**, at the default quality.
@@ -575,7 +763,7 @@ impl<R: Renderer> Exporter<R> {
             "0",
         ];
         args.extend_from_slice(BT709_TAGS);
-        self.encode_with_ffmpeg(scene, output_path, &args)
+        self.encode_with_ffmpeg(scene, output_path, &args, Some(AudioCodec::Opus))
     }
 
     /// Export `ProRes` 4444 in a `MOV` container, at the default quality.
@@ -627,7 +815,7 @@ impl<R: Renderer> Exporter<R> {
         ];
         args.extend_from_slice(BT709_TAGS);
         args.extend_from_slice(&["-movflags", "+faststart"]);
-        self.encode_with_ffmpeg(scene, output_path, &args)
+        self.encode_with_ffmpeg(scene, output_path, &args, Some(AudioCodec::Pcm))
     }
 
     /// Export an animated GIF using a single-pass palettegen/paletteuse filter
@@ -640,11 +828,15 @@ impl<R: Renderer> Exporter<R> {
                 "-vf",
                 "split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=floyd_steinberg",
             ],
+            // GIF has no audio track to put anything in.
+            None,
         )
     }
 }
 
 #[cfg(test)]
 mod alpha_tests;
+#[cfg(test)]
+mod audio_tests;
 #[cfg(test)]
 mod export_tests;

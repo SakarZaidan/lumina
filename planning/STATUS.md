@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 — Audio
+
+- `AAA-OUT-08`. `assets.audio`: a list of files with `start` (seconds, negative
+  to begin part-way in) and linear `gain`. Mixed into every video format; PNG
+  sequences and GIFs ignore it.
+- Placed by declaration rather than by reference. Sound is a property of the
+  scene, not of anything drawn in it, so there is no object to attach it to —
+  which is also why `AudioAsset.id` exists only to name the track in
+  diagnostics.
+- **The exporter never sees the scene's path strings.** ffmpeg needs a
+  filesystem path, not bytes, so an exporter that read `scene.assets.audio`
+  itself would let any caller name any file — and one caller is an HTTP server
+  taking scenes off the network. `Exporter::set_audio` takes already-resolved
+  paths; the CLI resolves against the working directory, the server against
+  `LUMINA_ASSET_ROOT`, rejecting anything outside it. A structural test asserts
+  `render_blocking` routes every audio path through the check, and it was
+  verified to fail with the check removed.
+- Three ffmpeg details that each look right and are not:
+  - `-shortest` alone truncates the video to a short track; `apad` alone
+    stretches it to fill a long one. Both together give the animation's length
+    in either direction, and the tests check both directions.
+  - `amix` normalises by input count unless told `normalize=0`, so declaring a
+    second track would silently halve the first.
+  - `adelay` without `all=1` delays only the first channel, turning a stereo
+    track into one channel of silence against one of sound.
+- Tests 265 → 272.
+
 ## 2026-09-02 (night, last) — A crate nothing lints is a crate nothing checks
 
 - Clippy now covers `lumina-wasm`, in `cargo xtask ci` and in CI. It had been

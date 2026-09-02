@@ -134,6 +134,21 @@ programme to reach reference quality in [plan/](plan/).
   At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
   continuous drawing rather than several racing each other. Both backends share
   one implementation, covered by parity fixture 19.
+- **Audio.** A scene declares `assets.audio` and video exports carry it, mixed
+  and trimmed to the animation's length. Each track takes a `start` in seconds
+  (negative begins part-way into the file) and a linear `gain`. MP4 gets AAC,
+  WebM Opus, and ProRes MOV uncompressed PCM; PNG sequences and GIFs have
+  nowhere to put sound and ignore it.
+
+  Audio is a property of the scene rather than of anything drawn in it, so
+  declaring the asset is what places it — there is no object to attach it to.
+
+  Unlike fonts and images, an audio file is handed to ffmpeg as a *path* rather
+  than as bytes, so `Exporter` never reads the scene's own path strings: the
+  caller resolves them. The CLI resolves against the working directory and the
+  server against `LUMINA_ASSET_ROOT`, rejecting anything outside it, so
+  `/render` does not become an arbitrary-file read whose result the caller
+  downloads.
 - **Alpha output**: `--format webm-alpha` (VP9) and `--format mov` (ProRes
   4444, 10-bit 4:4:4). Give a scene a transparent `canvas.background` such as
   `"#00000000"` and it composites over other footage in an editor instead of
