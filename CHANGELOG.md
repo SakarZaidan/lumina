@@ -162,6 +162,27 @@ rather than three, and the server's defaults are closed rather than open.
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **An MCP server** (`lumina-mcp`), so any MCP-capable agent can drive the
+  engine with no glue code: `lumina_objects` to learn the format,
+  `lumina_validate` to check a scene, `lumina_patch` to repair it, and
+  `lumina_render` to produce a file. Newline-delimited JSON-RPC on stdio — no
+  port, no credentials.
+
+  It answers in the **same error vocabulary as the HTTP server**, which is the
+  point: an agent that has learned `SCHEMA_MISMATCH` through one door knows it
+  in the other. `object_registry` moved into `lumina-core` so both front ends
+  answer from one table rather than two that drift.
+
+  `lumina_schema` takes an `objects` argument and returns only those
+  definitions plus everything they reference transitively — a scoped schema
+  with a dangling `$ref` is worse than a large one, because a model will either
+  invent the missing type or refuse.
+
+  `lumina_render` validates first and refuses an invalid scene, so a failure
+  from it is a real rendering problem rather than a document the agent can
+  repair. Output paths are confined to `LUMINA_ASSET_ROOT`: this tool runs on a
+  developer's machine with their permissions, and "render to
+  `../../.ssh/authorized_keys`" must not be something it can be talked into.
 - **The server is hardened** (TD-09 part 2). Bearer authentication via
   `LUMINA_API_TOKEN`, per-client rate limiting via `LUMINA_RATE_LIMIT`, a CORS
   allowlist via `LUMINA_CORS_ORIGINS`, a configurable bind address, a request

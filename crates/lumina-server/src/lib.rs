@@ -147,30 +147,7 @@ async fn get_schema() -> impl IntoResponse {
 /// `GET /objects` — returns the object-type registry: for each LSF object type,
 /// its required and optional properties. Intended for LLM/agent introspection.
 async fn get_objects() -> impl IntoResponse {
-    Json(object_registry())
-}
-
-fn object_registry() -> serde_json::Value {
-    use serde_json::json;
-    json!({
-        "Circle":      { "required": ["cx", "cy", "radius"], "optional": ["fill", "stroke", "stroke_width", "shadow", "opacity", "z_index"] },
-        "Rectangle":   { "required": ["x", "y", "width", "height"], "optional": ["fill", "stroke", "stroke_width", "rx", "ry", "shadow", "opacity", "z_index"] },
-        "Polygon":     { "required": ["points"], "optional": ["fill", "stroke", "stroke_width", "shadow", "opacity", "z_index"] },
-        "Path":        { "required": ["d"], "optional": ["fill", "stroke", "stroke_width", "draw_fraction", "shadow", "opacity", "z_index"] },
-        "Line":        { "required": ["x1", "y1", "x2", "y2"], "optional": ["stroke", "stroke_width", "dash", "draw_fraction", "opacity", "z_index"] },
-        "Arrow":       { "required": ["from", "to"], "optional": ["color", "stroke_width", "label", "opacity", "z_index"] },
-        "Text":        { "required": ["content", "x", "y", "font_size"], "optional": ["font_id", "color", "align", "letter_spacing", "opacity", "z_index"] },
-        "LaTeX":       { "required": ["expression", "x", "y", "font_size"], "optional": ["color", "draw_fraction", "align", "letter_spacing", "opacity", "z_index"] },
-        "MathML":      { "required": ["markup", "x", "y", "font_size"], "optional": ["color", "align", "letter_spacing", "opacity", "z_index"] },
-        "Image":       { "required": ["asset_id", "x", "y"], "optional": ["width", "height", "rotation", "opacity", "z_index"] },
-        "SVG":         { "required": ["asset_id", "x", "y"], "optional": ["width", "height", "rotation", "opacity", "z_index"] },
-        "Group":       { "required": ["children", "x", "y"], "optional": ["scale", "rotation", "opacity", "z_index"] },
-        "NumberLine":  { "required": ["start", "end", "step", "x", "y"], "optional": ["length", "color", "opacity", "z_index"] },
-        "Axes":        { "required": ["x_range", "y_range", "x", "y"], "optional": ["scale", "x_step", "y_step", "x_label", "y_label", "grid", "color", "opacity", "z_index"] },
-        "Plot":        { "required": ["function_str", "axes_id"], "optional": ["color", "stroke_width", "sample_count", "draw_fraction", "opacity", "z_index"] },
-        "BezierCurve": { "required": ["p0", "p1", "p2", "p3"], "optional": ["stroke", "stroke_width", "draw_fraction", "opacity", "z_index"] },
-        "Particles":   { "required": ["count", "emitter_x", "emitter_y"], "optional": ["lifetime", "speed", "spread", "size", "color", "opacity", "z_index"] }
-    })
+    Json(luminafx_core::object_registry())
 }
 
 /// `POST /patch` — applies a JSON Patch (RFC 6902) to a scene value, then
@@ -836,7 +813,7 @@ mod tests {
 
     #[test]
     fn test_object_registry_covers_all_types() {
-        let registry = object_registry();
+        let registry = luminafx_core::object_registry();
         let obj = registry
             .as_object()
             .expect("registry must be a JSON object");
