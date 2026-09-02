@@ -24,6 +24,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night) — Wave 2 opens: easing accuracy, property tests first
+
+- Property tests written **before** the fixes, as the plan requires, and they
+  failed immediately: `spring` was quantised and did not pin its endpoint.
+- The quantisation property went through two wrong formulations before a right
+  one. Comparing adjacent inputs fails on a *converged tail* — a settled spring
+  legitimately repeats f32 values near 1. Counting distinct outputs over 10 000
+  samples is what actually separates a staircase from a curve, and it reported
+  the old spring's level count exactly: **101**.
+- `spring` replaced with the closed-form damped-harmonic solution — exact,
+  continuous, O(1) instead of O(100) per property per frame, correct in all
+  three damping regimes, and tunable via `easing_params`. It lands exactly on
+  1; the old curve stopped at 1.0000196, leaving objects fractionally off.
+- `ease_css` now calls the curve it documents. It claimed
+  `cubic-bezier(0.25, 0.1, 0.25, 1.0)` and called `ease_in_out_sine`. The exact
+  solver was already in the same file.
+- `cubic_bezier` inversion: Newton–Raphson with bisection fallback.
+- Two unchecked preconditions now validated — bezier x control points in
+  `[0, 1]` (both solvers need monotonic x) and strictly increasing spline
+  keypoint times. y control points outside `[0, 1]` stay legal; that is
+  overshoot, and there is a test asserting it.
+- `hash01` divided by `u32::MAX`, which f32 rounds up to 2^32, so it could
+  return exactly 1.0 against a documented `[0, 1)`. Swept 2 million values
+  across the domain to confirm the fix.
+- Nothing in the repository uses `spring` or `ease`, so no golden pixels moved.
+  Particle positions do shift; nothing asserts exact positions, which is itself
+  a coverage gap worth noting.
+
 ## 2026-09-02 (evening) — Wave 1 complete: the lint floor and one gate command
 
 - `#![forbid(unsafe_code)]` on all nine crate roots. The zero-unsafe metric

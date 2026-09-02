@@ -427,6 +427,93 @@ fn check_easing(
                 },
             ),
         });
+        return;
+    }
+
+    // Present but invalid parameters are worse than missing ones: the solvers
+    // assume preconditions the shapes above do not check, and violating them
+    // yields a silently wrong curve rather than a fallback.
+    match name {
+        "cubic_bezier" => {
+            if let Some(arr) = params.and_then(|p| p.as_array()) {
+                let read = |i: usize| arr.get(i).and_then(serde_json::Value::as_f64);
+                for (i, label) in [(0usize, "x1"), (2, "x2")] {
+                    let Some(x) = read(i) else { continue };
+                    // The solver inverts bezier_x by Newton with a bisection
+                    // fallback, and both require x to be monotonic — which the
+                    // CSS specification guarantees by constraining the x
+                    // control points to [0, 1]. Outside it, the curve is not a
+                    // function of time and the solver returns nonsense.
+                    if !(0.0..=1.0).contains(&x) {
+                        errors.push(ValidationError {
+                            code: "INVALID_CUBIC_BEZIER".to_string(),
+                            path: path.clone(),
+                            message: format!(
+                                "cubic_bezier {label} is {x}; the x control points must be within \
+                                 [0, 1] or the curve is not a function of time."
+                            ),
+                            fix_suggestion: format!(
+                                "Clamp {label} into [0, 1]. y values may fall outside it — that \
+                                 is what produces overshoot."
+                            ),
+                        });
+                    }
+                }
+                for (i, label) in [(0usize, "x1"), (1, "y1"), (2, "x2"), (3, "y2")] {
+                    if let Some(v) = read(i) {
+                        if !v.is_finite() {
+                            errors.push(ValidationError {
+                                code: "INVALID_CUBIC_BEZIER".to_string(),
+                                path: path.clone(),
+                                message: format!(
+                                    "cubic_bezier {label} is {v}, which is not finite."
+                                ),
+                                fix_suggestion: "Use finite numbers for all four control points."
+                                    .to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        "spline" => {
+            if let Some(kp) = params
+                .and_then(|p| p.get("keypoints"))
+                .and_then(|k| k.as_array())
+            {
+                let xs: Vec<f64> = kp
+                    .iter()
+                    .filter_map(|pair| pair.as_array()?.first()?.as_f64())
+                    .collect();
+                // The Fritsch-Carlson construction divides by the interval
+                // between consecutive keypoints, floored at 1e-9. An unsorted
+                // or duplicated pair therefore clamps a zero or negative
+                // interval to 1e-9, producing tangents around 1e9 and garbage
+                // output — which then becomes `null` via the non-finite path.
+                if xs.windows(2).any(|w| w[1] <= w[0]) {
+                    errors.push(ValidationError {
+                        code: "UNSORTED_SPLINE_KEYPOINTS".to_string(),
+                        path: path.clone(),
+                        message: "spline keypoints must be sorted by time and strictly \
+                                  increasing; equal or decreasing times make the interpolation \
+                                  undefined."
+                            .to_string(),
+                        fix_suggestion: "Sort keypoints by their first element and remove \
+                                         duplicate times."
+                            .to_string(),
+                    });
+                }
+                if xs.iter().any(|x| !x.is_finite()) {
+                    errors.push(ValidationError {
+                        code: "UNSORTED_SPLINE_KEYPOINTS".to_string(),
+                        path,
+                        message: "spline keypoint times must be finite.".to_string(),
+                        fix_suggestion: "Replace any NaN or infinite keypoint time.".to_string(),
+                    });
+                }
+            }
+        }
+        _ => {}
     }
 }
 

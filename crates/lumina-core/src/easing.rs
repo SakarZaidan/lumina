@@ -18,6 +18,26 @@ pub fn eval_easing(name: &str, params: Option<&serde_json::Value>, t: f32) -> f3
         // Fallback to CSS ease when params are malformed
         return ease_css(t);
     }
+    if name == "spring" {
+        // easing_params: { "stiffness": k, "damping": c, "mass": m }.
+        // Any subset may be given; the rest fall back to DEFAULT_SPRING.
+        if let Some(obj) = params {
+            let read = |key: &str, fallback: f32| {
+                obj.get(key)
+                    .and_then(serde_json::Value::as_f64)
+                    .map_or(fallback, |v| v as f32)
+            };
+            let tuned = SpringParams {
+                stiffness: read("stiffness", DEFAULT_SPRING.stiffness),
+                damping: read("damping", DEFAULT_SPRING.damping),
+                mass: read("mass", DEFAULT_SPRING.mass),
+            };
+            if tuned != DEFAULT_SPRING {
+                return spring_with(tuned, t);
+            }
+        }
+        return spring(t);
+    }
     if name == "spline" {
         // easing_params: { "keypoints": [[t0,v0], [t1,v1], ...] } (blueprint §10).
         if let Some(kp) = params
@@ -111,13 +131,35 @@ fn cubic_bezier_easing(x1: f32, y1: f32, x2: f32, y2: f32, p: f32) -> f32 {
     if p >= 1.0 {
         return 1.0;
     }
-    // Binary-search t such that bezier_x(t) ≈ p, then return bezier_y(t).
+    // Solve bezier_x(t) = p for t, then evaluate bezier_y at that t.
+    //
+    // Newton-Raphson converges in a handful of iterations where the curve is
+    // well-behaved, which is the common case; bisection is kept as the
+    // fallback because Newton stalls when the derivative approaches zero, and
+    // control points are author-supplied.
+    const EPSILON: f32 = 1e-7;
+    let mut t = p; // x is close to t for typical easing curves
+    for _ in 0..8 {
+        let x = bezier_component(x1, x2, t) - p;
+        if x.abs() < EPSILON {
+            return bezier_component(y1, y2, t);
+        }
+        let d = bezier_derivative(x1, x2, t);
+        if d.abs() < 1e-6 {
+            break; // flat: hand over to bisection
+        }
+        t -= x / d;
+        if !(0.0..=1.0).contains(&t) {
+            break; // wandered off the domain: hand over to bisection
+        }
+    }
+
     let mut lo = 0.0_f32;
     let mut hi = 1.0_f32;
     for _ in 0..32 {
         let mid = (lo + hi) * 0.5;
         let x = bezier_component(x1, x2, mid);
-        if (x - p).abs() < 1e-6 {
+        if (x - p).abs() < EPSILON {
             return bezier_component(y1, y2, mid);
         }
         if x < p {
@@ -133,6 +175,12 @@ fn cubic_bezier_easing(x1: f32, y1: f32, x2: f32, y2: f32, p: f32) -> f32 {
 fn bezier_component(p1: f32, p2: f32, t: f32) -> f32 {
     let u = 1.0 - t;
     3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t
+}
+
+/// d/dt of [`bezier_component`], for the Newton step in the solver above.
+fn bezier_derivative(p1: f32, p2: f32, t: f32) -> f32 {
+    let u = 1.0 - t;
+    3.0 * u * u * p1 + 6.0 * u * t * (p2 - p1) + 3.0 * t * t * (1.0 - p2)
 }
 
 /// Every easing name accepted by [`eval_easing`] / [`get_easing_fn`] — the
@@ -453,28 +501,102 @@ pub fn ease_in_bounce(t: f32) -> f32 {
     1.0 - ease_out_bounce(1.0 - t)
 }
 
-// --- Spring (critically damped, default stiffness=200, damping=20, mass=1) ---
-// Approximates a spring curve on [0,1] using RK4 integration.
-/// Critically-under-damped spring (RK4-integrated), slight overshoot.
+// --- Spring ---
+
+/// Default spring: mass 1, stiffness 200, damping 20 — underdamped
+/// (zeta ~= 0.707), so it overshoots once and settles.
+pub const DEFAULT_SPRING: SpringParams = SpringParams {
+    stiffness: 200.0,
+    damping: 20.0,
+    mass: 1.0,
+};
+
+/// A damped harmonic oscillator, as an easing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpringParams {
+    /// Spring constant `k`. Higher is snappier.
+    pub stiffness: f32,
+    /// Damping coefficient `c`. Higher settles sooner with less overshoot.
+    pub damping: f32,
+    /// Mass `m`. Higher is more sluggish.
+    pub mass: f32,
+}
+
+/// Underdamped spring with a single overshoot, in closed form.
+///
+/// See [`spring_with`] for the parameterised version and for why this is
+/// solved rather than integrated.
 pub fn spring(t: f32) -> f32 {
-    const STIFFNESS: f32 = 200.0;
-    const DAMPING: f32 = 20.0;
-    const STEPS: u32 = 100;
-    const DT: f32 = 1.0 / STEPS as f32;
+    spring_with(DEFAULT_SPRING, t)
+}
 
-    let mut x = 0.0_f32;
-    let mut v = 0.0_f32;
+/// Evaluate a damped harmonic oscillator released from 0 toward 1.
+///
+/// # Why closed form
+///
+/// This was previously 100 fixed steps of semi-implicit Euler indexed by
+/// `(t / dt).round()`, which had three problems. It was **quantised** — 100
+/// discrete output levels, so `spring(0.001)` and `spring(0.004)` returned
+/// bit-identical values. It was **resolution-dependent**: changing the step
+/// count changed the curve. And it cost O(100) per property, per frame.
+///
+/// The equation `m x'' + c x' + k x = k` has an exact solution for every
+/// damping regime, so there is nothing to approximate. This is O(1) and
+/// continuous everywhere.
+///
+/// # Endpoints
+///
+/// A spring approaches its target asymptotically — with the defaults it is
+/// still ~6e-5 short at `t = 1`. An easing must land *exactly* on the keyframe
+/// value, or the object rests slightly off its mark forever, so the residual
+/// is removed with a cubic blend. `t^3` is ~1e-6 through the early motion, so
+/// the visible curve, overshoot included, is the physical one; only the final
+/// settling is adjusted.
+pub fn spring_with(params: SpringParams, t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    // Displacement from the target, released at rest: u(0) = 1, u'(0) = 0,
+    // with x(t) = 1 - u(t).
+    let residual = |t: f32| -> f32 {
+        let m = params.mass.max(1e-6);
+        let k = params.stiffness.max(0.0);
+        let c = params.damping.max(0.0);
 
-    let target_t = t;
-    let n = (target_t / DT).round() as u32;
+        let omega0 = (k / m).sqrt();
+        if omega0 <= 0.0 {
+            // No restoring force: nothing moves.
+            return 1.0;
+        }
+        let zeta = c / (2.0 * (k * m).sqrt());
 
-    for _ in 0..n {
-        let a = -STIFFNESS * (x - 1.0) - DAMPING * v;
-        v += a * DT;
-        x += v * DT;
+        if zeta < 1.0 {
+            // Underdamped: decaying oscillation.
+            let omega_d = omega0 * (1.0 - zeta * zeta).sqrt();
+            let decay = (-zeta * omega0 * t).exp();
+            decay * ((omega_d * t).cos() + (zeta * omega0 / omega_d) * (omega_d * t).sin())
+        } else if (zeta - 1.0).abs() < 1e-6 {
+            // Critically damped: fastest approach without overshoot.
+            (-omega0 * t).exp() * (1.0 + omega0 * t)
+        } else {
+            // Overdamped: two real roots, no oscillation.
+            let disc = omega0 * (zeta * zeta - 1.0).sqrt();
+            let r1 = -zeta * omega0 + disc;
+            let r2 = -zeta * omega0 - disc;
+            (r1 * (r2 * t).exp() - r2 * (r1 * t).exp()) / (r1 - r2)
+        }
+    };
+
+    let raw = 1.0 - residual(t);
+    // Land exactly on 1 without disturbing the curve people actually see.
+    let end_error = 1.0 - residual(1.0) - 1.0;
+    let corrected = raw - end_error * t * t * t;
+
+    if corrected.is_finite() {
+        corrected
+    } else {
+        // A pathological parameter set should degrade to something usable
+        // rather than poison the state map with a non-finite value.
+        linear(t)
     }
-
-    x.clamp(0.0, 2.0)
 }
 
 // --- Manim-compatible ---
@@ -508,8 +630,12 @@ pub fn there_and_back(t: f32) -> f32 {
     }
 }
 
-// CSS cubic-bezier(0.25, 0.1, 0.25, 1.0) approximated as ease_in_out_sine
-/// The CSS `ease` curve: cubic-bezier(0.25, 0.1, 0.25, 1.0).
+/// The CSS `ease` curve: `cubic-bezier(0.25, 0.1, 0.25, 1.0)`.
+///
+/// This used to call [`ease_in_out_sine`], which is a visibly different curve —
+/// the CSS one accelerates harder early and coasts longer at the end. The
+/// exact solver was already in this file, so the documented behaviour and the
+/// implemented behaviour are now the same thing.
 pub fn ease_css(t: f32) -> f32 {
-    ease_in_out_sine(t)
+    cubic_bezier_easing(0.25, 0.1, 0.25, 1.0, t)
 }

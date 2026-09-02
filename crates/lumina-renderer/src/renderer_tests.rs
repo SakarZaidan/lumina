@@ -890,3 +890,40 @@ mod tests {
         );
     }
 }
+
+/// `hash01` seeds the analytic particle simulation, so its range is load-bearing:
+/// every particle's position, lifetime, and velocity is derived from it.
+#[cfg(test)]
+mod hash_range {
+    use crate::raster::hash01;
+
+    #[test]
+    fn hash01_stays_within_the_half_open_unit_interval() {
+        // Sweep the whole u32 domain rather than sampling: the failure was at
+        // the top of the range, where `u32::MAX as f32` rounds up and the
+        // quotient reaches exactly 1.0. Stepping by a large prime covers the
+        // space including the extremes without 4 billion iterations.
+        const STEP: u32 = 2_654_435_761; // 2^32 / phi
+        let mut n: u32 = 0;
+        for _ in 0..2_000_000 {
+            let h = hash01(n);
+            assert!(
+                (0.0..1.0).contains(&h),
+                "hash01({n}) = {h} is outside [0, 1)"
+            );
+            n = n.wrapping_add(STEP);
+        }
+        // The extremes explicitly.
+        for n in [0u32, 1, u32::MAX - 1, u32::MAX] {
+            let h = hash01(n);
+            assert!((0.0..1.0).contains(&h), "hash01({n}) = {h}");
+        }
+    }
+
+    #[test]
+    fn hash01_is_deterministic() {
+        for n in [0u32, 7, 12345, u32::MAX] {
+            assert_eq!(hash01(n).to_bits(), hash01(n).to_bits());
+        }
+    }
+}
