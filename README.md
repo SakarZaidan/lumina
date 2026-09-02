@@ -518,7 +518,7 @@ Validation errors are structured for LLM re-injection:
 ### React
 
 ```tsx
-import { LuminaPlayer } from '@lumina/sdk';
+import { LuminaPlayer } from 'luminafx';
 
 <LuminaPlayer
   scene={myScene}
@@ -533,7 +533,7 @@ import { LuminaPlayer } from '@lumina/sdk';
 ### Vanilla JS
 
 ```js
-import { createPlayer } from '@lumina/sdk';
+import { createPlayer } from 'luminafx';
 
 const player = await createPlayer(document.getElementById('canvas'), scene, { autoplay: true });
 player.seek(3.5);

@@ -47,6 +47,21 @@ Three things deliberately do **not** change:
   `tools/lumina-cli/Cargo.toml` now pins it in an explicit `[[bin]]` section
   with that reason written down.
 
+## The SDKs had the same problem
+
+Checking the crates surfaced two more names that could never have published,
+neither of them a Rust crate:
+
+- **PyPI**: `sdks/python/pyproject.toml` declared `lumina-engine`, which is
+  taken. Now `luminafx`. The *module* stays `lumina`, so `import lumina` is
+  unchanged — `[lib] name` is what a user imports, and module names are not
+  globally unique, only distribution names are.
+- **npm**: `sdks/javascript/package.json` declared `@lumina/sdk`, a scoped name
+  requiring ownership of the `lumina` scope, which the project does not have.
+  Now the unscoped `luminafx`. The README and the book advertised
+  `npm install @lumina/sdk` for a package that could not have been published
+  under that name by us.
+
 ## Consequences
 
 - `cargo add luminafx-core` then `use luminafx_core::…`; the command is

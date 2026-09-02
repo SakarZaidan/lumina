@@ -54,6 +54,15 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 - Token is stored as the `CARGO_REGISTRY_TOKEN` repository secret. **Nothing
   has been published**; the first real publish is the owner's call, since it
   cannot be undone, only yanked.
+- **The SDKs had the same problem, and neither is a Rust crate.** PyPI wanted
+  `lumina-engine` (taken) and npm wanted `@lumina/sdk` (a scope the project
+  does not own) — the README advertised `npm install @lumina/sdk` for a package
+  nobody here could have published. Both are `luminafx` now. `import lumina`
+  is unchanged: a Python module name is not a distribution name.
+- `sdks/python` is not a workspace member, so `cargo check --workspace` never
+  built it and the rename left it referencing packages that no longer existed.
+  It was `cargo machete` — added in the same session for a different reason —
+  that surfaced it, by failing to read the manifest.
 
 ## 2026-09-03 (last) — EXR, and what it honestly buys
 

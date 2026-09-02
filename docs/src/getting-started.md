@@ -60,5 +60,5 @@ Useful flags:
 ## Other entry points
 
 - **Python**: `pip install maturin && (cd sdks/python && maturin develop)`, then `import lumina`.
-- **JavaScript/React**: `npm install @lumina/sdk` and mount `<LuminaPlayer scene={...} />`.
+- **JavaScript/React**: `npm install luminafx` and mount `<LuminaPlayer scene={...} />`.
 - **HTTP**: `cargo run -p lumina-server` exposes `/render`, `/validate`, `/patch`, `/schema`, `/objects`.

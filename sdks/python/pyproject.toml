@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "lumina-engine"
+name = "luminafx"
 version = "0.4.0"
 description = "Python bindings for Lumina — a declarative, GPU-capable animation engine (JSON in, video out)."
 readme = "README.md"
