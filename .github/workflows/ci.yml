@@ -146,15 +146,23 @@ jobs:
       # is arbitrary older code, and it cannot be assumed to have whatever
       # tasks the current xtask defines. The flags are kept in step with
       # `run_bench` in xtask/src/main.rs.
+      # `--manifest-path`, not `-p`: this job checks out the *merge base* to get
+      # a baseline, and a package renamed in this PR does not exist under its
+      # new name at that revision. The directory does exist at both, which is
+      # one of the reasons the crates.io rename (ADR-0014) left directory names
+      # alone. Addressing the crate by path makes the comparison work across
+      # any future rename too.
       - name: Measure the merge base
         run: |
           git checkout --detach ${{ github.event.pull_request.base.sha }}
-          cargo bench -p luminafx-bench -- --warm-up-time 1 --measurement-time 3 \
+          cargo bench --manifest-path crates/lumina-bench/Cargo.toml \
+            -- --warm-up-time 1 --measurement-time 3 \
             --save-baseline base
       - name: Measure this pull request
         run: |
           git checkout --detach ${{ github.sha }}
-          cargo bench -p luminafx-bench -- --warm-up-time 1 --measurement-time 3 \
+          cargo bench --manifest-path crates/lumina-bench/Cargo.toml \
+            -- --warm-up-time 1 --measurement-time 3 \
             --save-baseline pr
       - name: Compare
         run: |
