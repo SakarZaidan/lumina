@@ -82,15 +82,24 @@ const GRADIENT_TOL: Tolerance = Tolerance {
     max_mean_delta: 0.8,
 };
 
-/// Wider budget: text renders through two parallel code paths — Skia
-/// composites each glyph directly, Vello resamples a pre-rendered string
-/// bitmap (`raster.rs`) — which shifts glyph AA and low-opacity blending.
-/// Unifying the two paths is tracked as TD-18; tighten this when it lands.
+/// Text used to need a budget an order of magnitude wider than anything else,
+/// because the two backends composited it through parallel code paths: the CPU
+/// backend drew each glyph directly, the GPU backend resampled a pre-rendered
+/// bitmap of the whole string. TD-18 closed that — both now draw the same
+/// glyph bitmap at the same integer offset — and `04_text` runs at
+/// `DEFAULT_TOL` as a result.
+///
+/// What remains is for the combined fixture only, where text sits over
+/// gradients and curves and inherits both their AA headroom and their mean
+/// budget — the mean here is `GRADIENT_TOL`'s, for the same reason and not a
+/// number chosen to fit. The channel budget stays at the default; only the
+/// pixel fraction is loosened, and only because the fixture lands 66 differing
+/// pixels in 65 536 against a default budget of 65.
 const TEXT_TOL: Tolerance = Tolerance {
-    max_channel_delta: 12,
+    max_channel_delta: 8,
     aa_tol: 48,
-    max_diff_pixel_frac: 0.015,
-    max_mean_delta: 1.5,
+    max_diff_pixel_frac: 0.0015,
+    max_mean_delta: 0.8,
 };
 
 fn workspace_root() -> PathBuf {
@@ -310,7 +319,9 @@ fn parity_03_svg_path() {
 
 #[test]
 fn parity_04_text() {
-    assert_parity("04_text", TEXT_TOL);
+    // At `DEFAULT_TOL` since TD-18: both backends composite the same glyph
+    // bitmap at the same integer offset, so text is no longer a special case.
+    assert_parity("04_text", DEFAULT_TOL);
 }
 
 #[test]

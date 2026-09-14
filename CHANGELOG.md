@@ -134,6 +134,24 @@ programme to reach reference quality in [plan/](plan/).
   At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
   continuous drawing rather than several racing each other. Both backends share
   one implementation, covered by parity fixture 19.
+- **Text moves continuously instead of a pixel at a time.**
+  `Pixmap::draw_pixmap` snaps a translation to whole pixels whatever the filter
+  quality, so text had one position per pixel: a caption drifting across the
+  screen jumped a full pixel at a time, and because each glyph crossed its own
+  boundary at a different moment, the spacing between letters visibly wobbled
+  as the word moved. Sweeping a two-glyph run across one pixel produced four
+  distinct frames; it now produces a different frame at every step.
+
+  The sub-pixel remainder is baked into the glyph coverage and only the
+  whole-pixel part reaches the transform — which is all `draw_pixmap` would
+  have honoured anyway. Text-heavy scenes render about 4% slower for it.
+- **Both backends composite text identically.** Glyph layout was written twice
+  and the GPU backend resampled a bitmap of the whole string, so glyphs were
+  sampled twice where the CPU backend sampled once, and their anti-aliasing
+  diverged (TD-18). Layout now lives in one place and the GPU backend draws one
+  image per glyph, so both composite the same bitmap at the same offset. The
+  text parity fixture runs at the default tolerance rather than one an order of
+  magnitude wider.
 - **Audio.** A scene declares `assets.audio` and video exports carry it, mixed
   and trimmed to the animation's length. Each track takes a `start` in seconds
   (negative begins part-way into the file) and a linear `gain`. MP4 gets AAC,

@@ -8,26 +8,37 @@
 //! byte-identical, scrub-reproducible output.
 
 use lumina_text::TextEngine;
-use tiny_skia::{Color, ColorU8, Pixmap};
+use tiny_skia::{ColorU8, Pixmap};
 
-/// A standalone rasterized text run. `rgba` is straight-alpha (non-premultiplied)
-/// RGBA8 suitable for `peniko::Image`. `place_x`/`place_y` are screen-space
-/// offsets from the text anchor `(x, y)` to the bitmap's top-left, so drawing
-/// the bitmap at `(anchor_x + place_x, anchor_y + place_y)` reproduces the
-/// baseline-anchored placement the Skia backend uses.
-pub(crate) struct TextBitmap {
+/// One glyph of a run as a standalone straight-alpha bitmap, positioned
+/// relative to the run's anchor.
+pub(crate) struct GlyphBitmap {
+    /// Straight-alpha RGBA8, `width * height * 4` bytes.
     pub rgba: Vec<u8>,
+    /// Bitmap width in pixels.
     pub width: u32,
+    /// Bitmap height in pixels.
     pub height: u32,
-    pub place_x: f32,
-    pub place_y: f32,
+    /// Left edge, as a whole-pixel offset right of the anchor `x`; alignment
+    /// folded in, and the sub-pixel remainder already baked into `rgba`.
+    pub ix: i32,
+    /// Top edge, as a whole-pixel offset below the baseline `y`.
+    pub iy: i32,
 }
 
-/// Rasterize a text run with per-character font fallback, alignment and
-/// letter-spacing into a tight standalone bitmap. Returns `None` for empty or
-/// zero-area runs (e.g. all whitespace clipped by `draw_fraction`).
+/// Rasterise a text run as one bitmap **per glyph**.
+///
+/// The GPU backend used to composite the whole string into a single bitmap and
+/// draw that as one image, which meant the glyphs were resampled twice: once
+/// placing them into the string bitmap at fractional offsets, and again when
+/// that bitmap was drawn under the scene transform. The CPU backend resampled
+/// once. That second pass is where their text diverged (TD-18).
+///
+/// Drawing a glyph at a time gives each backend the same source bitmap at the
+/// same position with one resample each, so only the rasteriser's own sampling
+/// differs.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn rasterize_text(
+pub(crate) fn rasterize_glyphs(
     engine: &TextEngine,
     content: &str,
     font_size: f32,
@@ -36,78 +47,34 @@ pub(crate) fn rasterize_text(
     align: &str,
     letter_spacing: f32,
     opacity: f32,
-) -> Option<TextBitmap> {
+    anchor_x: f32,
+    anchor_y: f32,
+) -> Vec<GlyphBitmap> {
     if content.trim().is_empty() || font_size <= 0.0 {
-        return None;
+        return Vec::new();
     }
     let color = super::skia_backend::parse_color(color_str, opacity);
-    let total_width = engine.measure_width(content, font_size, font_id, letter_spacing);
-    if total_width <= 0.0 {
-        return None;
-    }
-    let align_offset = match align {
-        "center" => total_width / 2.0,
-        "right" => total_width,
-        _ => 0.0,
+    let Some(layout) =
+        crate::common::text::layout_run(engine, content, font_size, font_id, align, letter_spacing)
+    else {
+        return Vec::new();
     };
 
-    // Bitmap layout: left padding, baseline placed `base_y` down from the top,
-    // generous head/tail room for ascenders and descenders.
-    let left_pad = (font_size * 0.3).ceil();
-    let base_y = (font_size * 1.15).ceil();
-    let width = (total_width + left_pad * 2.0).ceil().max(1.0) as u32;
-    let height = (font_size * 1.6).ceil().max(1.0) as u32;
-
-    let mut pm = Pixmap::new(width, height)?;
-
-    let mut x_cursor = left_pad;
-    for c in content.chars() {
-        // Cached: the same glyph at the same size is rasterised from its
-        // outline once, not once per frame, and the coverage is shared across
-        // every colour it is ever drawn in.
-        let glyph = match engine.glyph(c, font_size, font_id) {
-            Some(g) => g,
-            None => continue,
-        };
-        let metrics = glyph.metrics;
-        let alpha = &glyph.alpha;
-        if metrics.width == 0 || metrics.height == 0 {
-            x_cursor += metrics.advance_width + letter_spacing;
-            continue;
-        }
-        if let Some(mut mask) = Pixmap::new(metrics.width as u32, metrics.height as u32) {
-            for (i, &a) in alpha.iter().enumerate() {
-                if i >= mask.pixels().len() {
-                    break;
-                }
-                let final_a = (a as f32 / 255.0) * color.alpha();
-                mask.pixels_mut()[i] =
-                    Color::from_rgba(color.red(), color.green(), color.blue(), final_a)
-                        .unwrap_or(Color::WHITE)
-                        .premultiply()
-                        .to_color_u8();
-            }
-            let glyph_top = base_y - metrics.height as f32 - metrics.ymin as f32;
-            let t = tiny_skia::Transform::from_translate(x_cursor + metrics.xmin as f32, glyph_top);
-            pm.draw_pixmap(
-                0,
-                0,
-                mask.as_ref(),
-                &tiny_skia::PixmapPaint::default(),
-                t,
-                None,
-            );
-        }
-        x_cursor += metrics.advance_width + letter_spacing;
-    }
-
-    Some(TextBitmap {
-        rgba: pixmap_to_straight_rgba(&pm),
-        width,
-        height,
-        place_x: -align_offset - left_pad,
-        place_y: -base_y,
-    })
+    layout
+        .glyphs
+        .iter()
+        .filter_map(|placed| {
+            let at = placed.place(anchor_x, anchor_y);
+            let mask = crate::common::text::glyph_mask(&placed.glyph, color, at.fx, at.fy)?;
+            Some(GlyphBitmap {
+                width: mask.width(),
+                height: mask.height(),
+                rgba: pixmap_to_straight_rgba(&mask),
+                ix: at.ix,
+                iy: at.iy,
+            })
+        })
+        .collect()
 }
 
 /// Convert a premultiplied tiny-skia `Pixmap` to straight-alpha RGBA8 bytes,

@@ -172,72 +172,38 @@ impl SkiaRenderer {
         opacity: f32,
         transform: Transform,
     ) {
-        if content.is_empty() {
-            return;
-        }
         let color = parse_color(color_str, opacity);
-        let start_x = match align {
-            "center" => {
-                x - self
-                    .text_engine
-                    .measure_width(content, font_size, font_id, letter_spacing)
-                    / 2.0
-            }
-            "right" => {
-                x - self
-                    .text_engine
-                    .measure_width(content, font_size, font_id, letter_spacing)
-            }
-            _ => x,
+        let Some(layout) = crate::common::text::layout_run(
+            &self.text_engine,
+            content,
+            font_size,
+            font_id,
+            align,
+            letter_spacing,
+        ) else {
+            return;
         };
 
-        let mut x_cursor = start_x;
-        for c in content.chars() {
-            // Same cache the shared raster path uses, so the CPU backend's
-            // inline glyph drawing and the bitmap the GPU backend consumes
-            // come from one rasterisation rather than two.
-            let glyph = match self.text_engine.glyph(c, font_size, font_id) {
-                Some(g) => g,
-                None => continue,
-            };
-            let metrics = glyph.metrics;
-            let alpha = &glyph.alpha;
-
-            // Skip zero-size glyphs (spaces, control chars).
-            if metrics.width == 0 || metrics.height == 0 {
-                x_cursor += metrics.advance_width + letter_spacing;
+        // The only step that differs from the GPU backend: each glyph goes
+        // straight into the frame under the live transform, rather than into a
+        // standalone bitmap that is then drawn as an image.
+        for placed in &layout.glyphs {
+            // The sub-pixel remainder is baked into the mask; the transform
+            // gets the whole-pixel part, which is all `draw_pixmap` would have
+            // honoured anyway.
+            let at = placed.place(x, y);
+            let Some(mask) = crate::common::text::glyph_mask(&placed.glyph, color, at.fx, at.fy)
+            else {
                 continue;
-            }
-
-            if let Some(mut mask) = Pixmap::new(metrics.width as u32, metrics.height as u32) {
-                for (i, &a) in alpha.iter().enumerate() {
-                    if i >= mask.pixels().len() {
-                        break;
-                    }
-                    let final_a = (a as f32 / 255.0) * color.alpha();
-                    mask.pixels_mut()[i] =
-                        Color::from_rgba(color.red(), color.green(), color.blue(), final_a)
-                            .unwrap_or(Color::WHITE)
-                            .premultiply()
-                            .to_color_u8();
-                }
-
-                // fontdue ymin: signed distance of glyph bottom from baseline.
-                // top of glyph in screen coords = baseline - height - ymin
-                let glyph_top = y - metrics.height as f32 - metrics.ymin as f32;
-                let glyph_transform =
-                    transform.pre_translate(x_cursor + metrics.xmin as f32, glyph_top);
-                pixmap.draw_pixmap(
-                    0,
-                    0,
-                    mask.as_ref(),
-                    &PixmapPaint::default(),
-                    glyph_transform,
-                    None,
-                );
-            }
-
-            x_cursor += metrics.advance_width + letter_spacing;
+            };
+            pixmap.draw_pixmap(
+                0,
+                0,
+                mask.as_ref(),
+                &PixmapPaint::default(),
+                transform.pre_translate(at.ix as f32, at.iy as f32),
+                None,
+            );
         }
     }
 
