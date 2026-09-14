@@ -24,6 +24,30 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 (last) — EXR, and what it honestly buys
+
+- `AAA-OUT-07`. `--format exr` writes an OpenEXR sequence in linear light with
+  associated alpha. Zero new dependencies: `exr` was already in the tree via
+  `image`'s default features, compiled and unused.
+- **Stated plainly in the rustdoc and pinned by a test: it adds no precision.**
+  The rasteriser has one pixel type, 8-bit sRGB (the same wall that blocks
+  `AAA-OUT-01`), so every value in an EXR frame is one of 256 decoded levels.
+  A test asserts exactly that, so the float channels cannot be mistaken for a
+  claim of float rendering — and so it fails the day a deeper buffer lands,
+  which is when the docs need rewriting.
+- What it does buy: nothing is lost *after* this point. No second quantisation,
+  no guessed gamma, and alpha in the convention OpenEXR specifies.
+- That alpha convention forced a real change. EXR wants *associated*
+  (premultiplied) alpha, which is the renderer's own convention — so
+  `render_blurred` now takes an `AlphaMode` rather than always converting.
+  Round-tripping through straight alpha would have divided by an 8-bit alpha
+  and amplified quantisation savagely at low coverage.
+- The tests are about the values, not the file: mid-grey must land at 0.216 and
+  not 0.502 (linear, not sRGB reinterpreted as float), and must land *below*
+  the sRGB value, since applying the transfer function backwards also produces
+  a plausible image.
+- Tests 275 → 280. Wave 4 complete.
+
 ## 2026-09-03 (later) — Text stops snapping, and TD-18 closes
 
 - `AAA-OUT-09` and `AAA-OUT-10`, which turned out to be one fix.

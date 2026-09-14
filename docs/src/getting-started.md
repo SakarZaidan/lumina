@@ -35,7 +35,7 @@ Useful flags:
 | Flag | Effect |
 |---|---|
 | `--backend skia\|vello` | CPU rasterizer (default) or GPU rasterizer. |
-| `--format png\|mp4\|webm\|webm-alpha\|mov\|gif` | Numbered PNG sequence, or encoded video (everything but `png` needs FFmpeg). `webm-alpha` (VP9) and `mov` (ProRes 4444) carry an alpha channel — set a transparent `canvas.background` such as `"#00000000"` and the scene composites over other footage instead of arriving as a rectangle. |
+| `--format png\|exr\|mp4\|webm\|webm-alpha\|mov\|gif` | `png` and `exr` are numbered frame sequences; the rest are encoded video and need FFmpeg. `webm-alpha` (VP9) and `mov` (ProRes 4444) carry an alpha channel — set a transparent `canvas.background` such as `"#00000000"` and the scene composites over other footage instead of arriving as a rectangle. `exr` is the compositor intermediate: linear light, float channels, associated alpha. |
 | `--watch` | Re-render a preview frame whenever the scene file changes. |
 | `--verbose` | Print render timing at the end. |
 

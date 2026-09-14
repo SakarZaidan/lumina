@@ -134,6 +134,61 @@ const PIPELINE_DEPTH: usize = 4;
 /// 32 frames is 265 MB at 1080p but over a gigabyte at 4K.
 const PNG_QUEUE_BYTES: usize = 256 * 1024 * 1024;
 
+/// Convert premultiplied 8-bit sRGB to premultiplied linear `f32`.
+///
+/// The transfer function is applied to the colour channels only. Alpha is a
+/// coverage fraction, not a light measurement, so it is linear already and
+/// gamma-decoding it would be wrong.
+///
+/// Premultiplied values are decoded as if they were straight: sRGB's transfer
+/// function is not linear, so `decode(c * a) != decode(c) * a`, and a fully
+/// correct conversion would un-multiply, decode, and re-multiply. That path
+/// divides by an 8-bit alpha, which amplifies quantisation savagely at low
+/// coverage — a single alpha step at `a = 1` scales the colour by 255. Given
+/// the source is 8 bits either way, decoding in place is the smaller error and
+/// the one that stays monotonic.
+fn premultiplied_srgb8_to_linear_f32(rgba: &[u8]) -> Vec<f32> {
+    /// sRGB electro-optical transfer function, on `[0, 1]`.
+    fn to_linear(c: f32) -> f32 {
+        if c <= 0.040_45 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    // 256 entries covers every possible input, so the transfer function is
+    // evaluated 256 times per export rather than once per channel per pixel
+    // per frame — 250 million times over a minute of 1080p.
+    let lut: [f32; 256] = std::array::from_fn(|i| to_linear(i as f32 / 255.0));
+
+    let mut out = Vec::with_capacity(rgba.len());
+    let (pixels, _trailing) = rgba.as_chunks::<4>();
+    for px in pixels {
+        out.push(lut[px[0] as usize]);
+        out.push(lut[px[1] as usize]);
+        out.push(lut[px[2] as usize]);
+        out.push(f32::from(px[3]) / 255.0);
+    }
+    out
+}
+
+/// Which alpha convention a consumer of rendered frames wants.
+///
+/// The renderer composes in premultiplied alpha. Most destinations want the
+/// other convention, but not all of them do, and getting it wrong is silent:
+/// at `a = 255` the two encodings are identical bytes, so an opaque scene
+/// looks correct either way and only transparency reveals the mistake.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AlphaMode {
+    /// Straight (non-premultiplied) — PNG, ffmpeg's `rgba` input, canvases.
+    Straight,
+    /// Premultiplied, which `OpenEXR` calls *associated* alpha and expects by
+    /// default. Compositors read EXR that way, so handing them straight alpha
+    /// makes every semi-transparent edge too bright.
+    Premultiplied,
+}
+
 /// ffmpeg arguments for audio, split by position on the command line.
 #[derive(Debug, Default)]
 struct AudioArgs {
@@ -244,6 +299,7 @@ impl<R: Renderer> Exporter<R> {
         timeline: &Timeline,
         frame_idx: u32,
         out: &mut Vec<u8>,
+        alpha: AlphaMode,
     ) -> Result<()> {
         let fps = f64::from(scene.canvas.fps).max(1.0);
         let base = f64::from(frame_idx) / fps;
@@ -269,7 +325,9 @@ impl<R: Renderer> Exporter<R> {
 
         if samples == 1 {
             *out = render_at(&mut self.renderer, base)?;
-            lumina_renderer::demultiply_in_place(out);
+            if alpha == AlphaMode::Straight {
+                lumina_renderer::demultiply_in_place(out);
+            }
             return Ok(());
         }
 
@@ -296,11 +354,13 @@ impl<R: Renderer> Exporter<R> {
         // channel down, which darkens a blurred frame relative to a sharp one.
         let half = samples / 2;
         out.extend(accum.iter().map(|a| ((a + half) / samples) as u8));
-        // Straight alpha from here on. This is the last point at which every
-        // export path is still holding raw renderer output, so it is the one
-        // place the conversion has to happen — and it has to happen *after*
-        // the averaging above, which is only correct on premultiplied values.
-        lumina_renderer::demultiply_in_place(out);
+        // This is the last point at which every export path is still holding
+        // raw renderer output, so it is the one place the conversion can
+        // happen — and it has to happen *after* the averaging above, which is
+        // only correct on premultiplied values.
+        if alpha == AlphaMode::Straight {
+            lumina_renderer::demultiply_in_place(out);
+        }
         Ok(())
     }
 
@@ -370,6 +430,7 @@ impl<R: Renderer> Exporter<R> {
                     &timeline,
                     frame_idx,
                     &mut frame_data,
+                    AlphaMode::Straight,
                 )?;
 
                 if tx
@@ -415,6 +476,7 @@ impl<R: Renderer> Exporter<R> {
                 &timeline,
                 frame_idx,
                 &mut frame_data,
+                AlphaMode::Straight,
             )?;
 
             sink(&frame_data)?;
@@ -515,6 +577,95 @@ impl<R: Renderer> Exporter<R> {
         .collect();
 
         Ok(AudioArgs { inputs, output })
+    }
+
+    /// Render every frame as `frame_NNNN.exr` in `output_dir`, in linear light
+    /// with associated (premultiplied) alpha.
+    ///
+    /// The intermediate for a compositor. EXR carries float channels and a
+    /// documented colour space, so nothing downstream has to guess a transfer
+    /// function or re-quantise on the way in.
+    ///
+    /// # What this does and does not buy
+    ///
+    /// It does **not** add information the renderer did not have. The CPU
+    /// rasteriser has exactly one pixel type — 8-bit, sRGB — so these floats
+    /// carry 8-bit values converted exactly, not extra precision
+    /// (`AAA-OUT-01` in `plan/`, blocked on the rasteriser). What it buys is
+    /// that nothing is lost *after* this point: no second quantisation, no
+    /// guessed gamma, and alpha in the convention `OpenEXR` actually specifies.
+    /// When the renderer gains a deeper buffer, this path carries it without
+    /// changing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory cannot be created or a frame cannot
+    /// be written.
+    pub fn export_exr_sequence(&mut self, scene: &Scene, output_dir: &Path) -> Result<()> {
+        let scene_graph = SceneGraph::from_scene(scene);
+        let timeline = Timeline::from_scene(scene);
+        let total_frames = (scene.canvas.duration * scene.canvas.fps as f32).ceil() as u32;
+        let (width, height) = (scene.canvas.width, scene.canvas.height);
+
+        if !output_dir.exists() {
+            std::fs::create_dir_all(output_dir)?;
+        }
+
+        // Same shape as the PNG sequence: render in order on this thread,
+        // encode on a rayon pool. Encoding is the expensive half and needs no
+        // renderer, and files carry their own frame number so the order they
+        // are written in is not observable.
+        let (tx, rx) =
+            std::sync::mpsc::sync_channel::<(u32, Vec<u8>)>(png_queue_depth(width, height));
+        let dir = output_dir.to_path_buf();
+
+        let writer = std::thread::spawn(move || -> Result<()> {
+            rx.into_iter().par_bridge().try_for_each(|(idx, data)| {
+                let pixels = premultiplied_srgb8_to_linear_f32(&data);
+                let img: ImageBuffer<image::Rgba<f32>, Vec<f32>> =
+                    ImageBuffer::from_raw(width, height, pixels).ok_or_else(|| {
+                        anyhow::anyhow!("Failed to create float image buffer from frame data")
+                    })?;
+                img.save(dir.join(format!("frame_{idx:04}.exr")))?;
+                Ok(())
+            })
+        });
+
+        let mut frame_data = Vec::new();
+        let render_result = (|| -> Result<()> {
+            for frame_idx in 0..total_frames {
+                self.render_blurred(
+                    scene,
+                    &scene_graph.objects,
+                    &timeline,
+                    frame_idx,
+                    &mut frame_data,
+                    // EXR specifies associated alpha, so the renderer's own
+                    // convention is the one the format wants — no conversion,
+                    // and none of its rounding.
+                    AlphaMode::Premultiplied,
+                )?;
+                if tx
+                    .send((frame_idx, std::mem::take(&mut frame_data)))
+                    .is_err()
+                {
+                    break;
+                }
+                if frame_idx % 10 == 0 {
+                    log::info!("Rendered frame {}/{}", frame_idx + 1, total_frames);
+                }
+            }
+            Ok(())
+        })();
+        drop(tx);
+
+        let write_result = writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("EXR encoder thread panicked"))?;
+        write_result.context("writing EXR frames")?;
+        render_result?;
+
+        Ok(())
     }
 
     /// Pipe rendered frames into `FFmpeg` with the given output-stage arguments
@@ -840,3 +991,5 @@ mod alpha_tests;
 mod audio_tests;
 #[cfg(test)]
 mod export_tests;
+#[cfg(test)]
+mod exr_tests;
