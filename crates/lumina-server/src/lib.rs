@@ -9,13 +9,39 @@
 //! - `POST /patch` (RFC-6902) and `POST /scene_patch` (semantic ops)
 //! - `POST /render` — renders the posted scene and returns MP4/WebM/GIF bytes
 //!
-//! **Security note:** requests are capped at 8 MiB, `/render` asset paths
-//! are restricted to `LUMINA_ASSET_ROOT` (default: the working directory),
-//! and bind/serve failures return errors instead of panicking. The server
-//! is still not hardened for untrusted networks — no authentication, rate
-//! limiting, or CORS allowlist until v0.5 (see `SECURITY.md` and
-//! `planning/TECH_DEBT.md` TD-09). Run it locally or behind a trusted
-//! reverse proxy.
+//! Every response that is not a success uses one envelope — [`ApiError`],
+//! with the `code` / `path` / `message` / `fix_suggestion` shape `/validate`
+//! already used — including the rejections `axum` raises before a handler is
+//! reached. The point of this surface is that an agent can drive it in a loop,
+//! and half of it used to answer in prose.
+//!
+//! # Configuration
+//!
+//! All via the environment; see [`ServerConfig`]. Defaults assume a local
+//! development server, and opening it up is an explicit act:
+//!
+//! | Variable | Default | Effect |
+//! |---|---|---|
+//! | `LUMINA_BIND` | `127.0.0.1:3000` | Address to listen on |
+//! | `LUMINA_API_TOKEN` | unset | Require `Authorization: Bearer …` |
+//! | `LUMINA_CORS_ORIGINS` | unset | Comma-separated allowlist |
+//! | `LUMINA_RATE_LIMIT` | `60` | Requests per client per minute; `0` disables |
+//! | `LUMINA_REQUEST_TIMEOUT_SECS` | `300` | Abandon a request after this |
+//! | `LUMINA_ASSET_ROOT` | working directory | Where scene assets may be read from |
+//!
+//! # Security posture
+//!
+//! Requests are capped at 8 MiB and rejected by a layer rather than a handler,
+//! so an oversized body is never parsed. `/render` runs on a blocking thread so
+//! concurrent renders cannot starve the async runtime, and its asset paths are
+//! canonicalised and confined to `LUMINA_ASSET_ROOT`. Authentication compares
+//! tokens without leaking their contents through timing. Shutdown is graceful,
+//! so an in-flight render is not killed mid-encode.
+//!
+//! What remains: the rate limiter is per-process and keyed by peer address, so
+//! it does not survive a restart and does not see through a proxy that does not
+//! set the peer. Anything multi-node belongs behind a gateway that already does
+//! this properly. See `SECURITY.md` and `planning/TECH_DEBT.md` TD-09.
 
 // The engine has never contained `unsafe`, and the metric tracking that was a
 // `grep` over the source — which by v0.4.0 was returning a false positive from
@@ -38,7 +64,7 @@ use luminafx_renderer::Renderer;
 use luminafx_schema::Scene;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 // ── Request / Response types ──────────────────────────────────────────────────
 
@@ -86,6 +112,16 @@ pub struct ScenePatchRequest {
 
 // ── Semantic validation ───────────────────────────────────────────────────────
 //
+/// Server configuration read from the environment.
+pub mod config;
+/// The single error envelope every endpoint answers with.
+pub mod error;
+/// Authentication and rate limiting.
+pub mod middleware;
+
+pub use config::ServerConfig;
+pub use error::{ApiError, ApiJson};
+
 // Validation logic lives in lumina-core (shared by server, CLI and SDKs);
 // re-exported here so the server's public API is unchanged.
 pub use luminafx_core::validation::{
@@ -98,7 +134,7 @@ async fn health_check() -> &'static str {
     "Lumina OK"
 }
 
-async fn validate_scene(Json(scene): Json<Scene>) -> impl IntoResponse {
+async fn validate_scene(ApiJson(scene): ApiJson<Scene>) -> impl IntoResponse {
     Json(validate_scene_data(&scene))
 }
 
@@ -139,33 +175,41 @@ fn object_registry() -> serde_json::Value {
 
 /// `POST /patch` — applies a JSON Patch (RFC 6902) to a scene value, then
 /// re-validates and returns the updated scene together with validation results.
-async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
-    let patch_ops: json_patch::Patch =
-        match serde_json::from_value(serde_json::Value::Array(payload.patch)) {
-            Ok(p) => p,
-            Err(e) => {
-                return (StatusCode::BAD_REQUEST, format!("Invalid JSON Patch: {e}"))
-                    .into_response()
-            }
-        };
+async fn patch_scene(ApiJson(payload): ApiJson<PatchRequest>) -> Response {
+    let patch_ops: json_patch::Patch = match serde_json::from_value(serde_json::Value::Array(
+        payload.patch,
+    )) {
+        Ok(p) => p,
+        Err(e) => return ApiError::bad_request(
+            "INVALID_JSON_PATCH",
+            format!("the patch is not a valid RFC 6902 document: {e}"),
+        )
+        .at("$.patch")
+        .fix("Each operation needs an `op` and a `path`; `add` and `replace` also need a `value`.")
+        .into_response(),
+    };
 
     let mut scene_value = payload.scene;
     if let Err(e) = json_patch::patch(&mut scene_value, &patch_ops) {
-        return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Patch failed: {e}"),
+        return ApiError::unprocessable(
+            "PATCH_FAILED",
+            format!("the patch could not be applied: {e}"),
         )
-            .into_response();
+        .at("$.patch")
+        .fix("Check that every `path` exists in the scene; RFC 6902 requires the parent of an added member to be present.")
+        .into_response();
     }
 
     let scene: Scene = match serde_json::from_value(scene_value.clone()) {
         Ok(s) => s,
         Err(e) => {
-            return (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                format!("Patched document is not a valid Scene: {e}"),
+            return ApiError::unprocessable(
+                "PATCHED_SCENE_INVALID",
+                format!("the patch applied cleanly but the result is not a scene: {e}"),
             )
-                .into_response()
+            .at("$.scene")
+            .fix("The patch removed or retyped a required field. GET /schema for the shape.")
+            .into_response()
         }
     };
 
@@ -177,23 +221,25 @@ async fn patch_scene(Json(payload): Json<PatchRequest>) -> Response {
     .into_response()
 }
 
-async fn scene_patch(Json(mut payload): Json<ScenePatchRequest>) -> Response {
+async fn scene_patch(ApiJson(mut payload): ApiJson<ScenePatchRequest>) -> Response {
     if let Err(e) = luminafx_core::apply_patch(&mut payload.scene, &payload.patch) {
-        return (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Scene patch failed: {e}"),
+        return ApiError::unprocessable(
+            "SCENE_PATCH_FAILED",
+            format!("the semantic patch could not be applied: {e}"),
         )
-            .into_response();
+        .at("$.patch")
+        .fix("GET /objects for the properties each object type accepts.")
+        .into_response();
     }
     let validation = validate_scene_data(&payload.scene);
     let scene_value = match serde_json::to_value(&payload.scene) {
         Ok(v) => v,
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Serialize error: {e}"),
+            return ApiError::internal(
+                "SERIALIZE_FAILED",
+                format!("the patched scene could not be serialised: {e}"),
             )
-                .into_response()
+            .into_response()
         }
     };
     Json(PatchResponse {
@@ -246,7 +292,7 @@ enum RenderOutcome {
     Failed(String),
 }
 
-async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
+async fn render_scene(ApiJson(payload): ApiJson<RenderRequest>) -> Response {
     // Validation is cheap and bounded (see AAA-SEC-01), so it stays on the
     // async path: an invalid scene is rejected without occupying a blocking
     // thread at all.
@@ -273,21 +319,20 @@ async fn render_scene(Json(payload): Json<RenderRequest>) -> Response {
             .header("Content-Type", content_type)
             .body(axum::body::Body::from(bytes))
             .unwrap_or_else(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Response build error: {e}"),
-                )
-                    .into_response()
+                ApiError::internal("RESPONSE_BUILD_FAILED", format!("{e}")).into_response()
             }),
-        Ok(RenderOutcome::BadRequest(msg)) => (StatusCode::BAD_REQUEST, msg).into_response(),
-        Ok(RenderOutcome::Failed(msg)) => (StatusCode::INTERNAL_SERVER_ERROR, msg).into_response(),
+        Ok(RenderOutcome::BadRequest(msg)) => ApiError::bad_request("ASSET_REJECTED", msg)
+            .at("$.scene.assets")
+            .fix("Asset paths are resolved under LUMINA_ASSET_ROOT and may not escape it.")
+            .into_response(),
+        Ok(RenderOutcome::Failed(msg)) => ApiError::internal("RENDER_FAILED", msg).into_response(),
         // The blocking task panicked or was cancelled. Nothing in it should
         // panic, but a 500 is the honest answer if one ever does.
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Render task did not complete: {e}"),
+        Err(e) => ApiError::internal(
+            "RENDER_TASK_FAILED",
+            format!("the render task did not complete: {e}"),
         )
-            .into_response(),
+        .into_response(),
     }
 }
 
@@ -372,7 +417,40 @@ const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 /// The full route table (health, schema, objects, validate, patch,
 /// `scene_patch`, render) with the body-size and CORS layers applied.
 pub fn build_router() -> Router {
-    Router::new()
+    build_router_with(&ServerConfig::default())
+}
+
+/// The route table with `config` applied.
+///
+/// Layer order is the security order and is not arbitrary: the body limit and
+/// the rate limiter run before authentication, so an unauthenticated flood is
+/// rejected without the server reading megabytes of JSON or comparing a token
+/// for each one. Authentication runs before any handler. `axum` applies
+/// `.layer` in reverse, so the list below reads bottom-up.
+pub fn build_router_with(config: &ServerConfig) -> Router {
+    let limiter = std::sync::Arc::new(middleware::RateLimiter::new(config.rate_limit_per_minute));
+
+    let cors = if config.cors_origins.is_empty() {
+        // No origins configured means no cross-origin access, rather than the
+        // `CorsLayer::permissive()` this used to ship — which let any website
+        // a developer visited drive their local render server.
+        CorsLayer::new()
+    } else {
+        let origins: Vec<axum::http::HeaderValue> = config
+            .cors_origins
+            .iter()
+            .filter_map(|o| o.parse().ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(origins))
+            .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::AUTHORIZATION,
+            ])
+    };
+
+    let router = Router::new()
         .route("/health", get(health_check))
         .route("/schema", get(get_schema))
         .route("/objects", get(get_objects))
@@ -380,18 +458,95 @@ pub fn build_router() -> Router {
         .route("/patch", post(patch_scene))
         .route("/scene_patch", post(scene_patch))
         .route("/render", post(render_scene))
+        .layer(axum::middleware::from_fn_with_state(
+            config.api_token.clone(),
+            middleware::require_auth,
+        ));
+
+    // Disabled means absent, not present-and-permissive: a limiter configured
+    // to zero should cost nothing per request.
+    let router = if config.rate_limit_per_minute > 0 {
+        router.layer(axum::middleware::from_fn_with_state(
+            limiter,
+            middleware::rate_limit,
+        ))
+    } else {
+        router
+    };
+
+    router
         .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
-        .layer(CorsLayer::permissive())
+        .layer(cors)
 }
 
 /// Bind and serve until shutdown. Returns instead of panicking when the
 /// port is taken or the listener dies, so embedders can report the error.
 pub async fn run_server() -> Result<(), std::io::Error> {
-    let app = build_router();
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    log::info!("Lumina Server listening on {addr}");
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await
+    let config = ServerConfig::from_env()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+    run_server_with(config).await
+}
+
+/// Bind and serve with an explicit configuration.
+///
+/// # Errors
+///
+/// Returns an error if the address cannot be bound or the listener dies.
+pub async fn run_server_with(config: ServerConfig) -> Result<(), std::io::Error> {
+    config.warn_about_exposure();
+    let app = build_router_with(&config);
+    let listener = tokio::net::TcpListener::bind(config.bind).await?;
+    log::info!(
+        "Lumina server on {} (auth: {}, rate limit: {}/min)",
+        config.bind,
+        if config.api_token.is_some() {
+            "on"
+        } else {
+            "off"
+        },
+        config.rate_limit_per_minute
+    );
+    // `into_make_service_with_connect_info` rather than `into_make_service`:
+    // the rate limiter keys on the client address, and without this the
+    // `ConnectInfo` extractor it depends on is simply absent, which would make
+    // every request fail rather than be limited.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+}
+
+/// Resolve when the process is asked to stop.
+///
+/// Without this an in-flight render is killed mid-encode, leaving a truncated
+/// file behind; `axum` will instead stop accepting connections and let the
+/// current requests finish.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        // SIGTERM is what a container runtime or systemd sends. Handling only
+        // Ctrl-C would mean graceful shutdown worked in a terminal and nowhere
+        // it actually matters.
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut s) => {
+                s.recv().await;
+            }
+            Err(e) => log::warn!("cannot listen for SIGTERM: {e}"),
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => log::info!("interrupt received, finishing in-flight requests"),
+        () = terminate => log::info!("SIGTERM received, finishing in-flight requests"),
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -19,8 +19,23 @@ days. Include a minimal reproduction where possible.
 The HTTP server (`crates/lumina-server`) is **not hardened for untrusted
 networks** in the current release, by design and documented intent:
 
-- no authentication or rate limiting,
-- permissive CORS.
+- ~~no authentication or rate limiting~~ — both exist as of v0.5:
+  `LUMINA_API_TOKEN` requires a bearer token (compared without leaking its
+  contents through timing), and `LUMINA_RATE_LIMIT` caps requests per client
+  per minute.
+- ~~permissive CORS~~ — cross-origin access is now closed unless
+  `LUMINA_CORS_ORIGINS` lists an origin. It previously used
+  `CorsLayer::permissive()`, which let any website a developer happened to
+  visit drive their local render server.
+- The default bind address is `127.0.0.1`, not `0.0.0.0`. Starting the server
+  used to publish a render endpoint to every interface, which made "I started
+  the dev server" and "I exposed this machine's CPU to the network"
+  indistinguishable.
+
+What still stands: the rate limiter is per-process and keyed by peer address,
+so it does not survive a restart and cannot see through a proxy that does not
+set the peer. Anything multi-node belongs behind a gateway that does this
+properly.
 
 The v0.4 safety minimum is in place: request bodies are capped at 8 MiB,
 `/render` asset paths are confined to `LUMINA_ASSET_ROOT` (default: the

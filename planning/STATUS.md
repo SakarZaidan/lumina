@@ -24,6 +24,37 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 (evening) — The server grows up; TD-09 closes
+
+- `AAA-SEC-08`. Bearer auth, per-client rate limiting, CORS allowlist,
+  configurable bind, request timeout, graceful shutdown.
+- **Three defaults changed, and each was a way to be exposed without having
+  decided to be.** It bound `0.0.0.0`, so starting the dev server published a
+  render endpoint to the whole network; CORS was `permissive()`, so any site a
+  developer visited could drive it; and there was no limiter at all. Now
+  loopback, closed, and 60/min.
+- Token comparison is constant-time. `==` on `&str` returns at the first
+  differing byte, so its timing reveals the length of a shared prefix — enough,
+  over many requests, to recover a token a byte at a time.
+- **One error envelope, and the interesting part was what converting the
+  handlers missed.** `axum` rejects a malformed body *before* any handler runs,
+  so the endpoint whose whole job is explaining what is wrong with your JSON
+  answered the most common mistake in prose. A custom extractor now answers
+  with the envelope and distinguishes `MALFORMED_JSON` from `SCHEMA_MISMATCH`
+  from `MISSING_CONTENT_TYPE` — three different fixes that used to look alike.
+  A test found this, not a review.
+- `ConnectInfo` is extracted as `Option`, deliberately. The plain extractor
+  *rejects* when a request carries no connection info, which turned every
+  in-process call into a 500 — the first run of the new suite was ten failures,
+  all of them the limiter answering 500 instead of limiting. A limiter that
+  answers 500 is worse than the flood it prevents.
+- 13 integration tests through the real middleware stack via
+  `ServiceExt::oneshot`: no port binding, so nothing fails on a busy machine
+  and no failure looks like a flake.
+- Rate limiting is per-process and keyed by peer address; documented as such
+  rather than implied to be more. Anything multi-node belongs behind a gateway.
+- Tests 280 → 297.
+
 ## 2026-09-03 (later) — Supply chain: scheduled, pinned, and scanned
 
 - `AAA-SEC-10` and `AAA-SEC-11`; closes issue #46.

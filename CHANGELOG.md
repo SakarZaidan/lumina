@@ -152,6 +152,36 @@ programme to reach reference quality in [plan/](plan/).
   image per glyph, so both composite the same bitmap at the same offset. The
   text parity fixture runs at the default tolerance rather than one an order of
   magnitude wider.
+- **The server is hardened** (TD-09 part 2). Bearer authentication via
+  `LUMINA_API_TOKEN`, per-client rate limiting via `LUMINA_RATE_LIMIT`, a CORS
+  allowlist via `LUMINA_CORS_ORIGINS`, a configurable bind address, a request
+  timeout, and graceful shutdown so an in-flight render is not killed
+  mid-encode.
+
+  Three defaults changed, and each was a way to be exposed without deciding to
+  be:
+  - **Binds `127.0.0.1`, not `0.0.0.0`.** Starting the server used to publish a
+    render endpoint on every interface, so "I started the dev server" and "I
+    offered this machine's CPU to the network" were indistinguishable.
+  - **Cross-origin is closed unless opened.** It shipped as
+    `CorsLayer::permissive()`, which let any website a developer happened to
+    visit drive their local render server.
+  - **Rate limited by default**, at 60 requests per client per minute.
+
+  Tokens are compared without leaking their contents through timing.
+- **One error envelope across the whole HTTP surface.** `/validate` answered
+  with `code` / `path` / `message` / `fix_suggestion`; `/patch`, `/scene_patch`,
+  and `/render` answered with bare strings. That gap matters more here than in
+  most APIs — the surface exists so an agent can send a scene, read what is
+  wrong, fix it and resend, and half the answers were prose it would have had
+  to parse with a regex.
+
+  Converting the handlers turned out not to be enough: `axum` rejects a
+  malformed body *before* any handler runs, so the endpoint whose job is to
+  explain what is wrong with your JSON answered the most common mistake in
+  plain text. Every route now takes an extractor that answers with the same
+  envelope, distinguishing `MALFORMED_JSON` from `SCHEMA_MISMATCH` from
+  `MISSING_CONTENT_TYPE` — three different fixes that used to look alike.
 - **The advisory scan runs on a schedule**, not only when someone opens a pull
   request. Two advisories landed while the v0.4 stack sat unmerged for seven
   weeks and surfaced only because that stack happened to run CI again; another
