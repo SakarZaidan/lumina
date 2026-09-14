@@ -24,6 +24,35 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-03 (later) — Supply chain: scheduled, pinned, and scanned
+
+- `AAA-SEC-10` and `AAA-SEC-11`; closes issue #46.
+- **The schedule is the point.** `cargo-deny` ran on push and pull request
+  only, so a repository nobody touches is a repository nobody scans — which is
+  exactly how RUSTSEC-2026-0235 and RUSTSEC-2026-0206 sat undetected for seven
+  weeks. Daily now, plus on any change to the dependency graph.
+- A red cron job on a quiet repository is also something nobody notices, so a
+  failure opens a labelled issue and reuses the open one rather than filing a
+  duplicate every morning.
+- **`cargo machete` found twelve unused dependencies across seven crates** on
+  its first run: `glam` in four of them, plus `thiserror`, `log`, `serde_json`,
+  `tokio`, `anyhow`, and `web-sys`. Each verified by an independent grep before
+  removal; `glam` is now gone from the lockfile entirely. This is an advisory
+  check by another route — `mitex`, which carried RUSTSEC-2026-0235 into this
+  workspace, was imported by nothing.
+- **Every action pinned to a commit SHA.** One subtlety worth recording:
+  `dtolnay/rust-toolchain` derives the toolchain *from the ref it is used at*,
+  so pinning `@stable` to a SHA silently changes which compiler builds the
+  project. Every use gained an explicit `toolchain: stable` in the same edit.
+- CodeQL (Rust is supported on this repo — checked, not assumed) and OpenSSF
+  Scorecard on a schedule. Scorecard is deliberately an outside opinion:
+  `planning/METRICS.md` is self-graded, and a metric you grade yourself is one
+  you can talk yourself into.
+- The `security` label the workflow first referenced does not exist in this
+  repository; it uses `kind/security` and `area/ci`, which do. A workflow that
+  files an issue with a non-existent label fails at the moment it is most
+  needed.
+
 ## 2026-09-03 — crates.io names, and two blockers nobody had checked
 
 - The owner supplied a crates.io token, and the first thing it revealed was

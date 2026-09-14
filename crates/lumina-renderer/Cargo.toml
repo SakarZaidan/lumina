@@ -20,9 +20,7 @@ vello = { workspace = true }
 tiny-skia = { workspace = true }
 resvg = { workspace = true }
 image = { workspace = true }
-glam = { workspace = true }
 thiserror = { workspace = true }
-log = { workspace = true }
 serde_json = { workspace = true }
 evalexpr = { workspace = true }
 pollster = "0.3"

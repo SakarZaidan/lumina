@@ -32,7 +32,6 @@ serde_json = { workspace = true }
 schemars = { workspace = true }
 json-patch = "1"
 tower-http = { version = "0.5", features = ["cors"] }
-anyhow = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 tempfile = "3.10"

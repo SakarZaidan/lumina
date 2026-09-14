@@ -1,0 +1,23 @@
+# Advisories accepted by `osv-scanner`, mirroring `deny.toml`.
+#
+# Two tools reading two lists would drift, and the drift would show up as a
+# scheduled job going red for a reason somebody already decided months earlier.
+# The reasons live in `deny.toml` in full; this file exists because
+# osv-scanner does not read that format, and each entry points back to the
+# tracked debt rather than restating the argument.
+#
+# Anything *not* in this list fails the audit. That is the point of running a
+# second scanner: OSV aggregates more sources than the RustSec database alone,
+# so it sees advisories `cargo-deny` does not.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+reason = "paste: unmaintained proc-macro, no vulnerability. Transitive via wgpu/vello and via exr -> image; build-time only, with no upgrade available. See deny.toml."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0192"
+reason = "ttf-parser 0.21: unmaintained, reached only through fontdue 0.9.3 (its latest release). resvg 0.47 already moved to maintained 0.25, so the untrusted-SVG path is clean. Tracked as TD-17."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0206"
+reason = "rustybuzz: unmaintained, via usvg/resvg 0.47 which is already the latest release, so there is nothing to upgrade to. Shapes text inside untrusted SVG assets, so tracked rather than dismissed. Tracked as TD-22."

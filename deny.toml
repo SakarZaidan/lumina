@@ -33,7 +33,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
     # Unmaintained transitive deps of wgpu/vello with no upgrade available.
     # Not vulnerabilities — informational "unmaintained" advisories only.
-    "RUSTSEC-2024-0436", # paste (via wgpu → vello)
+    "RUSTSEC-2024-0436", # paste (via wgpu → vello, and exr → image)
     # ttf-parser parses untrusted font files, so "unmaintained" matters more
     # here than for the two above. resvg 0.47 moved to maintained
     # ttf-parser 0.25, so the untrusted-SVG path is clean; only fontdue

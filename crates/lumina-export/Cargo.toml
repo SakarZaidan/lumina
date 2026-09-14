@@ -20,7 +20,6 @@ image = { workspace = true }
 rayon = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
-tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
