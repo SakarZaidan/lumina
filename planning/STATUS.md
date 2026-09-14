@@ -24,6 +24,29 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night) — Morphing flows instead of collapsing
+
+- `AAA-MOT-04`. Interpolating a point list to one of a different length padded
+  the shorter with copies of its last element. Correct as a definition of
+  "same length", wrong as motion: a four-point square becoming a sixty-four
+  point circle mapped sixty-one of the circle's vertices onto one corner, so
+  the square collapsed into that corner and unfolded out of it.
+- Both outlines are resampled at even arc-length spacing around their closed
+  perimeters, so each vertex has a comparable distance to travel and the shape
+  deforms rather than folds.
+- Two deliberate limits, both cheaper to solve where they arise:
+  - **Equal lengths are left alone.** Matching counts are how an author says
+    "vertex *i* becomes vertex *i*"; resampling would silently override that.
+  - **No rotational alignment.** Finding the best starting offset is O(n²) per
+    property per frame, and the shapes it fixes are ones the author can rotate
+    once at authoring time.
+- `as_point_list` is strict on purpose — every element a two-number array — so
+  gradient stops (`[[0.0, "#hex"], …]`) and Bézier parameter arrays keep the
+  padding path, where "arc length" would be meaningless.
+- Tests assert the property, not the mechanism: no cluster of vertices may
+  coincide at the midpoint. The padding implementation fails that and passes an
+  endpoints check.
+
 ## 2026-09-02 (evening, later) — `draw_fraction` finally means one thing
 
 - `AAA-MOT-02`. It meant three different things depending on the object:

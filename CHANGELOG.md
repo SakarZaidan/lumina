@@ -42,6 +42,19 @@ programme to reach reference quality in [plan/](plan/).
 - Interpolation never yields `null`. `Value::from` maps non-finite floats to
   `Value::Null`, which made the property disappear from the state map so the
   renderer silently used its default.
+- **Shapes morph between different vertex counts by arc length.** Animating a
+  point list to one of a different length padded the shorter list by repeating
+  its last element, so a four-point square becoming a sixty-four-point circle
+  mapped sixty-one of the circle's vertices onto one corner: the square
+  collapsed into that corner and unfolded, rather than flowing. Both outlines
+  are now resampled at even spacing around their perimeters, so every vertex
+  travels a comparable distance.
+
+  Lists of equal length are untouched — matching counts mean the author
+  intended vertex *i* to become vertex *i*, and resampling would override that
+  silently. Arrays that are not point lists (gradient stops, Bézier control
+  parameters) still pad, because resampling them by "arc length" would be
+  meaningless.
 - **Plot sampling is shared by both backends** (`common/plot.rs`), so they draw
   the same curve from the same points rather than from two similar loops. The
   expression is parsed **once per plot** instead of once per sample per frame —
