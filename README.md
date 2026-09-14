@@ -261,6 +261,25 @@ Animate any line, curve, or plot growing onto screen:
 }
 ```
 
+### Audio
+
+```json
+"assets": {
+  "audio": [
+    { "id": "score", "path": "examples/assets/score.mp3" },
+    { "id": "whoosh", "path": "examples/assets/whoosh.wav", "start": 2.4, "gain": 0.6 }
+  ]
+}
+```
+
+Audio is a property of the scene rather than of anything drawn in it, so
+declaring the asset is what places it — there is no object to attach it to.
+`start` is seconds into the video (negative begins part-way into the track) and
+`gain` is a linear multiplier. Tracks are mixed and the result is trimmed to the
+animation's length, whether the audio is shorter or longer. MP4 gets AAC, WebM
+Opus, and ProRes MOV uncompressed PCM; PNG sequences and GIFs have nowhere to
+put sound and ignore it.
+
 ### Camera pan, zoom, and rotation
 
 ```json

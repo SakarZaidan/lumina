@@ -20,7 +20,7 @@
 
 use anyhow::Context;
 use clap::Parser;
-use lumina_export::{Exporter, Quality};
+use lumina_export::{AudioTrack, Exporter, Quality};
 use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
 use lumina_schema::Scene;
 use std::path::PathBuf;
@@ -175,6 +175,25 @@ fn do_export<R: Renderer>(
     args: &Args,
 ) -> anyhow::Result<Vec<Duration>> {
     let mut timings = Vec::new();
+
+    // Audio paths are resolved here rather than inside the exporter, which
+    // never sees the scene's own path strings. The CLI's trust boundary is the
+    // working directory, so a relative path is taken at face value exactly as
+    // fonts and images are; the server resolves the same assets against
+    // `LUMINA_ASSET_ROOT` instead.
+    let tracks: Vec<AudioTrack> = scene
+        .assets
+        .audio
+        .iter()
+        .map(|a| AudioTrack::new(std::path::PathBuf::from(&a.path), a))
+        .collect();
+    for track in &tracks {
+        if !track.path.exists() {
+            anyhow::bail!("audio asset not found at {}", track.path.display());
+        }
+    }
+    exporter.set_audio(tracks);
+
     let quality = match args.quality.as_str() {
         "draft" => Quality::Draft,
         "standard" => Quality::Standard,

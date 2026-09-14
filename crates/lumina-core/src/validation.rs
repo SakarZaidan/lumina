@@ -443,6 +443,33 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             );
         }
     }
+    // Audio gain and start reach ffmpeg as filter-graph numbers. A non-finite
+    // value formats as `inf` or `NaN`, which ffmpeg rejects — the whole export
+    // fails with a parse error naming a filter the author never wrote.
+    for (i, audio) in scene.assets.audio.iter().enumerate() {
+        if !audio.gain.is_finite() || audio.gain < 0.0 {
+            errors.push(ValidationError {
+                code: "INVALID_AUDIO_GAIN".to_string(),
+                path: format!("$.assets.audio[{i}].gain"),
+                message: format!(
+                    "audio gain is {}; it must be a finite, non-negative multiplier.",
+                    audio.gain
+                ),
+                fix_suggestion: "Use 1.0 for the track as recorded, 0.5 to halve its                                  amplitude, or 0.0 to mute it."
+                    .to_string(),
+            });
+        }
+        if !audio.start.is_finite() {
+            errors.push(ValidationError {
+                code: "INVALID_AUDIO_START".to_string(),
+                path: format!("$.assets.audio[{i}].start"),
+                message: "audio start is not a finite number of seconds.".to_string(),
+                fix_suggestion: "Use 0 to start with the video, a positive value to delay                                  the track, or a negative one to begin part-way into it."
+                    .to_string(),
+            });
+        }
+    }
+
     if let Some(camera) = &scene.camera {
         for (i, entry) in camera.timeline.iter().enumerate() {
             check_easing(

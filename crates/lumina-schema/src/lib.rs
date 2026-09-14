@@ -121,6 +121,12 @@ pub struct Assets {
     /// Image/SVG files to load.
     #[serde(default)]
     pub images: Vec<ImageAsset>,
+    /// Audio files to mix into video exports.
+    ///
+    /// Ignored by the PNG sequence and by the WASM engine, neither of which
+    /// has anywhere to put sound.
+    #[serde(default)]
+    pub audio: Vec<AudioAsset>,
 }
 
 /// A font file to load, referenced by `font_id` on text objects.
@@ -131,6 +137,34 @@ pub struct FontAsset {
     /// Filesystem path, resolved against the working directory
     /// (the CLI) or `LUMINA_ASSET_ROOT` (the server).
     pub path: String,
+}
+
+/// An audio file mixed into video exports.
+///
+/// Unlike fonts and images, audio is not referenced by any object: a scene's
+/// sound is a property of the scene, not of something drawn in it. Declaring
+/// the asset is what places it.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AudioAsset {
+    /// Unique asset id. Not referenced by objects; it names the track in
+    /// diagnostics.
+    pub id: String,
+    /// Filesystem path, resolved against the working directory
+    /// (the CLI) or `LUMINA_ASSET_ROOT` (the server).
+    pub path: String,
+    /// Seconds into the video at which this track starts. Negative values
+    /// start the track before the video does, playing it from part-way in.
+    #[serde(default)]
+    pub start: f32,
+    /// Linear gain. `1.0` leaves the track as recorded; `0.5` halves its
+    /// amplitude.
+    #[serde(default = "default_gain")]
+    pub gain: f32,
+}
+
+/// Default [`AudioAsset::gain`]: unity, i.e. the file as recorded.
+fn default_gain() -> f32 {
+    1.0
 }
 
 /// A raster image or SVG file to load, referenced by `asset_id`.
