@@ -1,5 +1,5 @@
 [package]
-name = "lumina-server"
+name = "luminafx-server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,18 +13,18 @@ description = "HTTP API server for the Lumina animation engine: validation, rend
 publish = false
 
 [[bin]]
-name = "lumina-server"
+name = "luminafx-server"
 path = "src/main.rs"
 
 [lib]
-name = "lumina_server"
+name = "luminafx_server"
 path = "src/lib.rs"
 
 [dependencies]
-lumina-core = { path = "../lumina-core" }
-lumina-renderer = { path = "../lumina-renderer" }
-lumina-schema = { path = "../lumina-schema" }
-lumina-export = { path = "../lumina-export" }
+luminafx-core = { path = "../lumina-core", version = "0.4.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.4.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
+luminafx-export = { path = "../lumina-export", version = "0.4.0" }
 axum = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }

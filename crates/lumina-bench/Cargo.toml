@@ -1,5 +1,5 @@
 [package]
-name = "lumina-bench"
+name = "luminafx-bench"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,13 +9,13 @@ publish = false
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-lumina-core = { path = "../lumina-core" }
-lumina-renderer = { path = "../lumina-renderer" }
-lumina-schema = { path = "../lumina-schema" }
+luminafx-core = { path = "../lumina-core", version = "0.4.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.4.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
 serde_json = { workspace = true }
 
 [[bench]]
-name = "lumina_bench"
+name = "luminafx_bench"
 harness = false
 
 [lints]

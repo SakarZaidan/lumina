@@ -18,7 +18,7 @@
 #![warn(missing_docs)]
 
 use fontdue::{Font, FontSettings, Metrics};
-use lumina_schema::TextProps;
+use luminafx_schema::TextProps;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

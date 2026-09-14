@@ -14,7 +14,7 @@ export interface VanillaPlayerHandle {
  *
  * @example
  * ```js
- * import { createPlayer } from '@lumina/sdk';
+ * import { createPlayer } from 'luminafx';
  *
  * const player = await createPlayer(document.getElementById('my-canvas'), scene);
  * player.play();

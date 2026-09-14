@@ -6,7 +6,7 @@
 //! strongly-typed [`Scene`]. This is the format an AI agent uses to extend a
 //! scene it previously generated without resending the whole document.
 
-use lumina_schema::{Canvas, EventEntry, Object, Scene, TimelineEntry};
+use luminafx_schema::{Canvas, EventEntry, Object, Scene, TimelineEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;

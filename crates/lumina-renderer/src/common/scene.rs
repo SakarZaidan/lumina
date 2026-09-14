@@ -1,6 +1,6 @@
 //! Shared scene-walk helpers: z-ordering and group transform composition.
 
-use lumina_schema::Object;
+use luminafx_schema::Object;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -142,7 +142,7 @@ impl Mat2x3 {
 /// Computed in f32 via tiny-skia so the matrix is bit-identical on both
 /// backends.
 pub(crate) fn camera_transform(
-    camera: Option<&lumina_schema::CameraState>,
+    camera: Option<&luminafx_schema::CameraState>,
     width: u32,
     height: u32,
 ) -> Mat2x3 {

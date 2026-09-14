@@ -11,7 +11,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_renderer::testing::path::{length, parse_svg_path, trim};
+use luminafx_renderer::testing::path::{length, parse_svg_path, trim};
 
 #[test]
 fn a_half_trim_is_half_the_length() {
@@ -97,7 +97,7 @@ fn a_degenerate_path_does_not_panic() {
 trait CmdCount {
     fn to_string_len(&self) -> usize;
 }
-impl CmdCount for lumina_renderer::testing::path::PathData {
+impl CmdCount for luminafx_renderer::testing::path::PathData {
     fn to_string_len(&self) -> usize {
         format!("{self:?}").matches("To(").count()
     }

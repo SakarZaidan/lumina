@@ -6,7 +6,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_text::TextEngine;
+use luminafx_text::TextEngine;
 
 fn engine() -> TextEngine {
     let mut e = TextEngine::new();

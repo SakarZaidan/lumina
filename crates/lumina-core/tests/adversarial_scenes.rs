@@ -9,8 +9,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_core::{validation::validate_scene_data, SceneGraph, Timeline};
-use lumina_schema::Scene;
+use luminafx_core::{validation::validate_scene_data, SceneGraph, Timeline};
+use luminafx_schema::Scene;
 
 /// Deserialise, validate, and — if it validated — build the runtime state.
 ///
@@ -147,7 +147,7 @@ fn a_deep_group_chain_is_rejected_rather_than_overflowing() {
 fn every_easing_name_survives_a_real_scene() {
     // The registry is the contract, so walking it means a newly added easing
     // cannot ship without being evaluated once end to end.
-    for name in lumina_core::easing::EASING_NAMES {
+    for name in luminafx_core::easing::EASING_NAMES {
         let json = scene_json(
             r#"{"c":{"type":"Circle","properties":{"cx":0,"cy":0,"radius":1}}}"#,
             &format!(r#"[{{"time":1.0,"object":"c","state":{{"cx":100}},"easing":"{name}"}}]"#),

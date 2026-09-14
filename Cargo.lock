@@ -1689,18 +1689,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-bench"
+name = "luminafx-bench"
 version = "0.4.0"
 dependencies = [
  "criterion",
- "lumina-core",
- "lumina-renderer",
- "lumina-schema",
+ "luminafx-core",
+ "luminafx-renderer",
+ "luminafx-schema",
  "serde_json",
 ]
 
 [[package]]
-name = "lumina-cli"
+name = "luminafx-cli"
 version = "0.4.0"
 dependencies = [
  "anyhow",
@@ -1708,21 +1708,21 @@ dependencies = [
  "env_logger",
  "image",
  "log",
- "lumina-core",
- "lumina-export",
- "lumina-renderer",
- "lumina-schema",
+ "luminafx-core",
+ "luminafx-export",
+ "luminafx-renderer",
+ "luminafx-schema",
  "notify",
  "serde_json",
 ]
 
 [[package]]
-name = "lumina-core"
+name = "luminafx-core"
 version = "0.4.0"
 dependencies = [
  "glam",
  "log",
- "lumina-schema",
+ "luminafx-schema",
  "proptest",
  "serde",
  "serde_json",
@@ -1730,15 +1730,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-export"
+name = "luminafx-export"
 version = "0.4.0"
 dependencies = [
  "anyhow",
  "image",
  "log",
- "lumina-core",
- "lumina-renderer",
- "lumina-schema",
+ "luminafx-core",
+ "luminafx-renderer",
+ "luminafx-schema",
  "rayon",
  "serde_json",
  "tempfile",
@@ -1746,16 +1746,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-renderer"
+name = "luminafx-renderer"
 version = "0.4.0"
 dependencies = [
  "evalexpr",
  "glam",
  "image",
  "log",
- "lumina-core",
- "lumina-schema",
- "lumina-text",
+ "luminafx-core",
+ "luminafx-schema",
+ "luminafx-text",
  "pollster",
  "resvg",
  "serde_json",
@@ -1765,7 +1765,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-schema"
+name = "luminafx-schema"
 version = "0.4.0"
 dependencies = [
  "glam",
@@ -1776,7 +1776,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-server"
+name = "luminafx-server"
 version = "0.4.0"
 dependencies = [
  "anyhow",
@@ -1784,10 +1784,10 @@ dependencies = [
  "env_logger",
  "json-patch",
  "log",
- "lumina-core",
- "lumina-export",
- "lumina-renderer",
- "lumina-schema",
+ "luminafx-core",
+ "luminafx-export",
+ "luminafx-renderer",
+ "luminafx-schema",
  "schemars",
  "serde",
  "serde_json",
@@ -1797,26 +1797,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumina-text"
+name = "luminafx-text"
 version = "0.4.0"
 dependencies = [
  "fontdue",
  "glam",
  "log",
- "lumina-schema",
+ "luminafx-schema",
  "serde_json",
  "thiserror 1.0.69",
 ]
 
 [[package]]
-name = "lumina-wasm"
+name = "luminafx-wasm"
 version = "0.4.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
- "lumina-core",
- "lumina-renderer",
- "lumina-schema",
+ "luminafx-core",
+ "luminafx-renderer",
+ "luminafx-schema",
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",

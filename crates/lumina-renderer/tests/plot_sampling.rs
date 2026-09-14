@@ -9,7 +9,7 @@
 // allow-in-tests does not reach them.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_renderer::testing::plot;
+use luminafx_renderer::testing::plot;
 
 #[test]
 fn bare_math_calls_are_namespaced() {

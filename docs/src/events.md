@@ -41,7 +41,7 @@ time — useful for wiring drag gestures back into application logic.
 
 ## The event bus
 
-`lumina_core::EventBus` owns a `PlaybackState` and dispatches host events:
+`luminafx_core::EventBus` owns a `PlaybackState` and dispatches host events:
 
 - The host constructs an `Event { object_id, trigger, payload }` (usually from
   `hit_test`) and calls `process_event`.
@@ -69,7 +69,7 @@ RFC-6902 JSON Patch, which is also available):
 | `add_event` / `remove_event` | Edit interactivity declarations. |
 | `update_canvas` | Change canvas dimensions/fps/duration/background. |
 
-Apply them in-process via `lumina_core::scene_patch::apply_patch`, or over
+Apply them in-process via `luminafx_core::scene_patch::apply_patch`, or over
 HTTP with `POST /scene_patch` — the server applies the patch and re-validates
 the scene in one round trip, returning structured errors with
 `fix_suggestion`s on failure (see the

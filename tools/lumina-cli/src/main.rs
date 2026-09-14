@@ -20,9 +20,9 @@
 
 use anyhow::Context;
 use clap::Parser;
-use lumina_export::{AudioTrack, Exporter, Quality};
-use lumina_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
-use lumina_schema::Scene;
+use luminafx_export::{AudioTrack, Exporter, Quality};
+use luminafx_renderer::{skia_backend::SkiaRenderer, vello_backend::VelloRenderer, Renderer};
+use luminafx_schema::Scene;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -100,7 +100,7 @@ fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
 /// Run semantic validation, print every finding, and fail on errors.
 /// Warnings (duplicate keyframes, missing easing params, …) never block.
 fn validate_scene(scene: &Scene, path: &PathBuf) -> anyhow::Result<()> {
-    let result = lumina_core::validation::validate_scene_data(scene);
+    let result = luminafx_core::validation::validate_scene_data(scene);
     for w in &result.warnings {
         eprintln!("[warn]  {} at {}: {}", w.code, w.path, w.message);
     }
@@ -363,7 +363,7 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
 /// message** — while the full render path hard-errored on exactly the same
 /// input. Two behaviours for one fault, and the quiet one is the default in
 /// watch mode, where a typo'd path looks like a styling problem.
-fn load_declared_assets<R: lumina_renderer::Renderer>(
+fn load_declared_assets<R: luminafx_renderer::Renderer>(
     renderer: &mut R,
     scene: &Scene,
 ) -> anyhow::Result<()> {
@@ -386,7 +386,7 @@ fn load_declared_assets<R: lumina_renderer::Renderer>(
 
 fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> anyhow::Result<()> {
     use image::{ImageBuffer, Rgba};
-    use lumina_core::{SceneGraph, Timeline};
+    use luminafx_core::{SceneGraph, Timeline};
 
     let scene_graph = SceneGraph::from_scene(scene);
     let timeline = Timeline::from_scene(scene);
@@ -398,8 +398,8 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
         "vello" => {
             let mut r = VelloRenderer::new()?;
             load_declared_assets(&mut r, scene)?;
-            lumina_renderer::Renderer::set_time(&mut r, time);
-            lumina_renderer::Renderer::render_frame(
+            luminafx_renderer::Renderer::set_time(&mut r, time);
+            luminafx_renderer::Renderer::render_frame(
                 &mut r,
                 &scene_graph.objects,
                 &states,
@@ -413,8 +413,8 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
         _ => {
             let mut r = SkiaRenderer::new();
             load_declared_assets(&mut r, scene)?;
-            lumina_renderer::Renderer::set_time(&mut r, time);
-            lumina_renderer::Renderer::render_frame(
+            luminafx_renderer::Renderer::set_time(&mut r, time);
+            luminafx_renderer::Renderer::render_frame(
                 &mut r,
                 &scene_graph.objects,
                 &states,

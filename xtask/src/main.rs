@@ -95,9 +95,9 @@ fn ci_steps() -> Vec<Step> {
                 "test",
                 "--workspace",
                 "--exclude",
-                "lumina-wasm",
+                "luminafx-wasm",
                 "--exclude",
-                "lumina-bench",
+                "luminafx-bench",
             ],
         )
         .env("LUMINA_REQUIRE_VELLO", "1"),
@@ -108,9 +108,9 @@ fn ci_steps() -> Vec<Step> {
                 "check",
                 "--workspace",
                 "--exclude",
-                "lumina-wasm",
+                "luminafx-wasm",
                 "--exclude",
-                "lumina-bench",
+                "luminafx-bench",
                 "--all-targets",
             ],
         ),
@@ -122,9 +122,9 @@ fn ci_steps() -> Vec<Step> {
                 "--no-deps",
                 "--workspace",
                 "--exclude",
-                "lumina-wasm",
+                "luminafx-wasm",
                 "--exclude",
-                "lumina-bench",
+                "luminafx-bench",
             ],
         ),
         step("deny", "cargo", &["deny", "check"]).optional(),
@@ -253,7 +253,7 @@ fn run_one(s: &Step) -> ExitCode {
 /// task. Keep the flags below in step with `.github/workflows/ci.yml`.
 fn run_bench(args: &[String]) -> ExitCode {
     let mut cmd = Command::new("cargo");
-    cmd.args(["bench", "-p", "lumina-bench", "--"]);
+    cmd.args(["bench", "-p", "luminafx-bench", "--"]);
 
     // Shorter than criterion's defaults. The suite renders thousands of glyphs
     // per iteration; the default 100 samples over 5 seconds each would take
@@ -320,7 +320,7 @@ fn render_examples(full: bool) -> ExitCode {
 
     eprintln!("building lumina-cli …");
     if !Command::new("cargo")
-        .args(["build", "--release", "-p", "lumina-cli"])
+        .args(["build", "--release", "-p", "luminafx-cli"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)

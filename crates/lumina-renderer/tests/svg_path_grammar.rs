@@ -7,7 +7,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use lumina_renderer::testing::path::{parse_svg_path, PathData};
+use luminafx_renderer::testing::path::{parse_svg_path, PathData};
 
 /// Parse, or fail with the parser's own diagnostic.
 fn parse(d: &str) -> PathData {
@@ -159,7 +159,7 @@ fn a_degenerate_arc_becomes_a_line() {
 
 #[test]
 fn errors_name_the_offending_token() {
-    use lumina_renderer::testing::path::parse_svg_path_detailed;
+    use luminafx_renderer::testing::path::parse_svg_path_detailed;
 
     // Previously any of these silently dropped the whole path.
     let err = parse_svg_path_detailed("M 0 0 L 10 nonsense").expect_err("should fail");

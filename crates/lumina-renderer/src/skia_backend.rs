@@ -2,8 +2,8 @@
 
 use crate::{Renderer, RendererError};
 use image::AnimationDecoder;
-use lumina_schema::{CameraState, Object};
-use lumina_text::TextEngine;
+use luminafx_schema::{CameraState, Object};
+use luminafx_text::TextEngine;
 use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -222,10 +222,10 @@ impl SkiaRenderer {
         parent_transform: Transform,
         depth: usize,
     ) -> Result<(), RendererError> {
-        if depth > lumina_core::validation::MAX_GROUP_DEPTH {
+        if depth > luminafx_core::validation::MAX_GROUP_DEPTH {
             return Err(RendererError::Failed(format!(
                 "group nesting deeper than {} at '{id}'",
-                lumina_core::validation::MAX_GROUP_DEPTH
+                luminafx_core::validation::MAX_GROUP_DEPTH
             )));
         }
         let obj = objects.get(id).ok_or_else(|| {

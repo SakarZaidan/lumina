@@ -1,5 +1,5 @@
 use crate::interpolator::interpolate_value;
-use lumina_schema::Scene;
+use luminafx_schema::Scene;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -141,8 +141,8 @@ impl Timeline {
 
     /// Evaluate the camera state at `time` (identity when the scene has no
     /// camera block).
-    pub fn get_camera_at(&self, time: f32, scene: &Scene) -> lumina_schema::CameraState {
-        use lumina_schema::CameraState;
+    pub fn get_camera_at(&self, time: f32, scene: &Scene) -> luminafx_schema::CameraState {
+        use luminafx_schema::CameraState;
 
         let default = CameraState {
             x: 0.0,

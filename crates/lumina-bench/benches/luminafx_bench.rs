@@ -15,9 +15,9 @@
 #![allow(missing_docs)]
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use lumina_core::{SceneGraph, Timeline};
-use lumina_renderer::{skia_backend::SkiaRenderer, Renderer};
-use lumina_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
+use luminafx_core::{SceneGraph, Timeline};
+use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
+use luminafx_schema::{Canvas, CircleProps, Meta, Object, Scene, TimelineEntry};
 use std::collections::HashMap;
 
 // ── Scene factories ───────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ fn bench_skia_frame_render(c: &mut Criterion) {
 /// the original suite drew a single character, so the largest single cost in
 /// the engine was invisible to it.
 fn make_text_scene(n_labels: usize, chars_per_label: usize) -> Scene {
-    use lumina_schema::TextProps;
+    use luminafx_schema::TextProps;
 
     let mut objects = HashMap::new();
     let content: String = "The quick brown fox jumps over the lazy dog "
@@ -163,7 +163,7 @@ fn make_text_scene(n_labels: usize, chars_per_label: usize) -> Scene {
 
 /// A scene dominated by plotted functions.
 fn make_plot_scene(n_plots: usize, samples: u32) -> Scene {
-    use lumina_schema::{AxesProps, PlotProps};
+    use luminafx_schema::{AxesProps, PlotProps};
 
     let mut objects = HashMap::new();
     objects.insert(
@@ -363,7 +363,7 @@ fn bench_scene_walk(c: &mut Criterion) {
 /// Nothing in the suite measured it, so nothing could say whether memoising it
 /// was worth the cache.
 fn bench_latex_render(c: &mut Criterion) {
-    use lumina_schema::LaTeXProps;
+    use luminafx_schema::LaTeXProps;
 
     let mut group = c.benchmark_group("latex_render");
     group.sample_size(20);
@@ -412,7 +412,7 @@ fn bench_latex_render(c: &mut Criterion) {
 }
 
 fn bench_easing_dispatch(c: &mut Criterion) {
-    use lumina_core::easing::{eval_easing, get_easing_fn};
+    use luminafx_core::easing::{eval_easing, get_easing_fn};
 
     let mut group = c.benchmark_group("easing");
 

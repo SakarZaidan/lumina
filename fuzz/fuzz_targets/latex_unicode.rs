@@ -16,5 +16,5 @@ fuzz_target!(|data: &[u8]| {
     if text.len() > 4096 {
         return;
     }
-    let _ = lumina_renderer::testing::latex::latex_to_unicode(text);
+    let _ = luminafx_renderer::testing::latex::latex_to_unicode(text);
 });

@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use lumina_text::{RasterizedGlyph, TextEngine};
+use luminafx_text::{RasterizedGlyph, TextEngine};
 use tiny_skia::{Color, Pixmap};
 
 /// One glyph of a run, positioned relative to the run's anchor.

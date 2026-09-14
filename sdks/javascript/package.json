@@ -1,7 +1,7 @@
 {
-  "name": "@lumina/sdk",
+  "name": "luminafx",
   "version": "0.4.0",
-  "description": "Lumina Animation Engine — React and vanilla-JS player SDK",
+  "description": "Lumina Animation Engine \u2014 React and vanilla-JS player SDK",
   "license": "MIT",
   "author": "Sakar Hashim",
   "repository": {
@@ -18,7 +18,10 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist", "wasm"],
+  "files": [
+    "dist",
+    "wasm"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --out-dir dist",
     "typecheck": "tsc --noEmit",
@@ -29,8 +32,12 @@
     "react-dom": "^18.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
