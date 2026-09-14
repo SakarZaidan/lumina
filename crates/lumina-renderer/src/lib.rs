@@ -69,6 +69,20 @@ pub trait Renderer {
     /// Render one frame to tightly packed RGBA8 (`width * height * 4`
     /// bytes). `states` carries each object's animated property values at
     /// the current time; `camera` applies a pan/zoom root transform.
+    ///
+    /// # Alpha is premultiplied
+    ///
+    /// The returned bytes carry **premultiplied** alpha, which is what both
+    /// rasterisers compose in and what anything averaging or blending frames
+    /// wants: motion blur is correct on premultiplied values and wrong on
+    /// straight ones, where a nearly-transparent sample would be weighted as
+    /// heavily as an opaque one.
+    ///
+    /// Almost every *destination* wants the opposite. PNG, ffmpeg's `rgba`
+    /// input, and a canvas `ImageData` all store straight alpha, so call
+    /// [`demultiply_in_place`] once on the way out. This never mattered while
+    /// backgrounds were opaque — at `a = 255` the two encodings are the same
+    /// bytes — and became wrong the moment a scene asked for transparency.
     fn render_frame(
         &mut self,
         objects: &HashMap<String, Object>,
@@ -93,6 +107,41 @@ pub trait Renderer {
     /// next `render_frame` call. Used to select the correct frame of an animated
     /// GIF asset. Default is a no-op for backends without time-dependent assets.
     fn set_time(&mut self, _time: f32) {}
+}
+
+/// Convert premultiplied RGBA8 to straight (non-premultiplied) RGBA8, in place.
+///
+/// [`Renderer::render_frame`] returns premultiplied bytes because that is what
+/// compositing and frame averaging need. File formats and canvases need the
+/// other convention, so this is called once at each boundary where pixels
+/// leave the engine.
+///
+/// Fully opaque and fully transparent pixels are left untouched — the first
+/// because the two encodings agree there, the second because a colour under
+/// zero alpha carries no information to recover. Everything between is scaled
+/// back up by its own alpha, rounded rather than truncated so a channel does
+/// not drift down.
+///
+/// A trailing partial pixel (a slice whose length is not a multiple of four)
+/// is ignored rather than treated as an error; callers pass whole frames.
+pub fn demultiply_in_place(rgba: &mut [u8]) {
+    // `as_chunks_mut` rather than `chunks_exact_mut(4)`: the compiler knows
+    // the length is four, so the bounds check inside the loop goes away.
+    let (pixels, _trailing) = rgba.as_chunks_mut::<4>();
+    for px in pixels {
+        let a = px[3];
+        if a == 255 || a == 0 {
+            continue;
+        }
+        let a = u32::from(a);
+        for c in &mut px[..3] {
+            // `(v * 255 + a/2) / a`, saturated. The clamp is not defensive
+            // padding: a premultiplied buffer can legitimately hold a channel
+            // above its alpha after rounding in the rasteriser, and without
+            // the clamp that wraps instead of pinning to white.
+            *c = (((u32::from(*c) * 255) + a / 2) / a).min(255) as u8;
+        }
+    }
 }
 
 /// Errors surfaced by a [`Renderer`].

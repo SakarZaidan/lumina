@@ -69,14 +69,17 @@ impl Step {
 fn ci_steps() -> Vec<Step> {
     vec![
         step("fmt", "cargo", &["fmt", "--all", "--check"]),
+        // `lumina-wasm` is included. It was excluded here and in CI, and the
+        // crate quietly accumulated lints — among them a `sort_by` over
+        // `HashMap` keys that made hit-testing pick a different object between
+        // runs, the same defect the renderer had fixed as TD-25. A crate
+        // nothing lints is a crate nothing checks.
         step(
             "clippy",
             "cargo",
             &[
                 "clippy",
                 "--workspace",
-                "--exclude",
-                "lumina-wasm",
                 "--all-targets",
                 "--",
                 "-D",

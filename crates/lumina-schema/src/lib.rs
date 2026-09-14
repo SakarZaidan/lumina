@@ -649,6 +649,14 @@ pub struct CameraState {
     pub y: f32,
     /// Zoom factor about the canvas center (1 = unzoomed).
     pub zoom: f32,
+    /// Rotation in degrees about the canvas center; positive turns the scene
+    /// clockwise, matching `GroupProps.rotation`.
+    ///
+    /// Defaulted, so a camera written before this field existed still parses
+    /// and still renders identically — a zero rotation is skipped rather than
+    /// composed, so the transform is bit-for-bit what it was.
+    #[serde(default)]
+    pub rotation: f32,
 }
 
 /// A raster image (PNG/JPEG/WebP/animated GIF) placed on the canvas.

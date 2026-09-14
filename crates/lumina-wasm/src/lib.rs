@@ -79,7 +79,8 @@ impl LuminaEngine {
         let camera_state = self.timeline.get_camera_at(time, &self.scene);
         let camera = self.scene.camera.as_ref().map(|_| &camera_state);
         self.renderer.set_time(time);
-        self.renderer
+        let mut frame = self
+            .renderer
             .render_frame(
                 &self.scene_graph.objects,
                 &states,
@@ -88,7 +89,14 @@ impl LuminaEngine {
                 &self.scene.canvas.background,
                 camera,
             )
-            .map_err(|e| JsValue::from_str(&e.to_string()))
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        // `ImageData` — the only thing a caller can do with these bytes — is
+        // defined as straight alpha, and the renderer composes in
+        // premultiplied. Identical while the background is opaque; a scene
+        // with a transparent background painted every semi-transparent pixel
+        // too dark without this.
+        lumina_renderer::demultiply_in_place(&mut frame);
+        Ok(frame)
     }
 
     /// Dispatch an interactive event and return the resulting playback state
@@ -127,8 +135,23 @@ impl LuminaEngine {
             .keys()
             .filter(|id| !claimed.contains(id.as_str()))
             .collect();
-        // Higher z on top → tested first.
-        roots.sort_by(|a, b| self.get_z_index(b).cmp(&self.get_z_index(a)));
+        // Higher z on top → tested first, ties broken by id.
+        //
+        // Exactly the reverse of the renderer's draw order
+        // (`common::scene::sorted_root_ids`, ascending by `(z_index, id)`), so
+        // "tested first" and "drawn last" name the same object.
+        //
+        // The id half is not cosmetic. `roots` is collected from a `HashMap`,
+        // whose iteration order Rust randomises per process, and a *stable*
+        // sort on z alone preserves it — so two overlapping objects sharing a
+        // z-index reported different hits between runs of the same scene. It
+        // is the defect fixed in the renderer as TD-25, present a second time
+        // here because the ordering was reimplemented rather than shared.
+        roots.sort_by(|a, b| {
+            self.get_z_index(b)
+                .cmp(&self.get_z_index(a))
+                .then_with(|| b.cmp(a))
+        });
 
         roots
             .into_iter()
@@ -143,7 +166,7 @@ impl LuminaEngine {
     ///
     /// `depth` bounds recursion so a scene whose groups reference each other
     /// cannot overflow the stack. Such a scene is rejected by
-    /// `validate_scene_data` (CIRCULAR_GROUP_REFERENCE), but the WASM engine
+    /// `validate_scene_data` (`CIRCULAR_GROUP_REFERENCE`), but the WASM engine
     /// accepts unvalidated input from its JavaScript host.
     fn hit_in_object(
         &self,
@@ -167,7 +190,16 @@ impl LuminaEngine {
                 // `group_transform` is crate-private to `lumina-renderer`.
                 let (local_x, local_y) = (px - gx, py - gy);
                 let mut kids: Vec<&String> = props.children.iter().collect();
-                kids.sort_by(|a, b| self.get_z_index(b).cmp(&self.get_z_index(a)));
+                // Same total order as the roots above. Children come from a
+                // `Vec`, so ties were at least stable across runs — but they
+                // were stable in *author* order while the renderer draws them
+                // in id order, so a hit could name the object underneath the
+                // one visibly on top.
+                kids.sort_by(|a, b| {
+                    self.get_z_index(b)
+                        .cmp(&self.get_z_index(a))
+                        .then_with(|| b.cmp(a))
+                });
                 kids.into_iter()
                     .find_map(|cid| self.hit_in_object(cid, local_x, local_y, states, depth + 1))
             }

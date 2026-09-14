@@ -75,6 +75,32 @@ programme to reach reference quality in [plan/](plan/).
   Shared between backends and bounded, so an unvalidated caller cannot hang the
   renderer.
 
+- **Hit-testing is deterministic.** The WASM engine sorted candidate objects by
+  z-index with a *stable* sort over `HashMap` keys, so two overlapping objects
+  sharing a z-index resolved to whichever the map happened to yield first —
+  and Rust randomises that per process, so the same click on the same scene
+  could report different objects between runs. Ties now break by id, in exactly
+  the reverse of the renderer's draw order, so the object reported is the
+  object visibly on top. Inside a group the ordering was stable but still
+  disagreed with the renderer, which could name the object *underneath*.
+
+  This is the defect fixed in the renderer as TD-25, present a second time
+  because the ordering was reimplemented rather than shared. It survived
+  because `lumina-wasm` was excluded from clippy; it is not any more, in both
+  `cargo xtask ci` and CI.
+- **Transparency leaves the engine undarkened.** Frames were handed to PNG,
+  ffmpeg, and the WASM canvas with **premultiplied** alpha, and all three store
+  straight alpha. A half-opaque pure red left the rasteriser as
+  `(127, 0, 0, 127)` and was written as a *dark* red at half opacity rather
+  than a bright one — every semi-transparent pixel darkened by its own alpha.
+
+  It had never mattered: at `a = 255` the two encodings are the same bytes, and
+  until now every background was opaque. Opaque output is unchanged, byte for
+  byte. `Renderer::render_frame` still returns premultiplied values, which is
+  what compositing and frame averaging need — motion blur is correct on them
+  and wrong on straight alpha — and `demultiply_in_place` is called once at
+  each boundary where pixels leave the engine.
+
 ### Added
 - **Full SVG path grammar.** `Q`/`q`, `S`/`s`, `T`/`t` and elliptical arcs
   `A`/`a` are now understood; previously the parser handled `M L H V C Z` and
@@ -108,6 +134,24 @@ programme to reach reference quality in [plan/](plan/).
   At 0.5, half the ink is on the canvas. Multi-subpath shapes reveal as one
   continuous drawing rather than several racing each other. Both backends share
   one implementation, covered by parity fixture 19.
+- **Alpha output**: `--format webm-alpha` (VP9) and `--format mov` (ProRes
+  4444, 10-bit 4:4:4). Give a scene a transparent `canvas.background` such as
+  `"#00000000"` and it composites over other footage in an editor instead of
+  arriving as a rectangle of backdrop.
+- **Camera rotation.** `camera.timeline[].state.rotation`, in degrees about the
+  canvas centre, positive clockwise, matching `GroupProps.rotation`. It
+  interpolates as the angle written rather than by shortest arc, so `0 → 350`
+  turns 350 degrees forwards rather than 10 backwards — otherwise a full
+  revolution could not be expressed at all.
+
+  The field defaults to `0` and a zero rotation is skipped rather than composed
+  into the transform, so every camera authored before it existed renders the
+  identical bytes it did before. Parity fixture 20 covers it on both backends.
+- A camera state whose `x`, `y`, `zoom`, or `rotation` is not finite is now a
+  validation error (`CAMERA_STATE_NOT_FINITE`). The camera is a root transform,
+  so a single non-finite component rendered the *entire* video empty with no
+  diagnostic anywhere. JSON cannot write `inf`, but a literal past f32's range
+  becomes one on the way in.
 - **Motion blur**, via `canvas.motion_blur_samples` and `canvas.shutter`. Each
   frame is rendered several times across the shutter interval and averaged, so
   anything moving smears the way a camera's shutter makes it. `shutter` defaults

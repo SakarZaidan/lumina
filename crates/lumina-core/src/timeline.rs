@@ -148,6 +148,7 @@ impl Timeline {
             x: 0.0,
             y: 0.0,
             zoom: 1.0,
+            rotation: 0.0,
         };
         let camera = match &scene.camera {
             Some(c) => c,
@@ -185,6 +186,11 @@ impl Timeline {
             x: k0.state.x + (k1.state.x - k0.state.x) * t,
             y: k0.state.y + (k1.state.y - k0.state.y) * t,
             zoom: k0.state.zoom + (k1.state.zoom - k0.state.zoom) * t,
+            // Interpolated as a plain angle, not by shortest arc. A camera
+            // asked to turn 350 degrees should turn 350 degrees; taking the
+            // short way round would silently reverse the author's direction
+            // and make a full revolution unexpressible.
+            rotation: k0.state.rotation + (k1.state.rotation - k0.state.rotation) * t,
         }
     }
 

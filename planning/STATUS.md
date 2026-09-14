@@ -24,6 +24,86 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-02 (night, last) — A crate nothing lints is a crate nothing checks
+
+- Clippy now covers `lumina-wasm`, in `cargo xtask ci` and in CI. It had been
+  excluded in both (TD-24), and adding it immediately reported a live bug.
+- `hit_test` sorted candidates by z-index with a **stable** sort over
+  `HashMap` keys. Ties therefore resolved in map iteration order, which Rust
+  randomises per process — the same click on the same scene could name
+  different objects between runs. This is TD-25 exactly, present a second time
+  because the WASM engine reimplemented the ordering instead of sharing it.
+- Fixed to descending `(z_index, id)`, the precise reverse of the renderer's
+  ascending draw order, so "tested first" and "drawn last" name one object.
+  Group children had the same disagreement in a quieter form: ties were stable
+  but in *author* order while the renderer draws them in id order, so a hit
+  could report the object underneath the one visibly on top.
+- TD-24 is now mostly closed. `cargo test` still excludes the crate, because
+  those tests need the wasm target and run under `wasm-pack test --node`.
+- The general lesson is TD-25's, restated: the ordering rule lives in
+  `lumina-renderer::common::scene` and is crate-private, so every other
+  consumer reimplements it. Sharing it is TD-21's blocker too.
+
+## 2026-09-02 (night, latest) — Alpha output, and the bug under it
+
+- `AAA-OUT-06`. `--format webm-alpha` (VP9, `yuva420p`) and `--format mov`
+  (ProRes 4444, 10-bit 4:4:4 with 16-bit alpha).
+- The flags were the easy half. **Frames were leaving the engine
+  premultiplied** and PNG, ffmpeg's `rgba` input, and the WASM canvas all store
+  straight alpha, so a half-opaque pure red was written as a dark red at half
+  opacity. It had never been visible because at `a = 255` the two encodings are
+  identical bytes and every background so far was opaque — the feature and the
+  bug could only be found together.
+- `render_frame` still returns premultiplied, documented on the trait. That is
+  deliberate: motion blur is correct averaging premultiplied values and wrong
+  averaging straight ones, and demultiplying at the renderer would force a
+  lossy 8-bit round trip through every blurred frame. `demultiply_in_place` is
+  called once per boundary instead — inside `render_blurred` after the average,
+  and in the WASM `render_frame`.
+- Two things the tests get right by accident of being written last:
+  - The VP9 check is a **decode round trip**, not an `ffprobe` field. WebM
+    reports `pix_fmt=yuv420p` for a file with a full alpha plane and signals
+    the plane in an `alpha_mode` tag, so the obvious probe reports "no alpha"
+    on a correct file. The first version of the test failed for that reason.
+  - "Still red" is asserted as channel dominance. A saturated primary does not
+    survive an RGB → BT.709 → RGB round trip exactly (ProRes returns green 25
+    where the source had 0), and pinning absolute values would test ffmpeg's
+    rounding rather than ours.
+- An opaque scene is byte-for-byte what it was; a test asserts it.
+- Tests 259 → 265.
+- **The benchmark gate cried wolf and was fixed rather than ignored.** It
+  failed this branch on `timeline_eval/2000 +52.9%` — for a function
+  (`get_state_at`) byte-identical to `main`, on a bench that never touches the
+  camera. One run on a shared runner cannot separate that from a real
+  regression by threshold alone, so a regression must now corroborate across
+  the sizes of its own family: shared code slows at every size, a bad
+  neighbour on the host moves one. Uncorroborated ones are still printed
+  loudly. Verified against three cases — noise, a genuine across-the-board
+  regression, and a single-member family, which is judged on the threshold as
+  before.
+
+## 2026-09-02 (night, later) — The camera can turn
+
+- `AAA-MOT-05`. `camera.timeline[].state.rotation`, degrees about the canvas
+  centre, positive clockwise to match `GroupProps.rotation`.
+- Free on both backends: `common::scene::camera_transform` builds the matrix
+  once and each backend concatenates it, so there was one place to change and
+  no way for them to disagree. Parity fixture 20 asserts that anyway — the
+  claim is cheap to make and cheap to check.
+- **Interpolated as a plain angle, not by shortest arc.** Shortest-arc is the
+  usual choice and it is wrong here: `0 → 350` would turn 10 degrees backwards,
+  reversing the direction the author stated, and a full revolution would become
+  inexpressible.
+- **Zero is skipped, not composed.** The field is `#[serde(default)]`, so every
+  camera ever written now carries `rotation: 0.0`. A test asserts the rendered
+  bytes are *identical* with the field absent and with it explicitly zero —
+  concatenating an approximate identity would have drifted every existing
+  golden image by a fraction of a pixel.
+- Found while wiring it: a non-finite camera component blanked the whole video
+  silently, since the camera transform reaches every object. Now
+  `CAMERA_STATE_NOT_FINITE`.
+- Tests 252 → 259.
+
 ## 2026-09-02 (night) — Morphing flows instead of collapsing
 
 - `AAA-MOT-04`. Interpolating a point list to one of a different length padded

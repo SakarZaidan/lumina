@@ -394,6 +394,16 @@ fn parity_19_draw_fraction_paths() {
     assert_parity("19_draw_fraction_paths", PATH_TOL);
 }
 
+#[test]
+fn parity_20_camera_rotation() {
+    // The camera's rotation is a root transform, so it reaches every object
+    // through a different code path in each backend — the Skia backend
+    // concatenates it into a `tiny_skia::Transform` per shape, the Vello
+    // backend into a `kurbo::Affine` per scene fragment. They agree only
+    // because the matrix itself is built once, in `common::scene`.
+    assert_parity("20_camera_rotation", PATH_TOL);
+}
+
 // ── Behavioural parity ──────────────────────────────────────────────────────
 //
 // The pixel suite above compares frames that *both* backends produced. When
