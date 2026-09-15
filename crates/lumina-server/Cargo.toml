@@ -21,10 +21,10 @@ name = "luminafx_server"
 path = "src/lib.rs"
 
 [dependencies]
-luminafx-core = { path = "../lumina-core", version = "0.4.0" }
-luminafx-renderer = { path = "../lumina-renderer", version = "0.4.0" }
-luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
-luminafx-export = { path = "../lumina-export", version = "0.4.0" }
+luminafx-core = { path = "../lumina-core", version = "0.5.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.5.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
+luminafx-export = { path = "../lumina-export", version = "0.5.0" }
 axum = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }

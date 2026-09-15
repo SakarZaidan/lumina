@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "luminafx"
-version = "0.4.0"
+version = "0.5.0"
 description = "Python bindings for Lumina — a declarative, GPU-capable animation engine (JSON in, video out)."
 readme = "README.md"
 license = { text = "MIT" }

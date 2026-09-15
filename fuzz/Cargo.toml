@@ -15,9 +15,9 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-luminafx-core = { path = "../crates/lumina-core", version = "0.4.0" }
-luminafx-schema = { path = "../crates/lumina-schema", version = "0.4.0" }
-luminafx-renderer = { path = "../crates/lumina-renderer", version = "0.4.0" }
+luminafx-core = { path = "../crates/lumina-core", version = "0.5.0" }
+luminafx-schema = { path = "../crates/lumina-schema", version = "0.5.0" }
+luminafx-renderer = { path = "../crates/lumina-renderer", version = "0.5.0" }
 serde_json = "1"
 
 [[bin]]

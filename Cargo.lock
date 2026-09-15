@@ -1681,7 +1681,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-bench"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion",
  "luminafx-core",
@@ -1692,7 +1692,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1709,7 +1709,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log",
  "luminafx-schema",
@@ -1721,7 +1721,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-export"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "image",
@@ -1736,7 +1736,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-renderer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "evalexpr",
  "image",
@@ -1753,7 +1753,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-schema"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "schemars",
  "serde",
@@ -1762,7 +1762,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "axum",
  "env_logger",
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-text"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "fontdue",
  "luminafx-schema",
@@ -1792,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "luminafx-wasm"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

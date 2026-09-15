@@ -9,9 +9,9 @@ publish = false
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-luminafx-core = { path = "../lumina-core", version = "0.4.0" }
-luminafx-renderer = { path = "../lumina-renderer", version = "0.4.0" }
-luminafx-schema = { path = "../lumina-schema", version = "0.4.0" }
+luminafx-core = { path = "../lumina-core", version = "0.5.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.5.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
 serde_json = { workspace = true }
 
 [[bench]]
