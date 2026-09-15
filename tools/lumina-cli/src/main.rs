@@ -35,9 +35,16 @@ use std::time::{Duration, Instant};
     long_about = None
 )]
 struct Args {
+    /// What to do. Omit for the original flag-driven form.
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Path to the LSF scene file (.lsf or .json)
+    // Optional at the parser level and checked in `scene_path`:
+    // `required_unless_present` takes an argument id, and a subcommand is not
+    // one, so clap would demand `--scene` even for `lumina-cli schema`.
     #[arg(short, long)]
-    scene: PathBuf,
+    scene: Option<PathBuf>,
 
     /// Output file or directory
     #[arg(short, long, default_value = "output")]
@@ -86,6 +93,130 @@ struct Args {
     /// Validate the scene and exit without rendering (exit code 1 on errors)
     #[arg(long)]
     check: bool,
+}
+
+/// The noun-verb surface.
+///
+/// The original flat form (`--scene x.lsf --output y --format mp4`) still
+/// works and is what every example and CI job uses. Breaking those to gain a
+/// nicer shape would be paying a real cost for a stylistic one, so both are
+/// accepted; `render` is the same thing with the scene as a positional.
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Render a scene to video or a frame sequence.
+    Render {
+        /// The scene file.
+        scene: PathBuf,
+        /// Output file or directory.
+        #[arg(short, long, default_value = "output")]
+        output: PathBuf,
+        /// png, exr, mp4, webm, webm-alpha, mov, or gif.
+        #[arg(short, long, default_value = "mp4")]
+        format: String,
+        /// skia (CPU) or vello (GPU).
+        #[arg(short, long, default_value = "skia")]
+        backend: String,
+        /// draft, standard, or final.
+        #[arg(long, default_value = "standard")]
+        quality: String,
+    },
+    /// Check a scene without rendering it.
+    Validate {
+        /// The scene file.
+        scene: PathBuf,
+        /// Emit the full validation response as JSON, for a script or an agent.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print the JSON Schema for the scene format.
+    Schema,
+    /// Print every object type with its required and optional properties.
+    Objects,
+    /// Write a starter scene that renders and animates.
+    New {
+        /// Where to write it. Refuses to overwrite an existing file.
+        path: PathBuf,
+    },
+    /// Look at an easing curve without rendering a video to see it.
+    Inspect {
+        /// Easing name to plot.
+        #[arg(long, conflicts_with = "list")]
+        easing: Option<String>,
+        /// List every registered easing.
+        #[arg(long)]
+        list: bool,
+    },
+}
+
+/// Run a subcommand. Returns the process exit code.
+fn run_command(command: &Command) -> anyhow::Result<i32> {
+    use luminafx_cli as lib;
+    match command {
+        Command::Schema => {
+            println!("{}", lib::schema_json());
+            Ok(0)
+        }
+        Command::Objects => {
+            println!("{}", lib::objects_json());
+            Ok(0)
+        }
+        Command::New { path } => {
+            lib::new_scene(path)?;
+            println!("wrote {}", path.display());
+            println!("render it with: lumina-cli render {}", path.display());
+            Ok(0)
+        }
+        Command::Validate { scene, json } => {
+            let style = if *json {
+                lib::Report::Json
+            } else {
+                lib::Report::Human
+            };
+            let (text, ok) = lib::validate(scene, style)?;
+            print!("{text}");
+            // Exit code, not just output: this is what a pre-commit hook or a
+            // CI step branches on.
+            Ok(i32::from(!ok))
+        }
+        Command::Inspect { easing, list } => {
+            if *list {
+                print!("{}", lib::easing_list());
+                return Ok(0);
+            }
+            match easing {
+                Some(name) => {
+                    print!("{}", lib::plot_easing(name, 60, 16)?);
+                    Ok(0)
+                }
+                None => {
+                    print!("{}", lib::easing_list());
+                    Ok(0)
+                }
+            }
+        }
+        Command::Render {
+            scene,
+            output,
+            format,
+            backend,
+            quality,
+        } => {
+            let args = Args {
+                command: None,
+                scene: Some(scene.clone()),
+                output: lib::output_path(output, format),
+                format: format.clone(),
+                backend: backend.clone(),
+                watch: false,
+                verbose: false,
+                quality: quality.clone(),
+                preview: None,
+                check: false,
+            };
+            run_flat(&args)?;
+            Ok(0)
+        }
+    }
 }
 
 fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
@@ -260,13 +391,41 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let args = Args::parse();
 
+    if let Some(command) = &args.command {
+        let code = run_command(command)?;
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
+    run_flat(&args)
+}
+
+/// The scene path for the flag-driven form.
+fn scene_path(args: &Args) -> anyhow::Result<&PathBuf> {
+    args.scene.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "no scene given. Either name a subcommand (`lumina-cli render scene.lsf`) or \
+             pass --scene; `lumina-cli --help` lists both."
+        )
+    })
+}
+
+/// The original flag-driven form: `--scene x.lsf --output y --format mp4`.
+///
+/// Kept because every example, every CI job, and the book all invoke it.
+/// `render` routes here with its positional arguments mapped across, so there
+/// is one implementation rather than two that drift.
+fn run_flat(args: &Args) -> anyhow::Result<()> {
+    let scene_path = scene_path(args)?;
+
     if args.watch {
-        run_watch(&args)
+        run_watch(args)
     } else {
-        let scene = load_scene(&args.scene)?;
-        validate_scene(&scene, &args.scene)?;
+        let scene = load_scene(scene_path)?;
+        validate_scene(&scene, scene_path)?;
         if args.check {
-            println!("[lumina] {:?} is valid.", args.scene);
+            println!("[lumina] {scene_path:?} is valid.");
             return Ok(());
         }
         if let Some(spec) = &args.preview {
@@ -280,7 +439,7 @@ fn main() -> anyhow::Result<()> {
             render_preview(&scene, &args.output, time, &args.backend)?;
             println!(
                 "[lumina] preview of {:?} at t={time:.2}s written to {:?}",
-                args.scene, args.output
+                scene_path, args.output
             );
             return Ok(());
         }
@@ -289,7 +448,7 @@ fn main() -> anyhow::Result<()> {
             scene.meta.title,
             args.backend
         );
-        let timings = render_once(&args, &scene)?;
+        let timings = render_once(args, &scene)?;
         if args.verbose {
             println!("[lumina] render complete in {:.2?}", timings[0]);
         }
@@ -304,11 +463,9 @@ fn main() -> anyhow::Result<()> {
 fn run_watch(args: &Args) -> anyhow::Result<()> {
     use notify::{RecursiveMode, Watcher};
 
+    let watched = scene_path(args)?.clone();
     let preview_out = args.output.with_extension("png");
-    println!(
-        "[watch] Watching {:?} — preview → {:?}",
-        args.scene, preview_out
-    );
+    println!("[watch] Watching {watched:?} — preview → {preview_out:?}");
 
     let do_preview = |path: &PathBuf| {
         let t0 = Instant::now();
@@ -336,7 +493,7 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
     };
 
     // Initial render
-    do_preview(&args.scene);
+    do_preview(&watched);
 
     let (tx, rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -344,14 +501,14 @@ fn run_watch(args: &Args) -> anyhow::Result<()> {
             let _ = tx.send(event);
         }
     })?;
-    watcher.watch(&args.scene, RecursiveMode::NonRecursive)?;
+    watcher.watch(&watched, RecursiveMode::NonRecursive)?;
 
     println!(
         "[watch] ready — edit {:?} to trigger a re-render. Ctrl-C to quit.",
         args.scene
     );
     for _event in rx {
-        do_preview(&args.scene);
+        do_preview(&watched);
     }
     Ok(())
 }

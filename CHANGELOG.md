@@ -172,6 +172,30 @@ rather than three, and the server's defaults are closed rather than open.
   `Lumina`, which is a distinct name on Linux and the *same* name on macOS and
   Windows, where filesystems are case-insensitive. Shipping a collision that
   appears on two platforms out of three is worse than not shipping one.
+- **CLI subcommands**: `render`, `validate`, `schema`, `objects`, `new`,
+  `inspect`. The original flag form (`--scene x.lsf --output y --format mp4`)
+  still works and routes through the same code — every example, CI job, and
+  book page uses it, and breaking those to gain a nicer shape would be paying a
+  real cost for a stylistic one.
+
+  - `lumina-cli new scene.lsf` writes a starter scene that *animates*, so
+    rendering it confirms the whole pipeline rather than producing a still
+    rectangle. It refuses to overwrite an existing file.
+  - `lumina-cli validate scene.lsf` exits non-zero on errors, which is what a
+    pre-commit hook or a CI step branches on; `--json` emits the full
+    validation response for a script or an agent.
+  - `lumina-cli inspect --easing ease_out_elastic` plots the curve as ASCII.
+    Easings are the one part of the format whose effect cannot be read from its
+    name, and the plot is scaled to what the curve actually produces rather
+    than clamped to the unit square — otherwise an overshooting easing would
+    draw identically to a non-overshooting one, which is the single thing the
+    plot exists to distinguish.
+  - `--format mp4 -o out` now writes `out.mp4` rather than a file called `out`
+    that no player opens on a double-click.
+
+  The logic moved into a library target so it can be tested: the binary
+  measured **0%** coverage while the rest of the workspace sat above 80%, for
+  the ordinary reason that a `main` cannot be called (TD-10). It is at 82% now.
 - **An MCP server** (`lumina-mcp`), so any MCP-capable agent can drive the
   engine with no glue code: `lumina_objects` to learn the format,
   `lumina_validate` to check a scene, `lumina_patch` to repair it, and
