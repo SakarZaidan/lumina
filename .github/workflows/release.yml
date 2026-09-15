@@ -58,10 +58,39 @@ jobs:
           fi
           echo "publishing $manifest"
 
-      - name: Publish
+      # A dry run can only ever check the first crate, and that is a fact about
+      # cargo rather than a gap here: packaging resolves each dependency's
+      # version against the registry *before* it verifies anything, so
+      # `luminafx-text` cannot be packaged — even with `--no-verify` — until
+      # `luminafx-schema` actually exists on crates.io. A dry run that always
+      # died at crate two would be a dry run nobody ran, so it checks the leaf
+      # and says plainly what it could not check.
+      - name: Dry run (leaf crate only)
+        if: ${{ inputs.dry_run }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          DRY: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          set -euo pipefail
+          cargo publish -p luminafx-schema --dry-run
+          cat <<'EOF'
+
+          ── Dry run complete ──────────────────────────────────────────────
+          Checked:     luminafx-schema packages and builds from its .crate.
+          Not checked: text, core, renderer, export, mcp, cli. Each resolves
+                       its dependencies from the registry at packaging time,
+                       so none can be dry-run until the crate below it is
+                       really published. They are verified by the real run,
+                       in order, which stops at the first failure.
+          Not checked: the registry token. `cargo publish --dry-run` never
+                       authenticates, so nothing here proves the token works.
+                       The first real publish is what proves that.
+          EOF
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          DRY: ''
         run: |
           set -euo pipefail
           for crate in \
