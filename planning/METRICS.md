@@ -9,25 +9,26 @@ comparable.
 
 ## Snapshot
 
-| Metric | v0.3.0 (2026-07-08) | v0.4.0 (2026-09-02) |
-|---|---|---|
-| Rust LOC (all workspace + sdks src) | 9 885 | 11 548 |
-| — lumina-renderer / core / server | 4 347 / 2 482 / 744 | 5 097 / 3 149 / 616 |
-| Tests (native + wasm) | 92 + 3 | 117 + 3 |
-| Test functions (incl. parity fixtures) | — | 120 |
-| Test coverage | n/a — tooling lands v0.4 (`cargo-llvm-cov`) | still n/a — retargeted to v0.5 (`AAA-TEST-06`) |
-| Benchmarks (criterion groups) | 3 — manual, not in CI | 3 — still not in CI (`AAA-TEST-07`) |
-| Cross-backend parity fixtures | 0 | **16**, gating in CI |
-| Locked dependencies | 428 | **386** (mitex removed, ADR-0012) |
-| `unsafe` blocks in production code | **0** | **0** |
-| `unwrap()`/`expect()`/`panic!` in production code | 0 *(see note)* | **2**, both provably guarded |
-| Public API items (approx, grep) | 129 | 264 |
-| Undocumented public items | 416 | **0** (`missing_docs` + `-D warnings`) |
-| CI jobs / operating systems | 8 / 1 | 10 / 3 |
-| MSRV | 1.88 (lockfile-dependent; probed) | 1.88, verified by a CI job |
-| Releases to date / cadence | 3 (Apr 30, May 9, Jul 8 2026) | 4 (+ Sep 2 2026) |
-| CLI binary size (release, unstripped) | 22.9 MB | 22.1 MB |
-| Memory profile | n/a — tooling planned v0.5 | n/a — `AAA-P-*` baselines, Wave 3 |
+| Metric | v0.3.0 (2026-07-08) | v0.4.0 (2026-09-02) | v0.5.0 (prepared 2026-09-04) |
+|---|---|---|---|
+| Rust LOC (all workspace + sdks src) | 9 885 | 11 548 | 22 064 |
+| — lumina-renderer / core / server | 4 347 / 2 482 / 744 | 5 097 / 3 149 / 616 | 7 966 / 5 556 / 1 821 |
+| Tests (native + wasm) | 92 + 3 | 117 + 3 | **311** + 3 |
+| Test functions (incl. parity fixtures) | — | 120 | 311 |
+| Test coverage | n/a — tooling lands v0.4 (`cargo-llvm-cov`) | still n/a — retargeted to v0.5 (`AAA-TEST-06`) | **83.4% lines / 83.8% regions**, measured in CI and gated at an 80% floor that ratchets |
+| Benchmarks (criterion groups) | 3 — manual, not in CI | 3 — still not in CI (`AAA-TEST-07`) | 6, **gating in CI** with family-corroborated regression detection |
+| Cross-backend parity fixtures | 0 | **16**, gating in CI | **21**, `04_text` now at the default tolerance (TD-18) |
+| Locked dependencies | 428 | **386** (mitex removed, ADR-0012) | 409 (+exr/tower/http-body-util; `glam` removed, 12 unused deps deleted) |
+| `unsafe` blocks in production code | **0** | **0** | **0**, compiler-enforced (`forbid`) |
+| `unwrap()`/`expect()`/`panic!` in production code | 0 *(see note)* | **2**, both provably guarded | 2, unchanged |
+| Public API items (approx, grep) | 129 | 264 | 300+ (server config/error, MCP, `demultiply_in_place`) |
+| Undocumented public items | 416 | **0** (`missing_docs` + `-D warnings`) | **0** |
+| CI jobs / operating systems | 8 / 1 | 10 / 3 | **15** / 3 (+coverage, audit ×3, CodeQL, Scorecard) |
+| MSRV | 1.88 (lockfile-dependent; probed) | 1.88, verified by a CI job | 1.88, verified |
+| Releases to date / cadence | 3 (Apr 30, May 9, Jul 8 2026) | 4 (+ Sep 2 2026) | 5th prepared; **first to a registry** |
+| Registries published to | 0 | 0 | crates.io + PyPI **armed**, npm blocked on TD-12 |
+| CLI binary size (release, unstripped) | 22.9 MB | 22.1 MB | not re-measured |
+| Memory profile | n/a — tooling planned v0.5 | n/a — `AAA-P-*` baselines, Wave 3 | n/a — still unmeasured |
 
 ## Performance baselines
 
@@ -150,18 +151,22 @@ open source project", not against the previous release. Re-scored at every
 release with a one-line justification; movement matters more than absolute
 value.
 
-| Dimension | v0.3.0 | v0.4.0 | Why it moved |
-|---|---|---|---|
-| Architecture | 90 | 93 | Backend duplication closed (TD-02); four incompatible error idioms remain (`AAA-ARCH-01..04`) |
-| API design | 75 | 78 | Easing names validated; properties still untyped (TD-07) and three server endpoints still return prose |
-| Documentation | 85 | 93 | 416 public items documented and the lint enforces it; README claims still unverified (`AAA-CQ-01`) |
-| Testing | 78 | 86 | 16-fixture cross-backend parity suite gating in CI; no property tests, fuzzing, or coverage yet |
-| Benchmarks | 60 | 60 | Unchanged — still three groups, still not run by CI |
-| Performance | 65 | 65 | Unchanged by design; v0.4 was non-goal territory. Wave 3 owns it |
-| Security | 55 | 68 | Asset-root allowlist, body cap, no panics on bind/serve; a live vulnerability removed with its dead dependency. Five audited DoS vectors still open (`AAA-SEC-01..05`) |
-| Developer experience | 82 | 86 | Portable examples, MSRV job, 3-OS matrix; the CLI is still one flat command and the gate is still five |
-| Examples | 85 | 90 | All portable off Linux with a bundled OFL font; CI still renders none |
-| CI / release engineering | 80 | 88 | 3-OS matrix, MSRV job, wasm suite actually running, concurrency-cancel; nothing published to any registry yet |
+| Dimension | v0.3.0 | v0.4.0 | v0.5.0 | Why it moved |
+|---|---|---|---|---|
+| Architecture | 90 | 93 | 95 | Text layout unified (TD-18); `object_registry` shared by both front ends. Four error idioms still coexist (`AAA-ARCH-01..04`) |
+| API design | 75 | 78 | 90 | One error envelope on every HTTP endpoint *including* `axum`'s own extractor rejections; MCP answers in the same vocabulary. Properties still untyped (TD-07) |
+| Documentation | 85 | 93 | 95 | Every behaviour change in this release documented where it is; ADR-0014 records the rename. `AAA-CQ-01` still open |
+| Testing | 78 | 86 | 92 | 311 tests, 21 parity fixtures, coverage measured and gated. Still no property tests or fuzzing in CI |
+| Benchmarks | 60 | 60 | 85 | Running in CI with a regression gate that requires corroboration across a benchmark family, after a false positive proved the threshold alone was not enough |
+| Performance | 65 | 65 | 80 | Wave 3 landed: analytic spring, binary keyframe search, glyph cache, pixmap reuse, pipelined export. Sub-pixel text cost 4% back, knowingly |
+| Security | 55 | 68 | 90 | Server hardened (TD-09 closed): auth, rate limiting, CORS allowlist, loopback default. Scheduled advisory scan, SHA-pinned actions, CodeQL, Scorecard. All five audited DoS vectors closed |
+| Developer experience | 82 | 86 | 88 | `cargo xtask ci` is one gate command; the CLI is still one flat command until Wave 7 |
+| Examples | 85 | 90 | 92 | Rendered by CI now, so a broken example is a broken build (principle #12) |
+| CI / release engineering | 80 | 88 | 93 | 15 jobs, coverage gated, release workflows written and armed for crates.io and PyPI. Still nothing actually published — the last step is a merge and a tag |
+| Accuracy | — | — | 90 | New dimension. OKLab colour, closed-form spring, Newton–Raphson bezier inversion, adaptive plot sampling, exact tick indexing, full SVG arc grammar |
+| Output fidelity | — | — | 85 | New dimension. BT.709 tagging, 10-bit, alpha formats, EXR, straight-alpha correctness at every boundary. Linear-light compositing blocked by the rasteriser (`AAA-OUT-01`) |
+| Motion design | — | — | 88 | New dimension. Arc-length draw-on, motion blur, arc-length morphing, camera rotation, sub-pixel text |
+| Ecosystem | — | — | 55 | New dimension. MCP server exists and names are settled on all three registries; nothing is installable yet, and the JS SDK does not build (TD-12) |
 
 **Overall trajectory target (revised at v0.4.0):** the AAA programme raises
 the bar to **≥ 95 on every dimension by v1.0, nothing below 85 after v0.6**,

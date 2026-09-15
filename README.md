@@ -6,6 +6,7 @@
 [![Docs](https://img.shields.io/badge/docs-book-navy)](https://sakarzaidan.github.io/lumina/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/SakarZaidan/lumina/badge)](https://scorecard.dev/viewer/?uri=github.com/SakarZaidan/lumina)
 [![Audit](https://github.com/SakarZaidan/lumina/actions/workflows/audit.yml/badge.svg)](https://github.com/SakarZaidan/lumina/actions/workflows/audit.yml)
+[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen)](https://github.com/SakarZaidan/lumina/actions/workflows/ci.yml)
 
 **Lumina** is a production-grade animation engine built in Rust. Write a JSON scene file, get a video out. No GUI, no scripting, no runtime dependencies beyond FFmpeg for MP4 export.
 

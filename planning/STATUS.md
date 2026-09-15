@@ -9,7 +9,7 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 |---|---|---|
 | CI on `main` | 🟢 | 10 jobs green on ubuntu/macos/windows + MSRV + wasm |
 | Tests | 🟢 | 117 native + 3 wasm passing; zero flakes |
-| Coverage | 🟡 | still not measured — retargeted to v0.5 (`AAA-TEST-06`) |
+| Coverage | 🟢 | 83.4% lines / 83.8% regions, measured in CI and gated at an 80% floor that ratchets |
 | Benchmarks | 🟡 | exist, manual only; not in CI (TD-14 remainder, `AAA-TEST-07`) |
 | Docs (book + rustdoc) | 🟢 | book live on Pages; every public item documented, lint-enforced |
 | Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
@@ -23,6 +23,32 @@ Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-04 (later) — Coverage stops being an assertion
+
+- `AAA-TEST-06`. `cargo-llvm-cov` runs in CI, reports the number, and fails
+  when it drops. The METRICS row had read `n/a` for two releases, and a number
+  nobody measures is a number that only ever gets asserted.
+- **83.4% lines, 83.8% regions.** Not the 85% the plan named, and the gate is
+  set at an 80% floor rather than at the target: a gate pinned to a number the
+  project does not meet is permanently red, which is the same as no gate.
+  It ratchets as coverage rises.
+- Two exclusions, and they are the honest kind. `xtask` is the build tool that
+  runs the tests, and the `main.rs` entry points parse argv and call one
+  function each. Everything that *decides* anything is measured — including
+  every backend, the server middleware, and the MCP protocol layer.
+- Measuring first found a gap I had made this session: `config.rs` was at
+  **7.5%**, because I wrote `ServerConfig::from_env` and tested the router
+  instead. Now seven tests, including that a malformed `LUMINA_BIND` is an
+  error rather than a silent revert to the default — a server listening
+  somewhere its operator did not intend, whose only symptom is that it works.
+- The largest remaining hole is `tools/lumina-cli` at **0%** (470 regions).
+  That is TD-10, and it wants the Wave 7 CLI redesign rather than tests bolted
+  onto a 470-line `main`.
+- METRICS gains a v0.5.0 column and four new scorecard dimensions — Accuracy,
+  Output fidelity, Motion design, Ecosystem — as the AAA programme specified.
+  Ecosystem is deliberately the lowest at 55: names are settled and workflows
+  are armed, and nothing is installable yet.
 
 ## 2026-09-04 — PyPI, and a collision that only shows on two platforms
 

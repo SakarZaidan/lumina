@@ -130,6 +130,60 @@ jobs:
         run: wasm-pack test --node crates/lumina-wasm
 
   # ── cargo-deny ────────────────────────────────────────────────────────────────
+  # ── Coverage ─────────────────────────────────────────────────────────────────
+  #
+  # `planning/METRICS.md` carried "n/a" in the coverage row for two releases. A
+  # number nobody measures is a number that only ever gets asserted, so this
+  # measures it and fails when it drops.
+  #
+  # The gate ratchets rather than aims: it sits just below the measured figure,
+  # so it catches a regression today and is raised as coverage rises. Setting it
+  # at the 85% target while the real number is lower would mean a permanently
+  # red job, which is the same as no job at all.
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Install FFmpeg and a software Vulkan driver
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg mesa-vulkan-drivers
+      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2
+        with:
+          tool: cargo-llvm-cov
+      # `xtask` and the `main.rs` entry points are excluded, and the exclusions
+      # are the honest kind rather than the convenient kind: `xtask` is the
+      # build tool that runs the tests, and a `main` that parses argv and calls
+      # one function has nothing to cover that its library does not already.
+      # Everything that decides anything is measured.
+      - name: Measure
+        env:
+          LUMINA_REQUIRE_VELLO: "1"
+        run: |
+          cargo llvm-cov --workspace \
+            --exclude luminafx-wasm --exclude luminafx-bench --exclude xtask \
+            --ignore-filename-regex 'main\.rs$' \
+            --summary-only | tee coverage.txt
+      - name: Gate
+        run: |
+          pct=$(grep -E '^TOTAL' coverage.txt | awk '{print $(NF-3)}' | tr -d '%')
+          echo "line coverage: ${pct}%"
+          awk -v p="$pct" -v f=80 'BEGIN {
+            if (p+0 < f+0) {
+              printf "::error::coverage %.2f%% is below the %d%% floor\n", p, f
+              exit 1
+            }
+            printf "coverage %.2f%% is at or above the %d%% floor\n", p, f
+          }'
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: coverage
+          path: coverage.txt
+
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
