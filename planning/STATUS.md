@@ -41,6 +41,12 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
   until `luminafx-schema` really exists on crates.io. A dry run can therefore
   only ever check the leaf crate. It now checks that one and states plainly
   what it could not check, rather than failing at crate two every time.
+- **CodeQL was misconfigured since it was added**, and only running it on
+  `main` revealed it: the Rust extractor supports `build-mode: none` alone and
+  refuses `manual` as a configuration error. It reads source rather than
+  observing a build, which also removes the reason that job installed a
+  toolchain and compiled the workspace. Every run of it since #86 had been a
+  configuration error rather than an analysis.
 - **Correcting an earlier claim in this programme:** a dry run does not prove
   the token. `cargo publish --dry-run` never authenticates. Neither does
   crates.io's `/me` endpoint, which is website-only. The first real publish is
