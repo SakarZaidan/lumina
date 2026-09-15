@@ -24,6 +24,33 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-04 (night) — Every unknown identifier now says what you meant
+
+- `AAA-AI-08`. One edit-distance suggester in `lumina_core::suggest`, used by
+  every reference check. `suggest_easing` delegates to it, so there is one
+  distance implementation rather than two.
+- The old object-id suggester compared the **first three characters**. It
+  therefore missed every transposition — `cricle_one` never suggested
+  `circle_one` — and confidently proposed anything sharing a prefix, so `title`
+  suggested `titan_orbit_diagram`. Both directions now have a test.
+- The threshold **scales with name length** instead of being a flat three. At a
+  flat three, `abc` matches `xyz` — every character differs — while
+  `emitter_positon` fails to match `emitter_position`, which is one
+  transposition in a long word.
+- **Two references were not validated at all**, and both failed in the quietest
+  way available:
+  - an `Image`/`SVG` with a misspelled `asset_id` drew nothing;
+  - a `Plot` with a dangling `axes_id` drew nothing.
+
+  The render succeeded in both cases. Every other unknown reference in a scene
+  was an error; these two were silence. A `Plot` pointed at an object that
+  exists but is not an `Axes` gets its own code, since telling the author to
+  add an object would send them to fix the wrong thing.
+- Neither new check broke a single example or fixture, which is the answer to
+  "was this ever actually wrong in practice" — it was not, and it would have
+  been the moment somebody typed an id by hand.
+- Tests 311 → 345.
+
 ## 2026-09-04 (evening) — The CLI grows verbs, and becomes testable
 
 - Subcommands: `render`, `validate`, `schema`, `objects`, `new`, `inspect`.

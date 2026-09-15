@@ -39,6 +39,8 @@ pub mod interpolator;
 /// Scene graph: object map with root/child resolution.
 pub mod scene;
 pub mod scene_patch;
+/// "Did you mean …?" for unknown identifiers, shared by every reference check.
+pub mod suggest;
 /// Keyframe tracks and scene-state evaluation at any time.
 pub mod timeline;
 pub mod validation;
