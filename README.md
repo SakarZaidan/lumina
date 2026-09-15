@@ -163,6 +163,27 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 
 ## Getting Started
 
+### Install
+
+```bash
+# Prebuilt binary — no toolchain needed. See Releases for other platforms.
+# https://github.com/SakarZaidan/lumina/releases
+
+cargo install luminafx-cli        # or build it yourself
+pip install luminafx              # Python bindings
+```
+
+As a library:
+
+```bash
+cargo add luminafx-core luminafx-renderer luminafx-export
+```
+
+The crates are published under the `luminafx-` prefix because `lumina`,
+`lumina-core` and `lumina-cli` were already taken on crates.io — the second by
+an unrelated wgpu renderer. The project, the format and the command are still
+Lumina; see [ADR-0014](planning/ADR/0014-published-crate-names.md).
+
 ### Prerequisites
 
 - **Rust** — latest stable via [rustup](https://rustup.rs)
