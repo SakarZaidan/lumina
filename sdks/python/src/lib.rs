@@ -1,9 +1,9 @@
 //! Python bindings for the Lumina animation engine.
 //!
 //! Exposes three functions to Python:
-//!   - `lumina.validate(scene_dict) -> dict`
-//!   - `lumina.render(scene_dict, output_path, format="mp4")`
-//!   - `lumina.schema() -> dict`
+//!   - `luminafx.validate(scene_dict) -> dict`
+//!   - `luminafx.render(scene_dict, output_path, format="mp4")`
+//!   - `luminafx.schema() -> dict`
 
 // The engine has never contained `unsafe`, and the metric tracking that was a
 // `grep` over the source — which by v0.4.0 was returning a false positive from
@@ -37,7 +37,7 @@ fn validate(py: Python<'_>, scene: &Bound<'_, PyAny>) -> PyResult<PyObject> {
                     "code": "PARSE_ERROR",
                     "path": "$",
                     "message": e.to_string(),
-                    "fix_suggestion": "Ensure the scene matches the LSF schema (see lumina.schema())."
+                    "fix_suggestion": "Ensure the scene matches the LSF schema (see luminafx.schema())."
                 }],
                 "warnings": []
             });
