@@ -130,6 +130,44 @@ jobs:
         run: wasm-pack test --node crates/lumina-wasm
 
   # ── cargo-deny ────────────────────────────────────────────────────────────────
+  # ── Public API ───────────────────────────────────────────────────────────────
+  #
+  # Now that the crates are on crates.io, a breaking change that merges without
+  # a version bump is a breaking change shipped to everyone who wrote
+  # `luminafx-core = "0.5"`. `cargo-semver-checks` compares this branch's public
+  # API against the published release and fails when the two disagree about what
+  # the version number promises — which is ENGINEERING_PRINCIPLES #10 enforced
+  # by a tool rather than by remembering.
+  #
+  # It runs on pull requests only. On `main` the comparison is against a release
+  # that may not exist yet for a freshly bumped version, which would be a
+  # failure about nothing.
+  semver:
+    name: Public API (semver)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2
+        with:
+          tool: cargo-semver-checks
+      # Only the published library crates. `luminafx-cli` is a binary whose
+      # library exists to be testable, `-server`, `-wasm` and `-bench` are
+      # `publish = false`, and none of them has a published baseline to compare
+      # against — semver-checks would fail looking for one.
+      - name: Compare against the published release
+        run: |
+          cargo semver-checks check-release \
+            -p luminafx-schema \
+            -p luminafx-text \
+            -p luminafx-core \
+            -p luminafx-renderer \
+            -p luminafx-export
+
   # ── Coverage ─────────────────────────────────────────────────────────────────
   #
   # `planning/METRICS.md` carried "n/a" in the coverage row for two releases. A

@@ -50,6 +50,34 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
   that hardening shipped in TD-09, and what remains is stated instead of
   implied away.
 
+## 2026-09-15 (evening) — PyPI too, and a gate that proves itself
+
+- **`luminafx` 0.5.0 is on PyPI**: `cp39-abi3` wheels for macOS arm64,
+  manylinux x86_64 and Windows amd64, plus an sdist. Two registries live.
+- **Both installs verified from clean environments rather than asserted.**
+  `cargo add luminafx-core` in an empty project resolves from the registry and
+  runs; `pip install luminafx` in a fresh venv imports and returns
+  `{'valid': True}`. That is the Wave 5 gate for two of its three registries.
+- Installing from PyPI immediately found drift the rename had left behind: a
+  shipped `fix_suggestion` told users to call `lumina.schema()`, and the module
+  is `luminafx`. Four such references corrected. Publishing is its own kind of
+  test — nothing in CI reads a docstring the way a user does.
+- **`cargo-semver-checks` runs on every pull request** (`AAA-REL-10`). It
+  matters *now* rather than later: with the crates published, a breaking change
+  merged without a version bump ships to everyone who wrote
+  `luminafx-core = "0.5"`.
+- **The gate was verified by breaking something on purpose.** Making
+  `edit_distance` private produced `196 checks: 195 pass, 1 fail —
+  function_missing: pub fn removed or renamed`, and it demanded a major
+  version. Reverted; back to "no semver update required". A gate that has never
+  failed is a gate nobody has tested.
+- It runs on pull requests only. On `main` the baseline for a freshly bumped
+  version does not exist yet, and the job would fail about nothing.
+- Scoped to the five published libraries. `-cli` is a binary whose library
+  exists to be testable, and `-server`, `-wasm`, `-bench` are `publish = false`
+  — none has a published baseline, so semver-checks would fail looking for one.
+
+
 ## 2026-09-15 (later) — **Published.** Lumina is on crates.io
 
 - `v0.5.0` tagged; all seven crates live: `luminafx-schema`, `-text`, `-core`,
