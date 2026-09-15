@@ -23,9 +23,11 @@
     "wasm"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --out-dir dist",
-    "typecheck": "tsc --noEmit",
-    "dev": "tsup src/index.ts --format esm --watch"
+    "build:wasm": "wasm-pack build ../../crates/lumina-wasm --target web --out-dir ../../sdks/javascript/wasm && rm -f ../../sdks/javascript/wasm/.gitignore ../../sdks/javascript/wasm/package.json",
+    "build": "npm run build:wasm && tsup src/index.ts --format cjs,esm --dts --out-dir dist",
+    "typecheck": "npm run build:wasm && tsc --noEmit",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
     "react": "^18.0.0",
