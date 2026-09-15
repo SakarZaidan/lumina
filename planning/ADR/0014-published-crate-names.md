@@ -53,9 +53,13 @@ Checking the crates surfaced two more names that could never have published,
 neither of them a Rust crate:
 
 - **PyPI**: `sdks/python/pyproject.toml` declared `lumina-engine`, which is
-  taken. Now `luminafx`. The *module* stays `lumina`, so `import lumina` is
-  unchanged — `[lib] name` is what a user imports, and module names are not
-  globally unique, only distribution names are.
+  taken. Now `luminafx` — and so is the *module*, which was the second half of
+  the problem. Module names are not registry-controlled, so two packages may
+  both install one; PyPI's `lumina` installs a top-level `Lumina`, which is a
+  distinct name on Linux and the **same** name on macOS and Windows, where
+  filesystems are case-insensitive. Shipping a collision that appears on two
+  platforms out of three is worse than not shipping one. `pip install luminafx`
+  then `import luminafx` also reads as one thing rather than two.
 - **npm**: `sdks/javascript/package.json` declared `@lumina/sdk`, a scoped name
   requiring ownership of the `lumina` scope, which the project does not have.
   Now the unscoped `luminafx`. The README and the book advertised

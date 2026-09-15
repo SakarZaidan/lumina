@@ -23,5 +23,6 @@ Homepage = "https://github.com/SakarZaidan/lumina"
 Repository = "https://github.com/SakarZaidan/lumina"
 
 [tool.maturin]
-# The cdylib's [lib] name is `lumina`, so `import lumina` works after install.
-module-name = "lumina"
+# Matches the `[lib]` name and the distribution name, so `pip install luminafx`
+# then `import luminafx` reads as one thing rather than two.
+module-name = "luminafx"
