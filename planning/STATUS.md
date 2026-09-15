@@ -15,14 +15,46 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09); five audited DoS vectors open (`AAA-SEC-01..05`) |
 | Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite gating in CI; Windows probe suppressed (TD-20) |
-| Release | 🟡 | v0.5.0 **merged to `main`** and green (345 tests); untagged, so nothing published yet |
-| Distribution | 🟡 | names settled (`luminafx-*`, ADR-0014), crates.io + PyPI tokens stored, workflows armed on `main`. One step left: a `v0.5.0` tag |
+| Release | 🟢 | **v0.5.0 released** — all seven crates live on crates.io |
+| Distribution | 🟡 | **crates.io: published** (7 crates). PyPI: wheels pending an abi3 fix. npm: still blocked on TD-12 |
 | Dependencies | 🟢 | deny green; 386 locked crates (mitex removed); rustybuzz tracked as TD-22 |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-15 (later) — **Published.** Lumina is on crates.io
+
+- `v0.5.0` tagged; all seven crates live: `luminafx-schema`, `-text`, `-core`,
+  `-renderer`, `-export`, `-mcp`, `-cli`. The first release of this project to
+  reach a registry, after three that did not.
+- Three things blocked it in turn, and each was only findable by trying:
+  1. **A verified email address.** crates.io requires one of every publisher.
+     The token was valid all along — the 400 came from the account, not the
+     credential, which is the thing no dry run could ever have told us.
+  2. **The new-crate rate limit**, twice. crates.io allows roughly one
+     brand-new crate name per eight minutes, so seven new names cost three
+     windows. It only applies to first-time publishes and will never recur for
+     this project.
+  3. Nothing else. The dependency order held: each crate resolved its
+     predecessor from the live registry, which could only ever be verified by
+     doing it.
+- **The skip-check earned itself.** On each resume it reported five, then six,
+  crates already published and picked up at exactly the right one. Without it
+  every retry would have died on "crate already exists" at step one and the
+  release would have needed hand-editing to finish.
+- **PyPI is not done**, and the wheel build found two real defects:
+  - `pyo3` had no `abi3` feature, so it compiled against whatever interpreter
+    the runner had — and the macOS runner's Python 3.14 is newer than pyo3 0.22
+    supports, so that wheel could not be built at all. `abi3-py39` builds
+    against the stable ABI instead: one wheel per platform, working on 3.9 and
+    every version after, including ones that do not exist yet.
+  - The SDK depended on **`luminafx-server`, which is `publish = false`** — for
+    one function, `validate_scene_data`, that lives in `lumina-core` and is
+    only re-exported by the server. An sdist naming an unpublished crate could
+    never have been built by anyone installing from PyPI. Now it depends on
+    core directly, which also takes axum and tokio out of this crate's build.
 
 ## 2026-09-15 — The stack lands on `main`
 
