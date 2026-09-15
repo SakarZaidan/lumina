@@ -565,7 +565,7 @@ player.seek(3.5);
 
 ## Python SDK
 
-> **Not on PyPI yet.** Once v0.5.0 is released it installs as `pip install luminafx`
+> **Not on PyPI yet** (the crates are on crates.io as of v0.5.0). It will install as `pip install luminafx`
 > (`lumina` on PyPI is an unrelated object-detection package). Until then, build
 > it locally with
 > [maturin](https://www.maturin.rs/); publishing is tracked in

@@ -15,7 +15,7 @@ use luminafx_export::Exporter;
 use luminafx_renderer::skia_backend::SkiaRenderer;
 use luminafx_renderer::Renderer;
 use luminafx_schema::Scene;
-use luminafx_server::validate_scene_data;
+use luminafx_core::validation::validate_scene_data;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
