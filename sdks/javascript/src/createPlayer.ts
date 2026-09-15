@@ -1,4 +1,4 @@
-import init, { LuminaEngine } from '../wasm/lumina_wasm';
+import init, { LuminaEngine } from '../wasm/luminafx_wasm';
 import type { LuminaScene } from './types';
 
 export interface VanillaPlayerHandle {

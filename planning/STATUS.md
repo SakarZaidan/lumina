@@ -24,6 +24,29 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-15 (night, later) — The JS SDK builds, and TD-12 closes
+
+- `AAA-REL-03`. Three sources import `../wasm/luminafx_wasm`, which is
+  generated rather than committed, and nothing generated it — so a clean
+  checkout could not build the package at all. `build:wasm` produces it and
+  `prepack` runs it, so the tarball can never be missing what the package is
+  about.
+- The rename had left a second miss here: the imports still said
+  `lumina_wasm`, and `wasm-pack` emits `luminafx_wasm` now. The build would
+  have failed on a name that stopped existing at #85.
+- **Fixing it exposed a quieter failure.** `wasm-pack` writes a `.gitignore`
+  containing `*` into its output directory, and npm honours `.gitignore` when
+  packing. The wasm was silently dropped from the tarball — 5 files instead of
+  9, no `.wasm` at all — while `npm pack` reported success. A package that
+  builds, type-checks and ships none of its WebAssembly is exactly what would
+  have gone to npm.
+- Neither failure is visible from a type-check or a test. The only thing that
+  catches them is packing the tarball and looking inside, so the new CI job
+  does exactly that and asserts the `.wasm` is present by name.
+- Verified from a clean `git archive` checkout: `npm install && npm pack` now
+  produces 9 files including the 4.0 MB `luminafx_wasm_bg.wasm`.
+- **`AAA-REL-04` (npm publish) still needs a token.** The package is ready.
+
 ## 2026-09-15 (night) — Provenance, SBOM, and prebuilt binaries
 
 - `AAA-REL-06` and most of `AAA-REL-08`. Each tag now attaches a CLI binary for
