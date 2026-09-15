@@ -206,12 +206,44 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Minting a provenance attestation needs an OIDC token, to prove to the
+      # signing service which workflow is asking.
+      id-token: write
+      attestations: write
     steps:
+      # The SBOM is generated from the source tree, so the source has to be
+      # here — this job otherwise only downloads artifacts.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: binary-*
           merge-multiple: true
           path: dist
+      # Signed provenance: a statement, verifiable against GitHub's transparency
+      # log, that these exact bytes were produced by this workflow from this
+      # commit. It lets somebody who did not build them check that a download
+      # is what the repository says it is:
+      #
+      #   gh attestation verify <file> --repo SakarZaidan/lumina
+      #
+      # This is the half of supply-chain security that points outward. Pinning
+      # actions and scanning dependencies protect what goes *into* a build;
+      # until now nothing said anything checkable about what came out of one.
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: "dist/*.tar.gz,dist/*.zip"
+
+      # An SBOM in SPDX form, listing every crate that went into the release, so
+      # somebody hit by a future advisory can answer "am I affected?" by reading
+      # a file rather than by rebuilding the workspace to find out.
+      - name: Generate an SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: lumina-${{ github.ref_name }}.spdx.json
+          output-file: dist/lumina-${{ github.ref_name }}.spdx.json
+
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*

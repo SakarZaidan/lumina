@@ -75,12 +75,53 @@ public API that can be called without validating first.
 These limits are enforced in `lumina-core`, so every consumer inherits them:
 the server, the CLI, and both SDKs.
 
-Run it only locally or behind a trusted reverse proxy. Full hardening
-(auth, rate limiting, CORS allowlist, structured request logging) is
-scheduled for v0.5 (see `planning/ROADMAP.md`); reports about these known
-items are welcome but will be tracked against that plan rather than treated
-as new advisories.
+Hardening landed in v0.5 (TD-09): bearer authentication, per-client rate
+limiting, a CORS allowlist, a loopback default bind, and graceful shutdown.
+What remains is documented rather than implied away — the rate limiter is
+per-process and keyed by peer address, so it does not survive a restart and
+cannot see through a proxy that does not set the peer. Anything multi-node
+belongs behind a gateway that already does this properly.
 
 The CLI and library crates process untrusted scene files defensively (no
 panics on malformed input); crashes or resource-exhaustion issues triggered by
 crafted `.lsf` files are in scope and appreciated.
+
+## Verifying a release
+
+Every binary attached to a release carries **signed build provenance**: a
+statement, recorded in GitHub's public transparency log, that those exact bytes
+came out of this repository's release workflow at a named commit. You do not
+have to trust the download, the mirror it came through, or us:
+
+```bash
+gh attestation verify lumina-cli-v0.5.0-x86_64-unknown-linux-gnu.tar.gz \
+  --repo SakarZaidan/lumina
+```
+
+A checksum sits beside each archive for the simpler case:
+
+```bash
+sha256sum -c lumina-cli-v0.5.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+```
+
+Each release also carries an **SBOM** (`lumina-<version>.spdx.json`) listing
+every crate that went into it, so when an advisory lands you can answer "am I
+affected?" by reading a file rather than by rebuilding the workspace to find
+out.
+
+This is the half of supply-chain security that points outward. Pinned actions,
+`cargo-deny`, `osv-scanner` and `cargo-machete` protect what goes *into* a
+build; provenance and the SBOM are what let somebody else check what came out.
+
+### Signed tags — not yet
+
+Tags are **not** currently signed. `git verify-tag v0.5.0` reports
+`no signature found`, and saying otherwise here would be the kind of claim this
+project's own rules forbid. Signing needs a key the maintainer holds and this
+repository cannot create for itself; when one exists, `git config
+user.signingkey` plus `git tag -s` is the whole change, and this section will
+say so with a version it is true of.
+
+In the meantime the **provenance attestation** above is the stronger guarantee
+anyway: it is produced by the workflow rather than by a person, it is recorded
+in a public transparency log, and verifying it needs nobody's public key.
