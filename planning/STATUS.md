@@ -15,14 +15,42 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 | Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
 | Security | 🟡 | server unhardened pre-v0.5 by design (TD-09); five audited DoS vectors open (`AAA-SEC-01..05`) |
 | Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite gating in CI; Windows probe suppressed (TD-20) |
-| Release | 🟡 | v0.5.0 prepared and unreleased — the stack is green but unmerged; nothing on crates.io yet |
-| Distribution | 🟡 | names settled (`luminafx-*`, ADR-0014), token stored, `release.yml` written and armed. Still nothing published: it needs the stack merged and a `v0.5.0` tag |
+| Release | 🟡 | v0.5.0 **merged to `main`** and green (345 tests); untagged, so nothing published yet |
+| Distribution | 🟡 | names settled (`luminafx-*`, ADR-0014), crates.io + PyPI tokens stored, workflows armed on `main`. One step left: a `v0.5.0` tag |
 | Dependencies | 🟢 | deny green; 386 locked crates (mitex removed); rustybuzz tracked as TD-22 |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
+
+## 2026-09-15 — The stack lands on `main`
+
+- All fourteen PRs (#80–#93) merged in order as merge commits, preserving the
+  per-PR history `TECH_DEBT.md` links to. `main` is at v0.5.0 with the
+  `luminafx-*` names, 345 tests, and the gate green.
+- GitHub auto-retargeted each PR to `main` as the one below it landed, so the
+  base chain never had to be edited by hand — and never collapsed, which is
+  what went wrong with the v0.4 stack.
+- `gh pr edit` fails on this repo with an unrelated Projects-classic GraphQL
+  deprecation. It turned out not to matter, but it is worth knowing: the retarget
+  it appeared to fail at had already happened.
+- **The release dry run has a floor, and it is cargo's, not ours.** Packaging
+  resolves every dependency's version against the registry *before* verifying
+  anything, so `luminafx-text` cannot be packaged — even with `--no-verify` —
+  until `luminafx-schema` really exists on crates.io. A dry run can therefore
+  only ever check the leaf crate. It now checks that one and states plainly
+  what it could not check, rather than failing at crate two every time.
+- **CodeQL was misconfigured since it was added**, and only running it on
+  `main` revealed it: the Rust extractor supports `build-mode: none` alone and
+  refuses `manual` as a configuration error. It reads source rather than
+  observing a build, which also removes the reason that job installed a
+  toolchain and compiled the workspace. Every run of it since #86 had been a
+  configuration error rather than an analysis.
+- **Correcting an earlier claim in this programme:** a dry run does not prove
+  the token. `cargo publish --dry-run` never authenticates. Neither does
+  crates.io's `/me` endpoint, which is website-only. The first real publish is
+  the only thing that proves a registry token works.
 
 ## 2026-09-04 (night) — Every unknown identifier now says what you meant
 
