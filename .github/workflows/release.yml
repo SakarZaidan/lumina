@@ -117,6 +117,106 @@ jobs:
             echo "::endgroup::"
           done
 
+  # ── Prebuilt CLI binaries ────────────────────────────────────────────────────
+  #
+  # `cargo install luminafx-cli` needs a Rust toolchain and several minutes of
+  # compilation. Most people who want to render a scene do not have the first
+  # and will not wait for the second, so each release attaches a ready binary
+  # per platform.
+  #
+  # Built from the tag rather than from `main`, so what is attached is what the
+  # version says it is.
+  binaries:
+    name: Binary (${{ matrix.target }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  ext: ""     }
+          - { os: macos-latest,   target: aarch64-apple-darwin,      ext: ""     }
+          - { os: macos-13,       target: x86_64-apple-darwin,       ext: ""     }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,    ext: ".exe" }
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo build --release --locked -p luminafx-cli --target ${{ matrix.target }}
+
+      # The binary alone is not enough to be useful: video output shells out to
+      # ffmpeg, and a user who downloads this and gets "failed to spawn ffmpeg"
+      # has no way to know that was expected. The README beside it says so.
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="lumina-cli-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/lumina-cli${{ matrix.ext }}" "dist/$name/"
+          cp LICENSE "dist/$name/"
+          cat > "dist/$name/README.txt" <<EOF
+          Lumina ${GITHUB_REF_NAME} — ${{ matrix.target }}
+
+          A declarative animation engine: JSON scene in, video out.
+
+            ./lumina-cli new my-scene.lsf
+            ./lumina-cli validate my-scene.lsf
+            ./lumina-cli render my-scene.lsf -o out --format mp4
+
+          PNG and EXR frame sequences need nothing else. Every video format
+          (mp4, webm, webm-alpha, mov, gif) shells out to ffmpeg, so install
+          ffmpeg and put it on PATH before asking for one.
+
+          Docs:   https://sakarzaidan.github.io/lumina/
+          Source: https://github.com/SakarZaidan/lumina
+          EOF
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "$name.zip" "$name" >/dev/null
+          else
+            tar czf "$name.tar.gz" "$name"
+          fi
+          # A checksum beside each archive, so a download can be verified
+          # without trusting the transport it arrived over.
+          for f in "$name".*; do
+            case "$f" in
+              *.tar.gz|*.zip) shasum -a 256 "$f" > "$f.sha256" 2>/dev/null \
+                              || sha256sum "$f" > "$f.sha256" ;;
+            esac
+          done
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: binary-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+
+  # Attach the binaries to the GitHub Release for the tag. Separate from the
+  # build so one platform failing to compile does not cost the others their
+  # upload — a release with three binaries beats a release with none.
+  attach:
+    name: Attach binaries to the release
+    needs: binaries
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: dist
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+
   # ── PyPI ──────────────────────────────────────────────────────────────────
   #
   # The Python SDK is not a workspace member and does not go to crates.io. It
