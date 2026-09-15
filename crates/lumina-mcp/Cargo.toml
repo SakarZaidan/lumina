@@ -1,0 +1,32 @@
+[package]
+name = "luminafx-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Model Context Protocol server for the Lumina animation engine: validate, patch, and render scenes as MCP tools"
+
+[[bin]]
+name = "lumina-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "luminafx_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+luminafx-core = { path = "../lumina-core", version = "0.5.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.5.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
+luminafx-export = { path = "../lumina-export", version = "0.5.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+
+[lints]
+workspace = true

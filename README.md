@@ -147,7 +147,14 @@ Load PNG, JPEG, animated GIF, or SVG files into a scene and composite them as fi
 - **Event bus** — Interactive events (click, double-click, hover, drag) drive `jump_to_time`, `play_from`, `pause`, `set_property`, `tween_to`, `show_tooltip` and `emit_custom` actions. `$drag.*` payload placeholders are substituted at dispatch; `process_event` returns playback state + emitted custom events.
 - **Semantic scene patching** — `luminafx_core::scene_patch` applies domain-level ops (`add_object`, `add_keyframe`, `update_property`, `update_canvas`, …) with cascade deletes; exposed at `POST /scene_patch`.
 - **WASM runtime** — Full engine in WebAssembly. `render_frame(time)` → raw RGBA; `hit_test(x, y, time)` → top object ID across all 17 types.
-- **Headless server** — Axum HTTP: `/render` (mp4/webm/gif), `/validate`, `/patch` (RFC 6902), `/scene_patch` (semantic), `/schema`, `/objects`.
+- **Headless server** — Axum HTTP: `/render` (mp4/webm/gif), `/validate`, `/patch` (RFC 6902), `/scene_patch` (semantic), `/schema`, `/objects`. Bearer auth, per-client rate limiting, and a CORS allowlist, all off-by-default-closed.
+- **MCP server** — the same capabilities as tools any MCP-capable agent can call, over stdio. No port, no credentials, no glue code:
+
+  ```json
+  { "mcpServers": { "lumina": { "command": "lumina-mcp" } } }
+  ```
+
+  `lumina_objects` → `lumina_validate` → `lumina_patch` → `lumina_render`. Errors carry the same `code`/`path`/`fix_suggestion` the HTTP server returns, so an agent that has learned one door knows the other.
 - **Live reload** — `lumina-cli --watch` re-renders a preview frame on every file change.
 - **Particles** — Deterministic seeded particle simulation evaluated at the current time — reproducible across renders and interactive scrubbing.
 
@@ -403,6 +410,7 @@ lumina/
 │   ├── lumina-renderer/   Renderer trait → SkiaRenderer (CPU) + VelloRenderer (GPU/wgpu); shared raster module
 │   ├── lumina-text/       Fontdue TTF rasterization, glyph layout, per-character font fallback
 │   ├── lumina-export/     PNG sequence + MP4 / WebM / GIF via FFmpeg stdin pipe
+│   ├── lumina-mcp/     MCP server: the engine as tools for any agent, over stdio
 │   ├── lumina-server/     Axum HTTP: /render /validate /patch /scene_patch /schema /objects
 │   ├── lumina-wasm/       wasm-bindgen: render_frame, hit_test (17 types), process_event
 │   └── lumina-bench/      Criterion benchmarks: timeline eval, Skia render, easing dispatch

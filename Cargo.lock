@@ -1735,6 +1735,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "luminafx-mcp"
+version = "0.5.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "luminafx-core",
+ "luminafx-export",
+ "luminafx-renderer",
+ "luminafx-schema",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "luminafx-renderer"
 version = "0.5.0"
 dependencies = [

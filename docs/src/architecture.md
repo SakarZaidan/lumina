@@ -17,6 +17,7 @@ lumina/
 │   ├── lumina-renderer/  Renderer trait → SkiaRenderer (CPU) + VelloRenderer (GPU)
 │   ├── lumina-text/      Fontdue TTF rasterization + per-character font fallback
 │   ├── lumina-export/    PNG sequence + MP4/WebM/GIF (FFmpeg stdin pipe)
+│   ├── lumina-mcp/    MCP server: the engine as tools for any agent, over stdio
 │   ├── lumina-server/    Axum HTTP: /render /validate /patch /scene_patch /schema /objects
 │   ├── lumina-wasm/      wasm-bindgen: render_frame, hit_test, process_event
 │   └── lumina-bench/     Criterion benchmarks
