@@ -24,6 +24,32 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-15 (night) — Provenance, SBOM, and prebuilt binaries
+
+- `AAA-REL-06` and most of `AAA-REL-08`. Each tag now attaches a CLI binary for
+  linux-x86_64, macOS on both architectures, and windows-x86_64, built from the
+  tag rather than from `main` so what is attached is what the version says.
+- Each archive carries a checksum, and a README — because the binary alone is
+  not enough to be useful. Every video format shells out to ffmpeg, and someone
+  who downloads this and sees "failed to spawn ffmpeg" has no way to know that
+  was expected. PNG and EXR need nothing else; the README says which is which.
+- **Signed build provenance** on every archive, plus an SPDX **SBOM**. This is
+  the half of supply-chain security that points outward: pinned actions,
+  `cargo-deny`, `osv-scanner` and `cargo-machete` protect what goes *into* a
+  build, and until now nothing said anything checkable about what came out.
+  `gh attestation verify <file> --repo SakarZaidan/lumina` needs no key.
+- **Caught myself writing a false claim.** The first draft of SECURITY.md said
+  "release tags are signed by the maintainer". They are not — `git verify-tag
+  v0.5.0` reports `no signature found`, and the tag was made with `-a`, not
+  `-s`. Signing needs a key this repository cannot create for itself, so the
+  section now says it is not done and names exactly what would make it true.
+  Documentation drifting ahead of code is the one thing VISION principle 5
+  forbids outright, and it is easiest to do by accident while writing the
+  section that claims otherwise.
+- SECURITY.md's "full hardening scheduled for v0.5" paragraph is also gone —
+  that hardening shipped in TD-09, and what remains is stated instead of
+  implied away.
+
 ## 2026-09-15 (later) — **Published.** Lumina is on crates.io
 
 - `v0.5.0` tagged; all seven crates live: `luminafx-schema`, `-text`, `-core`,
