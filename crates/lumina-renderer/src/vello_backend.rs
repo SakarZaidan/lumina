@@ -287,7 +287,10 @@ impl VelloRenderer {
             | Object::Path(_)
             | Object::Line(_)
             | Object::Arrow(_)
-            | Object::BezierCurve(_) => &Value::Null,
+            | Object::BezierCurve(_)
+            | Object::Text(_)
+            | Object::LaTeX(_)
+            | Object::MathML(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -798,34 +801,8 @@ impl VelloRenderer {
                 }
             }
             Object::Text(_) | Object::LaTeX(_) | Object::MathML(_) => {
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let font_size = state["font_size"].as_f64().unwrap_or(24.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_str = state["color"].as_str().unwrap_or("#FFFFFF");
-                let font_id = state["font_id"].as_str();
-                let align = state["align"].as_str().unwrap_or("left");
-                let letter_spacing = state["letter_spacing"].as_f64().unwrap_or(0.0) as f32;
-
-                // Resolve the displayed string: raw content for Text, Unicode-
-                // converted (and optionally write-on-clipped) for LaTeX, tag-
-                // stripped for MathML — matching the Skia backend exactly.
-                let rendered: String = match obj {
-                    Object::Text(_) => state["content"].as_str().unwrap_or("").to_string(),
-                    Object::LaTeX(_) => {
-                        let mut s = crate::common::notation::latex_to_unicode(
-                            state["expression"].as_str().unwrap_or(""),
-                        );
-                        if let Some(frac) = state["draw_fraction"].as_f64() {
-                            let frac = (frac as f32).clamp(0.0, 1.0);
-                            let visible = (s.chars().count() as f32 * frac).floor() as usize;
-                            s = s.chars().take(visible).collect();
-                        }
-                        s
-                    }
-                    _ => crate::common::notation::mathml_to_unicode(
-                        state["markup"].as_str().unwrap_or(""),
-                    ),
+                let Some((text, style)) = crate::common::text::text_of(obj) else {
+                    return Ok(());
                 };
 
                 // One image per glyph, at the position the shared layout
@@ -833,15 +810,15 @@ impl VelloRenderer {
                 // same place, resampled once rather than twice (TD-18).
                 for g in raster::rasterize_glyphs(
                     &self.text_engine,
-                    &rendered,
-                    font_size,
-                    color_str,
-                    font_id,
-                    align,
-                    letter_spacing,
-                    opacity,
-                    x,
-                    y,
+                    &text,
+                    style.font_size,
+                    style.color,
+                    style.font_id,
+                    style.align,
+                    style.letter_spacing,
+                    style.opacity,
+                    style.x,
+                    style.y,
                 ) {
                     let img = rgba_to_image(g.rgba, g.width, g.height);
                     let t = affine * Affine::translate(Vec2::new(f64::from(g.ix), f64::from(g.iy)));

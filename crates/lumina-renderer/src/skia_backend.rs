@@ -2,7 +2,6 @@
 
 use crate::common::fill::{fill_spec, FillSpec};
 pub use crate::common::notation::latex_to_unicode;
-use crate::common::notation::mathml_to_unicode;
 use crate::common::shadow::shadow_spec;
 use crate::{Renderer, RendererError};
 use image::AnimationDecoder;
@@ -161,29 +160,22 @@ impl SkiaRenderer {
 
     /// Rasterize a text run with per-character font fallback, horizontal
     /// alignment and letter-spacing, under the current transform.
-    #[allow(clippy::too_many_arguments)]
     fn draw_text(
         &self,
         pixmap: &mut Pixmap,
         content: &str,
-        x: f32,
-        y: f32,
-        font_size: f32,
-        color_str: &str,
-        font_id: Option<&str>,
-        align: &str,
-        letter_spacing: f32,
-        opacity: f32,
+        style: &crate::common::text::TextStyle<'_>,
         transform: Transform,
     ) {
-        let color = parse_color(color_str, opacity);
+        let color = parse_color(style.color, style.opacity);
+        let (x, y) = (style.x, style.y);
         let Some(layout) = crate::common::text::layout_run(
             &self.text_engine,
             content,
-            font_size,
-            font_id,
-            align,
-            letter_spacing,
+            style.font_size,
+            style.font_id,
+            style.align,
+            style.letter_spacing,
         ) else {
             return;
         };
@@ -272,7 +264,10 @@ impl SkiaRenderer {
             | Object::Path(_)
             | Object::Line(_)
             | Object::Arrow(_)
-            | Object::BezierCurve(_) => &Value::Null,
+            | Object::BezierCurve(_)
+            | Object::Text(_)
+            | Object::LaTeX(_)
+            | Object::MathML(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -493,67 +488,14 @@ impl SkiaRenderer {
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
-            Object::Text(_) => {
-                let content = state["content"].as_str().unwrap_or("");
-                if content.is_empty() {
+            Object::Text(_) | Object::LaTeX(_) | Object::MathML(_) => {
+                let Some((text, style)) = crate::common::text::text_of(obj) else {
+                    return Ok(());
+                };
+                if text.is_empty() {
                     return Ok(());
                 }
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let font_size = state["font_size"].as_f64().unwrap_or(24.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_str = state["color"].as_str().unwrap_or("#FFFFFF");
-                let font_id = state["font_id"].as_str();
-                let align = state["align"].as_str().unwrap_or("left");
-                let letter_spacing = state["letter_spacing"].as_f64().unwrap_or(0.0) as f32;
-                self.draw_text(
-                    pixmap,
-                    content,
-                    x,
-                    y,
-                    font_size,
-                    color_str,
-                    font_id,
-                    align,
-                    letter_spacing,
-                    opacity,
-                    transform,
-                );
-            }
-            Object::LaTeX(_) => {
-                let expression = state["expression"].as_str().unwrap_or("");
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let font_size = state["font_size"].as_f64().unwrap_or(24.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_str = state["color"].as_str().unwrap_or("#FFFFFF");
-                let font_id = state["font_id"].as_str();
-                let align = state["align"].as_str().unwrap_or("left");
-                let letter_spacing = state["letter_spacing"].as_f64().unwrap_or(0.0) as f32;
-                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
-
-                // Convert LaTeX/math notation to Unicode and optionally clip to
-                // the first N characters for write-on animation.
-                let mut rendered = latex_to_unicode(expression);
-                if let Some(frac) = draw_fraction {
-                    let frac = frac.clamp(0.0, 1.0);
-                    let char_count = rendered.chars().count();
-                    let visible = (char_count as f32 * frac).floor() as usize;
-                    rendered = rendered.chars().take(visible).collect();
-                }
-                self.draw_text(
-                    pixmap,
-                    &rendered,
-                    x,
-                    y,
-                    font_size,
-                    color_str,
-                    font_id,
-                    align,
-                    letter_spacing,
-                    opacity,
-                    transform,
-                );
+                self.draw_text(pixmap, &text, &style, transform);
             }
             Object::BezierCurve(props) => {
                 let [x0, y0] = props.p0;
@@ -826,34 +768,6 @@ impl SkiaRenderer {
                 if let Some(src) = self.rasterize_svg(asset_id, want_w, want_h) {
                     composite_image(pixmap, &src, x, y, None, None, rotation, opacity, transform);
                 }
-            }
-            Object::MathML(_) => {
-                let markup = state["markup"].as_str().unwrap_or("");
-                if markup.is_empty() {
-                    return Ok(());
-                }
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let font_size = state["font_size"].as_f64().unwrap_or(24.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_str = state["color"].as_str().unwrap_or("#FFFFFF");
-                let font_id = state["font_id"].as_str();
-                let align = state["align"].as_str().unwrap_or("left");
-                let letter_spacing = state["letter_spacing"].as_f64().unwrap_or(0.0) as f32;
-                let rendered = mathml_to_unicode(markup);
-                self.draw_text(
-                    pixmap,
-                    &rendered,
-                    x,
-                    y,
-                    font_size,
-                    color_str,
-                    font_id,
-                    align,
-                    letter_spacing,
-                    opacity,
-                    transform,
-                );
             }
             Object::Particles(_) => {
                 let count = state["count"].as_u64().unwrap_or(0) as u32;

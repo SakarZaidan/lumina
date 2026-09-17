@@ -8,10 +8,64 @@
 //! that is genuinely different: the CPU backend composites each glyph straight
 //! into the frame, the GPU backend composites them into an image it then draws.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
+use luminafx_schema::Object;
 use luminafx_text::{RasterizedGlyph, TextEngine};
 use tiny_skia::{Color, Pixmap};
+
+/// Where and how a text-like object draws its string.
+pub(crate) struct TextStyle<'a> {
+    pub x: f32,
+    pub y: f32,
+    pub font_size: f32,
+    pub color: &'a str,
+    pub font_id: Option<&'a str>,
+    pub align: &'a str,
+    pub letter_spacing: f32,
+    pub opacity: f32,
+}
+
+/// The string a `Text`, `LaTeX` or `MathML` object shows and how to draw it;
+/// `None` for any other object.
+///
+/// LaTeX becomes Unicode, cut to its `draw_fraction` by character for a
+/// write-on; `MathML` loses its tags. Both backends carried their own copy of
+/// the write-on arithmetic, free to disagree about which characters of a
+/// formula were showing. Now the string is decided once.
+pub(crate) fn text_of(object: &Object) -> Option<(Cow<'_, str>, TextStyle<'_>)> {
+    macro_rules! style {
+        ($props:expr) => {
+            TextStyle {
+                x: $props.x,
+                y: $props.y,
+                font_size: $props.font_size,
+                color: &$props.color,
+                font_id: $props.font_id.as_deref(),
+                align: &$props.align,
+                letter_spacing: $props.letter_spacing,
+                opacity: $props.opacity,
+            }
+        };
+    }
+    match object {
+        Object::Text(props) => Some((Cow::Borrowed(props.content.as_str()), style!(props))),
+        Object::LaTeX(props) => {
+            let mut text = super::notation::latex_to_unicode(&props.expression);
+            if let Some(frac) = props.draw_fraction {
+                let visible = (text.chars().count() as f32 * frac.clamp(0.0, 1.0)).floor() as usize;
+                text = text.chars().take(visible).collect();
+            }
+            Some((Cow::Owned(text), style!(props)))
+        }
+        Object::MathML(props) => Some((
+            Cow::Owned(super::notation::mathml_to_unicode(&props.markup)),
+            style!(props),
+        )),
+        _ => None,
+    }
+}
 
 /// One glyph of a run, positioned relative to the run's anchor.
 pub(crate) struct PlacedGlyph {
@@ -177,4 +231,57 @@ pub(crate) fn glyph_mask(
         }
     }
     Some(mask)
+}
+
+#[cfg(test)]
+mod text_of_objects {
+    use super::text_of;
+    use luminafx_schema::Object;
+    use serde_json::json;
+
+    fn object(value: serde_json::Value) -> Object {
+        serde_json::from_value(value).expect("object")
+    }
+
+    #[test]
+    fn plain_text_is_borrowed_with_its_style() {
+        let text = object(json!({ "type": "Text", "properties": {
+            "content": "Hello", "x": 3, "y": 4, "font_size": 18, "align": "center" } }));
+        let (string, style) = text_of(&text).expect("text");
+        assert!(matches!(string, std::borrow::Cow::Borrowed("Hello")));
+        assert_eq!((style.x, style.y, style.font_size), (3.0, 4.0, 18.0));
+        assert_eq!(style.align, "center");
+    }
+
+    #[test]
+    fn a_formula_is_written_on_by_whole_characters() {
+        // "a² + b²" is seven characters; 0.5 shows the first three, rounding
+        // down, whatever the byte width of the superscripts.
+        let latex = object(json!({ "type": "LaTeX", "properties": {
+            "expression": "a^2 + b^2", "x": 0, "y": 0, "font_size": 24,
+            "draw_fraction": 0.5 } }));
+        let (string, _) = text_of(&latex).expect("latex");
+        assert_eq!(string, "a² ");
+    }
+
+    #[test]
+    fn a_write_on_fraction_outside_zero_to_one_is_clamped() {
+        for (fraction, expected) in [(-1.0, ""), (2.0, "a² + b²")] {
+            let latex = object(json!({ "type": "LaTeX", "properties": {
+                "expression": "a^2 + b^2", "x": 0, "y": 0, "font_size": 24,
+                "draw_fraction": fraction } }));
+            assert_eq!(text_of(&latex).expect("latex").0, expected);
+        }
+    }
+
+    #[test]
+    fn markup_loses_its_tags_and_shapes_have_no_text() {
+        let mathml = object(json!({ "type": "MathML", "properties": {
+            "markup": "<math><mi>x</mi></math>", "x": 0, "y": 0, "font_size": 24 } }));
+        assert_eq!(text_of(&mathml).expect("mathml").0, "x");
+
+        let circle = object(json!({ "type": "Circle", "properties": {
+            "cx": 0, "cy": 0, "radius": 1 } }));
+        assert!(text_of(&circle).is_none());
+    }
 }
