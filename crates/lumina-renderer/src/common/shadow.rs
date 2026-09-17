@@ -6,10 +6,11 @@
 //! `peniko::Image` and draws it into the GPU scene. One blur implementation
 //! means shadows are near-identical across backends by construction.
 
-use serde_json::Value;
+use luminafx_schema::Shadow;
 use tiny_skia::{BlendMode, FillRule, FilterQuality, Paint, Path, Pixmap, PixmapPaint, Transform};
 
 /// A resolved drop-shadow specification (straight-alpha RGBA color).
+#[derive(Debug, PartialEq)]
 pub(crate) struct ShadowSpec {
     pub color: [u8; 4],
     pub blur: f32,
@@ -18,22 +19,15 @@ pub(crate) struct ShadowSpec {
     pub opacity: f32,
 }
 
-pub(crate) fn parse_shadow(state: &Value) -> Option<ShadowSpec> {
-    let map = match state.get("shadow") {
-        Some(Value::Object(m)) => m,
-        _ => return None,
-    };
-    let color_hex = map
-        .get("color")
-        .and_then(|c| c.as_str())
-        .unwrap_or("#000000");
-    Some(ShadowSpec {
-        color: super::color::parse_rgba8(color_hex, 1.0),
-        blur: map.get("blur").and_then(|b| b.as_f64()).unwrap_or(0.0) as f32,
-        dx: map.get("dx").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        dy: map.get("dy").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
-        opacity: map.get("opacity").and_then(|o| o.as_f64()).unwrap_or(1.0) as f32,
-    })
+/// Resolve a shadow into a [`ShadowSpec`].
+pub(crate) fn shadow_spec(shadow: &Shadow) -> ShadowSpec {
+    ShadowSpec {
+        color: super::color::parse_rgba8(&shadow.color, 1.0),
+        blur: shadow.blur,
+        dx: shadow.dx,
+        dy: shadow.dy,
+        opacity: shadow.opacity,
+    }
 }
 
 /// Rasterize the blurred, offset silhouette of `path` into its own pixmap
@@ -130,6 +124,64 @@ fn blur_pass_v(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize) {
                 sum += get(add_idx);
                 sum -= get(sub_idx);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod typed_equivalence {
+    use super::{shadow_spec, ShadowSpec};
+    use luminafx_schema::Shadow;
+    use serde_json::Value;
+
+    /// The JSON reading `shadow_spec` replaced, kept verbatim as the reference
+    /// until RFC-0002 Stage 2 has moved every draw branch.
+    fn parse_shadow(state: &Value) -> Option<ShadowSpec> {
+        let map = match state.get("shadow") {
+            Some(Value::Object(m)) => m,
+            _ => return None,
+        };
+        let color_hex = map
+            .get("color")
+            .and_then(|c| c.as_str())
+            .unwrap_or("#000000");
+        Some(ShadowSpec {
+            color: crate::common::color::parse_rgba8(color_hex, 1.0),
+            blur: map.get("blur").and_then(|b| b.as_f64()).unwrap_or(0.0) as f32,
+            dx: map.get("dx").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
+            dy: map.get("dy").and_then(|d| d.as_f64()).unwrap_or(0.0) as f32,
+            opacity: map.get("opacity").and_then(|o| o.as_f64()).unwrap_or(1.0) as f32,
+        })
+    }
+
+    #[test]
+    fn shadow_spec_matches_parse_shadow() {
+        let shadows = [
+            Shadow {
+                color: "#000000".into(),
+                blur: 8.0,
+                dx: 2.0,
+                dy: -3.0,
+                opacity: 0.5,
+            },
+            Shadow {
+                color: "#FF00FF80".into(),
+                blur: 0.0,
+                dx: 0.0,
+                dy: 0.0,
+                opacity: 1.0,
+            },
+            Shadow {
+                color: "nonsense".into(),
+                blur: 1e30,
+                dx: -1e30,
+                dy: 0.25,
+                opacity: 0.0,
+            },
+        ];
+        for shadow in &shadows {
+            let state = serde_json::json!({ "shadow": shadow });
+            assert_eq!(Some(shadow_spec(shadow)), parse_shadow(&state), "{state}");
         }
     }
 }

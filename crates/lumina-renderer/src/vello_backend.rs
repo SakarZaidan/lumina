@@ -1,3 +1,5 @@
+use crate::common::fill::{fill_spec, FillSpec};
+use crate::common::shadow::shadow_spec;
 use crate::raster;
 use crate::{Renderer, RendererError};
 use luminafx_schema::{CameraState, Object};
@@ -242,10 +244,9 @@ impl VelloRenderer {
         let obj = ctx.objects.get(id).ok_or_else(|| {
             RendererError::Failed(format!("Object '{id}' not found in scene graph"))
         })?;
-        let state = crate::common::untyped::state_of(obj);
-
         match obj {
             Object::Group(props) => {
+                let state = crate::common::untyped::state_of(obj);
                 let transform = crate::common::scene::group_transform(parent, &state);
 
                 for child_id in crate::common::scene::sorted_children(&props.children, ctx.objects)
@@ -254,7 +255,7 @@ impl VelloRenderer {
                 }
                 Ok(())
             }
-            _ => self.draw_leaf(scene, obj, &state, parent, ctx.canvas, ctx.objects),
+            _ => self.draw_leaf(scene, obj, parent, ctx.canvas, ctx.objects),
         }
     }
 
@@ -266,26 +267,36 @@ impl VelloRenderer {
     /// scene produced different output depending on `--backend`, and the
     /// pixel-diff suite could not see it — it only compares frames that both
     /// backends produced.
-    #[allow(clippy::too_many_arguments)]
     fn draw_leaf(
         &self,
         scene: &mut Scene,
         obj: &Object,
-        state: &Value,
         mat: crate::common::scene::Mat2x3,
         canvas: (u32, u32),
         objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
         let affine = mat.to_kurbo();
+        // Branches still reading JSON get the map built from the typed object
+        // (RFC-0002 Stage 2); the ones that have moved to typed fields don't
+        // pay for it.
+        let untyped;
+        let state: &Value = match obj {
+            Object::Circle(_) | Object::Rectangle(_) | Object::Polygon(_) | Object::Path(_) => {
+                &Value::Null
+            }
+            _ => {
+                untyped = crate::common::untyped::state_of(obj);
+                &untyped
+            }
+        };
         match obj {
-            Object::Circle(_) => {
-                let cx = state["cx"].as_f64().unwrap_or(0.0);
-                let cy = state["cy"].as_f64().unwrap_or(0.0);
-                let radius = state["radius"].as_f64().unwrap_or(0.0);
+            Object::Circle(props) => {
+                let (cx, cy) = (f64::from(props.cx), f64::from(props.cy));
+                let radius = f64::from(props.radius);
                 if radius <= 0.0 {
                     return Ok(());
                 }
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
+                let opacity = props.opacity;
 
                 let circle = Circle::new((cx, cy), radius);
                 let bbox = (
@@ -294,15 +305,15 @@ impl VelloRenderer {
                     (radius * 2.0) as f32,
                     (radius * 2.0) as f32,
                 );
-                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                if let Some(spec) = props.shadow.as_ref().map(shadow_spec) {
                     let mut pb = tiny_skia::PathBuilder::new();
                     pb.push_circle(cx as f32, cy as f32, radius as f32);
                     if let Some(path) = pb.finish() {
                         draw_shadow_image(scene, canvas, &path, mat, &spec);
                     }
                 }
-                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                let fill = fill_spec(&props.fill, opacity)
+                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
                 scene.fill(
                     Fill::NonZero,
                     affine,
@@ -311,10 +322,13 @@ impl VelloRenderer {
                     &circle,
                 );
 
-                if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
+                if let Some(stroke) = props
+                    .stroke
+                    .as_ref()
+                    .and_then(|paint| fill_spec(paint, opacity))
+                {
                     scene.stroke(
-                        &flat_stroke(sw),
+                        &flat_stroke(f64::from(props.stroke_width)),
                         affine,
                         &brush_from_fill(&stroke, bbox),
                         None,
@@ -322,26 +336,26 @@ impl VelloRenderer {
                     );
                 }
             }
-            Object::Rectangle(_) => {
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let w = state["width"].as_f64().unwrap_or(0.0);
-                let h = state["height"].as_f64().unwrap_or(0.0);
+            Object::Rectangle(props) => {
+                let (x, y) = (f64::from(props.x), f64::from(props.y));
+                let (w, h) = (f64::from(props.width), f64::from(props.height));
                 if w <= 0.0 || h <= 0.0 {
                     return Ok(());
                 }
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
+                let opacity = props.opacity;
 
-                let rx = state["rx"].as_f64().unwrap_or(0.0) as f32;
-                let ry_raw = state["ry"].as_f64().unwrap_or(0.0) as f32;
-                let ry = if ry_raw > 0.0 { ry_raw } else { rx };
+                let rx = props.rx;
+                let ry = if props.ry > 0.0 { props.ry } else { rx };
                 let bbox = (x as f32, y as f32, w as f32, h as f32);
-                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
-                let stroke = crate::common::fill::parse_stroke(state, opacity);
-                let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
+                let fill = fill_spec(&props.fill, opacity)
+                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
+                let stroke = props
+                    .stroke
+                    .as_ref()
+                    .and_then(|paint| fill_spec(paint, opacity));
+                let sw = f64::from(props.stroke_width);
 
-                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                if let Some(spec) = props.shadow.as_ref().map(shadow_spec) {
                     let tiny_path = if rx > 0.0 {
                         crate::common::path::to_tiny_path(&crate::common::path::rounded_rect(
                             x as f32, y as f32, w as f32, h as f32, rx, ry,
@@ -513,31 +527,22 @@ impl VelloRenderer {
                 let path = crate::common::path::to_kurbo_path(&curve);
                 scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
             }
-            Object::Polygon(_) => {
-                let points = match state["points"].as_array() {
-                    Some(p) => p,
-                    None => return Ok(()),
-                };
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
+            Object::Polygon(props) => {
+                let opacity = props.opacity;
 
                 let mut path = BezPath::new();
                 let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
                 let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-                for (i, p) in points.iter().enumerate() {
-                    let arr = match p.as_array() {
-                        Some(a) => a,
-                        None => continue,
-                    };
-                    let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    min_x = min_x.min(x as f32);
-                    min_y = min_y.min(y as f32);
-                    max_x = max_x.max(x as f32);
-                    max_y = max_y.max(y as f32);
+                for (i, &[x, y]) in props.points.iter().enumerate() {
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = max_y.max(y);
+                    let point = (f64::from(x), f64::from(y));
                     if i == 0 {
-                        path.move_to((x, y));
+                        path.move_to(point);
                     } else {
-                        path.line_to((x, y));
+                        path.line_to(point);
                     }
                 }
                 path.close_path();
@@ -546,15 +551,9 @@ impl VelloRenderer {
                 }
                 let bbox = (min_x, min_y, max_x - min_x, max_y - min_y);
 
-                if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                if let Some(spec) = props.shadow.as_ref().map(shadow_spec) {
                     let mut pb = tiny_skia::PathBuilder::new();
-                    for (i, p) in points.iter().enumerate() {
-                        let arr = match p.as_array() {
-                            Some(a) => a,
-                            None => continue,
-                        };
-                        let px = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                        let py = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    for (i, &[px, py]) in props.points.iter().enumerate() {
                         if i == 0 {
                             pb.move_to(px, py);
                         } else {
@@ -566,8 +565,8 @@ impl VelloRenderer {
                         draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
                     }
                 }
-                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
+                let fill = fill_spec(&props.fill, opacity)
+                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
                 scene.fill(
                     Fill::NonZero,
                     affine,
@@ -576,10 +575,13 @@ impl VelloRenderer {
                     &path,
                 );
 
-                if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
+                if let Some(stroke) = props
+                    .stroke
+                    .as_ref()
+                    .and_then(|paint| fill_spec(paint, opacity))
+                {
                     scene.stroke(
-                        &flat_stroke(sw),
+                        &flat_stroke(f64::from(props.stroke_width)),
                         affine,
                         &brush_from_fill(&stroke, bbox),
                         None,
@@ -587,24 +589,23 @@ impl VelloRenderer {
                     );
                 }
             }
-            Object::Path(_) => {
-                let d = state["d"].as_str().unwrap_or("");
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
+            Object::Path(props) => {
+                let opacity = props.opacity;
 
-                if let Some(data) = crate::common::path::parse_svg_path(d) {
+                if let Some(data) = crate::common::path::parse_svg_path(&props.d) {
                     // Shared arc-length trim, matching the CPU backend.
-                    let data = match state["draw_fraction"].as_f64() {
-                        Some(frac) => crate::common::path::trim(&data, frac as f32),
+                    let data = match props.draw_fraction {
+                        Some(frac) => crate::common::path::trim(&data, frac),
                         None => data,
                     };
                     let path = crate::common::path::to_kurbo_path(&data);
                     let bbox = crate::common::path::bbox(&data).unwrap_or((0.0, 0.0, 0.0, 0.0));
-                    if let Some(spec) = crate::common::shadow::parse_shadow(state) {
+                    if let Some(spec) = props.shadow.as_ref().map(shadow_spec) {
                         if let Some(tiny_path) = crate::common::path::to_tiny_path(&data) {
                             draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
                         }
                     }
-                    if let Some(fill) = crate::common::fill::parse_fill(&state["fill"], opacity) {
+                    if let Some(fill) = fill_spec(&props.fill, opacity) {
                         scene.fill(
                             Fill::NonZero,
                             affine,
@@ -613,10 +614,13 @@ impl VelloRenderer {
                             &path,
                         );
                     }
-                    if let Some(stroke) = crate::common::fill::parse_stroke(state, opacity) {
-                        let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
+                    if let Some(stroke) = props
+                        .stroke
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, opacity))
+                    {
                         scene.stroke(
-                            &flat_stroke(sw),
+                            &flat_stroke(f64::from(props.stroke_width)),
                             affine,
                             &brush_from_fill(&stroke, bbox),
                             None,

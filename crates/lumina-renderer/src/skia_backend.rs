@@ -1,5 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use crate::common::fill::{fill_spec, FillSpec};
+use crate::common::shadow::shadow_spec;
 use crate::{Renderer, RendererError};
 use image::AnimationDecoder;
 use luminafx_schema::{CameraState, Object};
@@ -230,10 +232,9 @@ impl SkiaRenderer {
         let obj = objects.get(id).ok_or_else(|| {
             RendererError::Failed(format!("Object '{id}' not found in scene graph"))
         })?;
-        let state = crate::common::untyped::state_of(obj);
-
         match obj {
             Object::Group(props) => {
+                let state = crate::common::untyped::state_of(obj);
                 let transform = crate::common::scene::group_transform(
                     crate::common::scene::Mat2x3::from_tiny(parent_transform),
                     &state,
@@ -245,7 +246,7 @@ impl SkiaRenderer {
                 }
             }
             _ => {
-                self.draw_leaf_object(pixmap, obj, &state, parent_transform, objects)?;
+                self.draw_leaf_object(pixmap, obj, parent_transform, objects)?;
             }
         }
         Ok(())
@@ -255,59 +256,63 @@ impl SkiaRenderer {
         &self,
         pixmap: &mut Pixmap,
         obj: &Object,
-        state: &Value,
         transform: Transform,
         objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
+        // Branches still reading JSON get the map built from the typed object
+        // (RFC-0002 Stage 2); the ones that have moved to typed fields don't
+        // pay for it.
+        let untyped;
+        let state: &Value = match obj {
+            Object::Circle(_) | Object::Rectangle(_) | Object::Polygon(_) | Object::Path(_) => {
+                &Value::Null
+            }
+            _ => {
+                untyped = crate::common::untyped::state_of(obj);
+                &untyped
+            }
+        };
         match obj {
-            Object::Circle(_) => {
-                let cx = state["cx"].as_f64().unwrap_or(0.0) as f32;
-                let cy = state["cy"].as_f64().unwrap_or(0.0) as f32;
-                let radius = state["radius"].as_f64().unwrap_or(0.0) as f32;
-                if radius <= 0.0 {
+            Object::Circle(props) => {
+                if props.radius <= 0.0 {
                     return Ok(());
                 }
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-
                 let mut pb = PathBuilder::new();
-                pb.push_circle(cx, cy, radius);
+                pb.push_circle(props.cx, props.cy, props.radius);
                 if let Some(path) = pb.finish() {
-                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| {
-                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
-                        });
-                    let stroke = crate::common::fill::parse_stroke(state, opacity);
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = crate::common::shadow::parse_shadow(state);
+                    let fill = fill_spec(&props.fill, props.opacity)
+                        .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                    let stroke = props
+                        .stroke
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, props.opacity));
+                    let shadow = props.shadow.as_ref().map(shadow_spec);
                     paint_shape(
                         pixmap,
                         &path,
                         transform,
                         Some(&fill),
                         stroke.as_ref(),
-                        sw,
+                        props.stroke_width,
                         shadow.as_ref(),
                     );
                 }
             }
-            Object::Rectangle(_) => {
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let width = state["width"].as_f64().unwrap_or(0.0) as f32;
-                let height = state["height"].as_f64().unwrap_or(0.0) as f32;
+            Object::Rectangle(props) => {
+                let (x, y, width, height) = (props.x, props.y, props.width, props.height);
                 if width <= 0.0 || height <= 0.0 {
                     return Ok(());
                 }
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-
-                let rx = state["rx"].as_f64().unwrap_or(0.0) as f32;
-                let ry_raw = state["ry"].as_f64().unwrap_or(0.0) as f32;
-                let ry = if ry_raw > 0.0 { ry_raw } else { rx };
-                let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                    .unwrap_or_else(|| crate::common::fill::FillSpec::solid("#FFFFFF", opacity));
-                let stroke = crate::common::fill::parse_stroke(state, opacity);
-                let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let shadow = crate::common::shadow::parse_shadow(state);
+                let rx = props.rx;
+                let ry = if props.ry > 0.0 { props.ry } else { rx };
+                let fill = fill_spec(&props.fill, props.opacity)
+                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                let stroke = props
+                    .stroke
+                    .as_ref()
+                    .and_then(|paint| fill_spec(paint, props.opacity));
+                let sw = props.stroke_width;
+                let shadow = props.shadow.as_ref().map(shadow_spec);
 
                 if rx > 0.0 || shadow.is_some() {
                     // Rounded and/or shadowed rectangles go through the path renderer.
@@ -352,26 +357,11 @@ impl SkiaRenderer {
                     }
                 }
             }
-            Object::Polygon(_) => {
-                let points = state["points"].as_array().ok_or_else(|| {
-                    RendererError::Failed(
-                        "Polygon 'points' property is missing or not an array".into(),
-                    )
-                })?;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-
+            Object::Polygon(props) => {
+                // `[f32; 2]` points: the missing-array and short-point errors
+                // this branch used to raise cannot be expressed any more.
                 let mut pb = PathBuilder::new();
-                for (i, p) in points.iter().enumerate() {
-                    let arr = p.as_array().ok_or_else(|| {
-                        RendererError::Failed(format!("Polygon point {i} is not an array"))
-                    })?;
-                    if arr.len() < 2 {
-                        return Err(RendererError::Failed(format!(
-                            "Polygon point {i} has fewer than 2 coordinates"
-                        )));
-                    }
-                    let x = arr[0].as_f64().unwrap_or(0.0) as f32;
-                    let y = arr[1].as_f64().unwrap_or(0.0) as f32;
+                for (i, &[x, y]) in props.points.iter().enumerate() {
                     if i == 0 {
                         pb.move_to(x, y);
                     } else {
@@ -381,50 +371,47 @@ impl SkiaRenderer {
                 pb.close();
 
                 if let Some(path) = pb.finish() {
-                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity)
-                        .unwrap_or_else(|| {
-                            crate::common::fill::FillSpec::solid("#FFFFFF", opacity)
-                        });
-                    let stroke = crate::common::fill::parse_stroke(state, opacity);
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = crate::common::shadow::parse_shadow(state);
+                    let fill = fill_spec(&props.fill, props.opacity)
+                        .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                    let stroke = props
+                        .stroke
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, props.opacity));
+                    let shadow = props.shadow.as_ref().map(shadow_spec);
                     paint_shape(
                         pixmap,
                         &path,
                         transform,
                         Some(&fill),
                         stroke.as_ref(),
-                        sw,
+                        props.stroke_width,
                         shadow.as_ref(),
                     );
                 }
             }
-            Object::Path(_) => {
-                let d = state["d"].as_str().unwrap_or("");
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-
-                if let Some(mut path) = crate::common::path::parse_svg_path(d) {
-                    // `draw_fraction` is in `PathProps` and was never read
-                    // here, so a Path with a reveal animation simply appeared
-                    // whole. Trimming by arc length is what the field means.
-                    if let Some(frac) = state["draw_fraction"].as_f64() {
-                        path = crate::common::path::trim(&path, frac as f32);
+            Object::Path(props) => {
+                if let Some(mut data) = crate::common::path::parse_svg_path(&props.d) {
+                    // Trimmed by arc length, which is what `draw_fraction`
+                    // means for every stroked object.
+                    if let Some(frac) = props.draw_fraction {
+                        data = crate::common::path::trim(&data, frac);
                     }
-                    let path = match crate::common::path::to_tiny_path(&path) {
-                        Some(p) => p,
-                        None => return Ok(()),
+                    let Some(path) = crate::common::path::to_tiny_path(&data) else {
+                        return Ok(());
                     };
-                    let fill = crate::common::fill::parse_fill(&state["fill"], opacity);
-                    let stroke = crate::common::fill::parse_stroke(state, opacity);
-                    let sw = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                    let shadow = crate::common::shadow::parse_shadow(state);
+                    let fill = fill_spec(&props.fill, props.opacity);
+                    let stroke = props
+                        .stroke
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, props.opacity));
+                    let shadow = props.shadow.as_ref().map(shadow_spec);
                     paint_shape(
                         pixmap,
                         &path,
                         transform,
                         fill.as_ref(),
                         stroke.as_ref(),
-                        sw,
+                        props.stroke_width,
                         shadow.as_ref(),
                     );
                 }
