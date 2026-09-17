@@ -9,6 +9,7 @@
 
 pub(crate) mod color;
 pub(crate) mod fill;
+pub(crate) mod notation;
 pub(crate) mod path;
 pub(crate) mod plot;
 pub(crate) mod scene;
