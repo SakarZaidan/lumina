@@ -49,6 +49,13 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **Animating a particle `count` no longer makes every particle vanish between
+  keyframes.** Interpolation produced a fraction even between two whole
+  numbers, and both renderers read a fraction where they expected an integer as
+  missing: a `count` animation drew no particles at all in between, and a
+  `sample_count` animation fell back to 200 samples. Animated and overridden
+  integer properties (`count`, `sample_count`, `z_index`) now take whole values,
+  rounded the way CSS rounds an animated integer.
 - **A shadow without a `color` is black, not white.** The field had been copied
   from a stroke color — its doc comment still read "Stroke/text color" — and kept
   the stroke's white default, so an uncoloured drop shadow rendered as a white

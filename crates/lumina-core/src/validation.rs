@@ -767,8 +767,8 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
     }
 }
 
-/// The LSF type name of an object, for diagnostics.
-fn object_type_name(obj: &Object) -> &'static str {
+/// The LSF type name of an object, e.g. `"Circle"`.
+pub(crate) fn object_type_name(obj: &Object) -> &'static str {
     match obj {
         Object::Circle(_) => "Circle",
         Object::Rectangle(_) => "Rectangle",

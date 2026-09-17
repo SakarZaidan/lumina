@@ -903,6 +903,34 @@ mod typed_properties {
         }
     }
 
+    #[test]
+    fn integer_properties_are_known_to_be_integers() {
+        // The timeline rounds these when it animates them; a property wrongly
+        // classed as an integer would have its animation snapped to whole
+        // numbers, and one wrongly classed as fractional would freeze its
+        // object mid-transition.
+        let schema = crate::property_schema::PropertySchema::get();
+        let kinds = |ty: &str, prop: &str| schema.properties_of(ty).expect(ty)[prop];
+        for (ty, prop) in [
+            ("Circle", "z_index"),
+            ("Plot", "sample_count"),
+            ("Particles", "count"),
+        ] {
+            assert!(kinds(ty, prop).is_integer(), "{ty}.{prop}");
+        }
+        for (ty, prop) in [
+            ("Circle", "radius"),
+            ("Circle", "fill"),
+            ("Rectangle", "width"),
+        ] {
+            assert!(!kinds(ty, prop).is_integer(), "{ty}.{prop}");
+        }
+        assert!(
+            kinds("Circle", "z_index").accepts(&serde_json::json!(2.5)),
+            "an integer property must still accept a fraction on validation"
+        );
+    }
+
     /// The RFC-0002 gate: every scene this repository ships still validates.
     ///
     /// This is the test that decides whether Stage 1 is safe to ship. The

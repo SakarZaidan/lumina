@@ -573,6 +573,63 @@ mod resolve_at {
         assert_eq!(r.width, 9.0);
     }
 
+    fn integer_scene() -> Scene {
+        serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": {
+                "c": { "type": "Circle",
+                       "properties": { "cx": 0, "cy": 32, "radius": 10, "z_index": 0 } }
+            },
+            "timeline": [
+                { "time": 0.0, "object": "c", "state": { "cx": 0, "z_index": 0 } },
+                { "time": 2.0, "object": "c", "state": { "cx": 100, "z_index": 5 } }
+            ]
+        }))
+        .expect("scene")
+    }
+
+    #[test]
+    fn an_animated_integer_is_rounded_rather_than_freezing_its_object() {
+        // Interpolation makes `z_index` 2.5 halfway, which is not an `i32`.
+        // Unrounded, the circle fails to deserialise and falls back to its
+        // authored self — so its `cx` animation stops dead for the whole
+        // transition, though nothing is wrong with `cx`.
+        let resolved = Timeline::from_scene(&integer_scene()).resolve_at(1.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("not a circle");
+        };
+        assert!((c.cx - 50.0).abs() < 1e-3, "cx froze at {}", c.cx);
+        // Halves round toward positive infinity, as CSS rounds an animated
+        // integer.
+        assert_eq!(c.z_index, 3);
+    }
+
+    #[test]
+    fn the_untyped_state_carries_the_same_rounded_integer() {
+        // The untyped path had its own version of the bug: both renderers read
+        // a particle `count` with `as_u64`, which is `None` for any
+        // interpolated number, whole or not — so particles vanished between
+        // keyframes.
+        let state = Timeline::from_scene(&integer_scene()).get_state_at(1.0);
+        assert_eq!(state["c"]["z_index"], json!(3));
+        assert!(state["c"]["z_index"].as_u64().is_some());
+    }
+
+    #[test]
+    fn a_fractional_override_of_an_integer_is_rounded() {
+        let mut timeline = Timeline::from_scene(&integer_scene());
+        timeline.override_property("c", "z_index", json!(6.4));
+        let resolved = timeline.resolve_at(1.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("not a circle");
+        };
+        assert_eq!(c.z_index, 6);
+        assert!((c.cx - 50.0).abs() < 1e-3, "cx froze at {}", c.cx);
+    }
+
     /// The untyped state deserialised the obvious way: the reference
     /// `resolve_at` has to agree with.
     fn from_untyped_state(authored: &Object, state: Option<&serde_json::Value>) -> Object {

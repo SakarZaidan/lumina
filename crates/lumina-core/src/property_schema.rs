@@ -29,6 +29,10 @@ impl JsonKinds {
     const ARRAY: u8 = 1 << 3;
     const OBJECT: u8 = 1 << 4;
     const NULL: u8 = 1 << 5;
+    /// `integer` in the schema. A property whose only numbers are integers
+    /// still *accepts* any number — see `type_bit` — but is rounded when
+    /// animated, because a fractional value will not deserialise into it.
+    const INTEGER: u8 = 1 << 6;
     /// Resolution failed somewhere, so nothing may be rejected on type grounds.
     const ANY: u8 = 1 << 7;
 
@@ -39,7 +43,7 @@ impl JsonKinds {
             return true;
         }
         let bit = match value {
-            Value::Number(_) => Self::NUMBER,
+            Value::Number(_) => Self::NUMBER | Self::INTEGER,
             Value::String(_) => Self::STRING,
             Value::Bool(_) => Self::BOOL,
             Value::Array(_) => Self::ARRAY,
@@ -47,6 +51,17 @@ impl JsonKinds {
             Value::Null => Self::NULL,
         };
         self.0 & bit != 0
+    }
+
+    /// Whether every number this property takes is an integer, as for
+    /// `z_index` or a particle `count`.
+    ///
+    /// False when resolution failed, and false when the schema also allows a
+    /// fractional number: rounding is only safe when nothing but an integer
+    /// can be meant.
+    #[must_use]
+    pub fn is_integer(self) -> bool {
+        self.0 & (Self::INTEGER | Self::NUMBER | Self::ANY) == Self::INTEGER
     }
 
     /// Human-readable description of what is accepted, for error messages.
@@ -57,7 +72,7 @@ impl JsonKinds {
         }
         let mut names = Vec::new();
         for (bit, name) in [
-            (Self::NUMBER, "a number"),
+            (Self::NUMBER | Self::INTEGER, "a number"),
             (Self::STRING, "a string"),
             (Self::BOOL, "a boolean"),
             (Self::ARRAY, "an array"),
@@ -248,10 +263,11 @@ fn kinds_of(defs: &serde_json::Map<String, Value>, schema: &Value, depth: usize)
 
 fn type_bit(t: &str) -> u8 {
     match t {
-        // `integer` accepts any number: a timeline interpolates `z_index`
-        // through fractional values, and rejecting `2.5` there would reject a
-        // scene the engine renders correctly.
-        "number" | "integer" => JsonKinds::NUMBER,
+        "number" => JsonKinds::NUMBER,
+        // Recorded separately so the timeline can round an animated integer,
+        // but `accepts` lets any number through: rejecting `2.5` for `z_index`
+        // would reject a scene the engine renders correctly, rounded.
+        "integer" => JsonKinds::INTEGER,
         "string" => JsonKinds::STRING,
         "boolean" => JsonKinds::BOOL,
         "array" => JsonKinds::ARRAY,

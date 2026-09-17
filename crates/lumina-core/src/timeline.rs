@@ -26,6 +26,13 @@ pub struct Timeline {
     seeds: HashMap<String, Object>,
     /// Ids of the objects at least one timeline entry animates.
     animated: HashSet<String>,
+    /// `object_id` → its animated properties whose type is an integer.
+    ///
+    /// Interpolation produces a float even between two integers, and a float
+    /// will not deserialise into `z_index: i32` — so without rounding, one
+    /// animated `z_index` would fail its whole object in
+    /// [`Timeline::resolve_at`] and freeze every other animation on it.
+    integers: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -49,6 +56,7 @@ impl Timeline {
 
         let mut seeds = HashMap::with_capacity(scene.objects.len());
         let mut animated = HashSet::new();
+        let mut integers: HashMap<String, HashSet<String>> = HashMap::new();
 
         // Initialize with initial property values from objects
         for (id, obj) in &scene.objects {
@@ -81,6 +89,15 @@ impl Timeline {
                     animated.insert(entry.object.clone());
                 }
                 for (prop_name, prop_value) in state {
+                    if seeds
+                        .get(&entry.object)
+                        .is_some_and(|object| is_integer_property(object, prop_name))
+                    {
+                        integers
+                            .entry(entry.object.clone())
+                            .or_default()
+                            .insert(prop_name.clone());
+                    }
                     let track = tracks
                         .entry(entry.object.clone())
                         .or_default()
@@ -110,6 +127,7 @@ impl Timeline {
             overrides: HashMap::new(),
             seeds,
             animated,
+            integers,
         }
     }
 
@@ -163,13 +181,14 @@ impl Timeline {
         // An override replaces its property's track instead of joining it:
         // serde refuses a struct that names the same field twice, which would
         // throw away every other animated value on the object.
+        let integers = self.integers.get(id);
         let keyframed = self
             .tracks
             .get(id)
             .into_iter()
             .flatten()
             .filter(move |(name, _)| overrides.is_none_or(|o| !o.contains_key(*name)))
-            .map(move |(name, track)| (name.as_str(), self.evaluate_track(track, time)));
+            .map(move |(name, track)| (name.as_str(), self.value_at(integers, name, track, time)));
         let overridden = overrides
             .into_iter()
             .flatten()
@@ -211,7 +230,14 @@ impl Timeline {
 
     /// Set an interactive override that takes precedence over keyframes
     /// (used by `tween_to`/`set_property` event actions).
+    ///
+    /// A fractional value for an integer property is rounded, as it would be
+    /// if the timeline had animated it there.
     pub fn override_property(&mut self, object_id: &str, property: &str, value: Value) {
+        let value = match self.seeds.get(object_id) {
+            Some(object) if is_integer_property(object, property) => round_to_integer(value),
+            _ => value,
+        };
         self.overrides
             .entry(object_id.to_string())
             .or_default()
@@ -228,9 +254,19 @@ impl Timeline {
             HashMap::with_capacity(self.tracks.len() + self.overrides.len());
 
         for (obj_id, object_tracks) in &self.tracks {
+            // Almost no scene animates an integer, so skip the lookup entirely
+            // rather than hash every object id on every frame to find that out.
+            let integers = if self.integers.is_empty() {
+                None
+            } else {
+                self.integers.get(obj_id)
+            };
             let mut props = serde_json::Map::with_capacity(object_tracks.len());
             for (prop_name, track) in object_tracks {
-                props.insert(prop_name.clone(), self.evaluate_track(track, time));
+                props.insert(
+                    prop_name.clone(),
+                    self.value_at(integers, prop_name, track, time),
+                );
             }
             state.insert(obj_id.clone(), Value::Object(props));
         }
@@ -311,6 +347,22 @@ impl Timeline {
         }
     }
 
+    /// A property's value at `time`, rounded if its type is an integer.
+    fn value_at(
+        &self,
+        integers: Option<&HashSet<String>>,
+        name: &str,
+        track: &[Keyframe],
+        time: f32,
+    ) -> Value {
+        let value = self.evaluate_track(track, time);
+        if integers.is_some_and(|i| i.contains(name)) {
+            round_to_integer(value)
+        } else {
+            value
+        }
+    }
+
     fn evaluate_track(&self, track: &[Keyframe], time: f32) -> Value {
         if track.is_empty() {
             return Value::Null;
@@ -350,5 +402,26 @@ impl Timeline {
             &upper.easing,
             upper.easing_params.as_ref(),
         )
+    }
+}
+
+/// Whether `property` on `object` is integer-typed, according to the schema.
+fn is_integer_property(object: &Object, property: &str) -> bool {
+    crate::property_schema::PropertySchema::get()
+        .properties_of(crate::validation::object_type_name(object))
+        .and_then(|props| props.get(property))
+        .is_some_and(|kinds| kinds.is_integer())
+}
+
+/// Round a number to an integer the way CSS rounds an animated integer: to the
+/// nearest, with a half going toward positive infinity. Anything that is not a
+/// fractional number passes through untouched.
+fn round_to_integer(value: Value) -> Value {
+    match value {
+        Value::Number(ref n) if n.is_f64() => {
+            let rounded = (n.as_f64().unwrap_or(0.0) + 0.5).floor();
+            Value::from(rounded as i64)
+        }
+        other => other,
     }
 }
