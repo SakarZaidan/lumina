@@ -5,7 +5,7 @@ digraph render_pipeline {
         color="#4A90D9", fontname="Helvetica", fontsize=12];
   edge [color="#4A90D9", fontname="Helvetica", fontsize=10, fontcolor="#7FA8D9"];
 
-  state  [label="objects + states(t)\n+ camera(t)", fillcolor="#2E5F3A"];
+  state  [label="resolved objects(t)\n+ camera(t)", fillcolor="#2E5F3A"];
   trait_ [label="Renderer trait\nrender_frame()"];
   subgraph cluster_backends {
     label="backends"; fontname="Helvetica"; fontcolor="#7FA8D9"; color="#4A90D9";

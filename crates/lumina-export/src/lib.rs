@@ -20,7 +20,7 @@
 
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgba};
-use luminafx_core::{SceneGraph, Timeline};
+use luminafx_core::Timeline;
 use luminafx_renderer::Renderer;
 use luminafx_schema::Scene;
 use rayon::prelude::*;
@@ -295,7 +295,6 @@ impl<R: Renderer> Exporter<R> {
     fn render_blurred(
         &mut self,
         scene: &Scene,
-        objects: &std::collections::HashMap<String, luminafx_schema::Object>,
         timeline: &Timeline,
         frame_idx: u32,
         out: &mut Vec<u8>,
@@ -307,14 +306,13 @@ impl<R: Renderer> Exporter<R> {
 
         let render_at = |renderer: &mut R, t: f64| -> Result<Vec<u8>> {
             let t = t as f32;
-            let states = timeline.get_state_at(t);
+            let objects = timeline.resolve_at(t);
             let camera_state = timeline.get_camera_at(t, scene);
             let camera = scene.camera.as_ref().map(|_| &camera_state);
             renderer.set_time(t);
             renderer
                 .render_frame(
-                    objects,
-                    &states,
+                    &objects,
                     scene.canvas.width,
                     scene.canvas.height,
                     &scene.canvas.background,
@@ -385,7 +383,6 @@ impl<R: Renderer> Exporter<R> {
     /// Render every frame of `scene` as `frame_NNNN.png` files in
     /// `output_dir` (created if missing).
     pub fn export_png_sequence(&mut self, scene: &Scene, output_dir: &Path) -> Result<()> {
-        let scene_graph = SceneGraph::from_scene(scene);
         let timeline = Timeline::from_scene(scene);
         let total_frames = (scene.canvas.duration * scene.canvas.fps as f32).ceil() as u32;
 
@@ -426,7 +423,6 @@ impl<R: Renderer> Exporter<R> {
             for frame_idx in 0..total_frames {
                 self.render_blurred(
                     scene,
-                    &scene_graph.objects,
                     &timeline,
                     frame_idx,
                     &mut frame_data,
@@ -464,7 +460,6 @@ impl<R: Renderer> Exporter<R> {
         scene: &Scene,
         mut sink: F,
     ) -> Result<()> {
-        let scene_graph = SceneGraph::from_scene(scene);
         let timeline = Timeline::from_scene(scene);
         let total_frames = (scene.canvas.duration * scene.canvas.fps as f32).ceil() as u32;
 
@@ -472,7 +467,6 @@ impl<R: Renderer> Exporter<R> {
         for frame_idx in 0..total_frames {
             self.render_blurred(
                 scene,
-                &scene_graph.objects,
                 &timeline,
                 frame_idx,
                 &mut frame_data,
@@ -602,7 +596,6 @@ impl<R: Renderer> Exporter<R> {
     /// Returns an error if the directory cannot be created or a frame cannot
     /// be written.
     pub fn export_exr_sequence(&mut self, scene: &Scene, output_dir: &Path) -> Result<()> {
-        let scene_graph = SceneGraph::from_scene(scene);
         let timeline = Timeline::from_scene(scene);
         let total_frames = (scene.canvas.duration * scene.canvas.fps as f32).ceil() as u32;
         let (width, height) = (scene.canvas.width, scene.canvas.height);
@@ -636,7 +629,6 @@ impl<R: Renderer> Exporter<R> {
             for frame_idx in 0..total_frames {
                 self.render_blurred(
                     scene,
-                    &scene_graph.objects,
                     &timeline,
                     frame_idx,
                     &mut frame_data,

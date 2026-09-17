@@ -16,3 +16,4 @@ pub(crate) mod shadow;
 pub(crate) mod stroke;
 pub(crate) mod text;
 pub(crate) mod ticks;
+pub(crate) mod untyped;

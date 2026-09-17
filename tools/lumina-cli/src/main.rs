@@ -546,11 +546,10 @@ fn load_declared_assets<R: luminafx_renderer::Renderer>(
 
 fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> anyhow::Result<()> {
     use image::{ImageBuffer, Rgba};
-    use luminafx_core::{SceneGraph, Timeline};
+    use luminafx_core::Timeline;
 
-    let scene_graph = SceneGraph::from_scene(scene);
     let timeline = Timeline::from_scene(scene);
-    let states = timeline.get_state_at(time);
+    let objects = timeline.resolve_at(time);
     let cam_state = timeline.get_camera_at(time, scene);
     let camera = scene.camera.as_ref().map(|_| &cam_state);
 
@@ -561,8 +560,7 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
             luminafx_renderer::Renderer::set_time(&mut r, time);
             luminafx_renderer::Renderer::render_frame(
                 &mut r,
-                &scene_graph.objects,
-                &states,
+                &objects,
                 scene.canvas.width,
                 scene.canvas.height,
                 &scene.canvas.background,
@@ -576,8 +574,7 @@ fn render_preview(scene: &Scene, output: &PathBuf, time: f32, backend: &str) -> 
             luminafx_renderer::Renderer::set_time(&mut r, time);
             luminafx_renderer::Renderer::render_frame(
                 &mut r,
-                &scene_graph.objects,
-                &states,
+                &objects,
                 scene.canvas.width,
                 scene.canvas.height,
                 &scene.canvas.background,

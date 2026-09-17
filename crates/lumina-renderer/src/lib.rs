@@ -1,7 +1,7 @@
 //! Rendering backends for the Lumina animation engine.
 //!
-//! Exposes the [`Renderer`] trait — "given objects and their animated states
-//! at one instant, produce an RGBA frame" — and two implementations:
+//! Exposes the [`Renderer`] trait — "given every object as it stands at one
+//! instant, produce an RGBA frame" — and two implementations:
 //!
 //! - [`skia_backend::SkiaRenderer`] — CPU rasterizer over `tiny-skia`. The
 //!   reference backend: all 17 object types, gradients, drop shadows,
@@ -60,15 +60,25 @@ pub mod skia_backend;
 pub mod vello_backend;
 
 use luminafx_schema::{CameraState, Object};
-use serde_json::Value;
 use std::collections::HashMap;
 
-/// A rendering backend: "given objects and their animated states at one
-/// instant, produce an RGBA frame".
+/// A rendering backend: "given every object as it stands at one instant,
+/// produce an RGBA frame".
 pub trait Renderer {
     /// Render one frame to tightly packed RGBA8 (`width * height * 4`
-    /// bytes). `states` carries each object's animated property values at
-    /// the current time; `camera` applies a pan/zoom root transform.
+    /// bytes). `camera` applies a pan/zoom root transform.
+    ///
+    /// # Objects are resolved
+    ///
+    /// `objects` holds every object **as it stands at this instant**, with its
+    /// animation already applied, which is what
+    /// [`luminafx_core::Timeline::resolve_at`] returns. Passing a scene's
+    /// authored objects draws its first frame at every time.
+    ///
+    /// Until v0.6 this took the authored objects plus a separate untyped
+    /// `states` map of animated values, read back by string with a fallback
+    /// default at every read: a misspelled key compiled and silently drew the
+    /// default, and a value of the wrong type did the same (RFC-0002).
     ///
     /// # Alpha is premultiplied
     ///
@@ -86,7 +96,6 @@ pub trait Renderer {
     fn render_frame(
         &mut self,
         objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
         width: u32,
         height: u32,
         background: &str,

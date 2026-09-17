@@ -38,6 +38,30 @@ programme to reach reference quality in [plan/](plan/).
   exists to explain what is wrong, and now it does.
 
 ### Breaking (Rust API)
+- **`Renderer::render_frame` takes resolved objects, and no `states` map**
+  (RFC-0002, Stage 2). Pass what `Timeline::resolve_at` returns where you passed
+  a scene's objects and `get_state_at`:
+
+  ```rust
+  // before
+  let states = timeline.get_state_at(t);
+  renderer.render_frame(&scene_graph.objects, &states, w, h, background, camera)?;
+  // after
+  let objects = timeline.resolve_at(t);
+  renderer.render_frame(&objects, w, h, background, camera)?;
+  ```
+
+  Passing a scene's authored objects still compiles, and draws them as authored,
+  with no animation. Frames are otherwise unchanged: every example and parity
+  fixture resolves to exactly the state the renderer used to read. Two
+  properties the renderer took from the authored scene now follow the timeline
+  instead — an animated `z_index` reorders drawing, and an animated group
+  `children` list changes what the group draws. Both animations were silently
+  ignored before.
+
+  A keyframe whose value cannot become its property's type — a one-element
+  `from` on an `Arrow`, say — now draws that object as authored. Both backends
+  used to return an error for it, aborting the export.
 - **`LaTeXProps` and `MathMLProps` gain a `font_id` field.** Code constructing
   either with a struct literal must add `font_id: None`. This is why the
   workspace moves to **0.6.0**: `cargo-semver-checks` rejected the change against
@@ -49,6 +73,11 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **Both backends now reject a group naming a child that does not exist.** The
+  CPU backend returned an error; the GPU backend drew the group without the
+  child, so the same objects failed or rendered depending on `--backend`.
+  Validation has always rejected such a scene (`UNKNOWN_CHILD_ID`); this is for
+  code that calls a renderer directly.
 - **Animating a particle `count` no longer makes every particle vanish between
   keyframes.** Interpolation produced a fraction even between two whole
   numbers, and both renderers read a fraction where they expected an integer as

@@ -52,7 +52,6 @@ pub struct VelloRenderer {
 /// function where three parameters held the same value at every level.
 struct WalkCtx<'a> {
     objects: &'a HashMap<String, Object>,
-    states: &'a HashMap<String, Value>,
     canvas: (u32, u32),
 }
 
@@ -187,7 +186,6 @@ impl VelloRenderer {
     fn build_scene(
         &self,
         objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
         width: u32,
         height: u32,
         background: &str,
@@ -211,7 +209,6 @@ impl VelloRenderer {
 
         let ctx = WalkCtx {
             objects,
-            states,
             canvas: (width, height),
         };
         for id in crate::common::scene::sorted_root_ids(objects) {
@@ -239,18 +236,17 @@ impl VelloRenderer {
                 luminafx_core::validation::MAX_GROUP_DEPTH
             )));
         }
-        let obj = match ctx.objects.get(id) {
-            Some(o) => o,
-            None => return Ok(()),
-        };
-        let state = match ctx.states.get(id) {
-            Some(s) => s,
-            None => return Ok(()),
-        };
+        // An error, as on the CPU backend. Skipping the missing object drew the
+        // rest of the frame without it, so the same scene failed on one backend
+        // and rendered on the other.
+        let obj = ctx.objects.get(id).ok_or_else(|| {
+            RendererError::Failed(format!("Object '{id}' not found in scene graph"))
+        })?;
+        let state = crate::common::untyped::state_of(obj);
 
         match obj {
             Object::Group(props) => {
-                let transform = crate::common::scene::group_transform(parent, state);
+                let transform = crate::common::scene::group_transform(parent, &state);
 
                 for child_id in crate::common::scene::sorted_children(&props.children, ctx.objects)
                 {
@@ -258,15 +254,7 @@ impl VelloRenderer {
                 }
                 Ok(())
             }
-            _ => self.draw_leaf(
-                scene,
-                obj,
-                state,
-                parent,
-                ctx.canvas,
-                ctx.objects,
-                ctx.states,
-            ),
+            _ => self.draw_leaf(scene, obj, &state, parent, ctx.canvas, ctx.objects),
         }
     }
 
@@ -286,8 +274,7 @@ impl VelloRenderer {
         state: &Value,
         mat: crate::common::scene::Mat2x3,
         canvas: (u32, u32),
-        _objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
+        objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
         let affine = mat.to_kurbo();
         match obj {
@@ -788,8 +775,8 @@ impl VelloRenderer {
                 let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
                 let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0) as f32;
 
-                let axes_s = match states.get(axes_id) {
-                    Some(s) => s,
+                let axes_s = match objects.get(axes_id) {
+                    Some(axes) => crate::common::untyped::state_of(axes),
                     None => return Ok(()),
                 };
                 let x = axes_s["x"].as_f64().unwrap_or(0.0);
@@ -987,13 +974,12 @@ impl Renderer for VelloRenderer {
     fn render_frame(
         &mut self,
         objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
         width: u32,
         height: u32,
         background: &str,
         camera: Option<&CameraState>,
     ) -> Result<Vec<u8>, RendererError> {
-        let scene = self.build_scene(objects, states, width, height, background, camera)?;
+        let scene = self.build_scene(objects, width, height, background, camera)?;
 
         // Create render target texture (Rgba8Unorm with STORAGE_BINDING + COPY_SRC)
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {

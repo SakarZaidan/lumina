@@ -61,13 +61,12 @@ mod tests {
     fn render(
         renderer: &mut SkiaRenderer,
         objects: HashMap<String, Object>,
-        states: HashMap<String, Value>,
         w: u32,
         h: u32,
         bg: &str,
     ) -> Vec<u8> {
         renderer
-            .render_frame(&objects, &states, w, h, bg, None)
+            .render_frame(&objects, w, h, bg, None)
             .expect("render_frame failed")
     }
 
@@ -79,7 +78,7 @@ mod tests {
     #[test]
     fn test_render_empty_scene_correct_size() {
         let mut r = make_renderer();
-        let data = render(&mut r, HashMap::new(), HashMap::new(), 100, 80, "#000000");
+        let data = render(&mut r, HashMap::new(), 100, 80, "#000000");
         // RGBA = 4 bytes per pixel
         assert_eq!(
             data.len(),
@@ -91,7 +90,7 @@ mod tests {
     #[test]
     fn test_background_color_applied() {
         let mut r = make_renderer();
-        let data = render(&mut r, HashMap::new(), HashMap::new(), 10, 10, "#FF0000");
+        let data = render(&mut r, HashMap::new(), 10, 10, "#FF0000");
         let (red, green, blue, _alpha) = pixel_at(&data, 0, 0, 10);
         assert_eq!(red, 255, "Red channel should be 255 for #FF0000 background");
         assert_eq!(green, 0, "Green channel should be 0");
@@ -102,7 +101,7 @@ mod tests {
     fn test_background_short_hex_parsed() {
         let mut r = make_renderer();
         // #000 should parse as #000000 (black)
-        let data = render(&mut r, HashMap::new(), HashMap::new(), 4, 4, "#000");
+        let data = render(&mut r, HashMap::new(), 4, 4, "#000");
         let (red, green, blue, _) = pixel_at(&data, 0, 0, 4);
         assert_eq!(
             (red, green, blue),
@@ -128,26 +127,11 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "c".into(),
-            json!({
-                "cx": 50.0, "cy": 50.0, "radius": 20.0,
-                "fill": "#FF0000", "opacity": 1.0, "stroke_width": 0.0
-            }),
-        );
 
         let mut r1 = make_renderer();
-        let frame1 = render(
-            &mut r1,
-            objects.clone(),
-            states.clone(),
-            100,
-            100,
-            "#000000",
-        );
+        let frame1 = render(&mut r1, objects.clone(), 100, 100, "#000000");
         let mut r2 = make_renderer();
-        let frame2 = render(&mut r2, objects, states, 100, 100, "#000000");
+        let frame2 = render(&mut r2, objects, 100, 100, "#000000");
 
         assert_eq!(
             frame1, frame2,
@@ -172,17 +156,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "c".into(),
-            json!({
-                "cx": 50.0, "cy": 50.0, "radius": 30.0,
-                "fill": "#FFFFFF", "opacity": 1.0, "stroke_width": 0.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
         assert_eq!(red, 255, "Circle center should be white (red=255)");
@@ -215,17 +191,9 @@ mod tests {
                 opacity: 0.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "c".into(),
-            json!({
-                "cx": 50.0, "cy": 50.0, "radius": 40.0,
-                "fill": "#FFFFFF", "opacity": 0.0, "stroke_width": 0.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         // Center pixel should still be black (circle is transparent)
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
@@ -269,24 +237,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "red".into(),
-            json!({
-                "cx": 50.0, "cy": 50.0, "radius": 30.0,
-                "fill": "#FF0000", "opacity": 1.0, "stroke_width": 0.0
-            }),
-        );
-        states.insert(
-            "blue".into(),
-            json!({
-                "cx": 50.0, "cy": 50.0, "radius": 30.0,
-                "fill": "#0000FF", "opacity": 1.0, "stroke_width": 0.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         let (red, _green, blue, _) = pixel_at(&data, 50, 50, 100);
         assert!(
@@ -315,17 +268,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "rect".into(),
-            json!({
-                "x": 10.0, "y": 10.0, "width": 80.0, "height": 80.0,
-                "fill": "#00FF00", "opacity": 1.0, "stroke_width": 0.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         // Center should be green
         let (_, green, _, _) = pixel_at(&data, 50, 50, 100);
@@ -358,18 +303,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "l".into(),
-            json!({
-                "x1": 0.0, "y1": 50.0, "x2": 100.0, "y2": 50.0,
-                "stroke": "#FFFFFF", "stroke_width": 4.0, "opacity": 1.0,
-                "draw_fraction": 0.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         // Center of line at (50, 50) should remain black
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
@@ -398,18 +334,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "l".into(),
-            json!({
-                "x1": 10.0, "y1": 50.0, "x2": 90.0, "y2": 50.0,
-                "stroke": "#FFFFFF", "stroke_width": 4.0, "opacity": 1.0,
-                "draw_fraction": 1.0
-            }),
-        );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
 
         // Center of line at (50, 50) should be white
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
@@ -439,16 +366,8 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "img".into(),
-            json!({
-                "asset_id": "logo", "x": 0.0, "y": 0.0,
-                "width": 100.0, "height": 100.0, "opacity": 1.0, "rotation": 0.0
-            }),
-        );
 
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
         assert!(
             red > 200 && green < 60 && blue < 60,
@@ -476,16 +395,8 @@ mod tests {
                 opacity: 0.5,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "img".into(),
-            json!({
-                "asset_id": "logo", "x": 0.0, "y": 0.0,
-                "width": 100.0, "height": 100.0, "opacity": 0.5, "rotation": 0.0
-            }),
-        );
 
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
         let (red, _, _, _) = pixel_at(&data, 50, 50, 100);
         assert!(
             (100..=160).contains(&red),
@@ -512,20 +423,10 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "g".into(),
-            json!({
-                "asset_id": "anim", "x": 0.0, "y": 0.0,
-                "width": 100.0, "height": 100.0, "opacity": 1.0, "rotation": 0.0
-            }),
-        );
 
         // Frame 0 (0–100ms) is red; frame 1 (100–200ms) is blue.
         r.set_time(0.0);
-        let f0 = r
-            .render_frame(&objects, &states, 100, 100, "#000000", None)
-            .unwrap();
+        let f0 = r.render_frame(&objects, 100, 100, "#000000", None).unwrap();
         let (r0, _, b0, _) = pixel_at(&f0, 50, 50, 100);
         assert!(
             r0 > b0,
@@ -533,9 +434,7 @@ mod tests {
         );
 
         r.set_time(0.15);
-        let f1 = r
-            .render_frame(&objects, &states, 100, 100, "#000000", None)
-            .unwrap();
+        let f1 = r.render_frame(&objects, 100, 100, "#000000", None).unwrap();
         let (r1, _, b1, _) = pixel_at(&f1, 50, 50, 100);
         assert!(
             b1 > r1,
@@ -563,16 +462,8 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "s".into(),
-            json!({
-                "asset_id": "icon", "x": 0.0, "y": 0.0,
-                "width": 100.0, "height": 100.0, "opacity": 1.0, "rotation": 0.0
-            }),
-        );
 
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
         let (red, green, blue, _) = pixel_at(&data, 50, 50, 100);
         assert!(
             green > 200 && red < 60 && blue < 60,
@@ -580,35 +471,23 @@ mod tests {
         );
     }
 
-    fn rect_object() -> Object {
-        Object::Rectangle(RectangleProps {
-            x: 0.0,
-            y: 0.0,
-            width: 100.0,
-            height: 100.0,
-            z_index: 1,
-            fill: "#FFFFFF".into(),
-            stroke: None,
-            stroke_width: 0.0,
-            rx: 0.0,
-            ry: 0.0,
-            shadow: None,
-            opacity: 1.0,
-        })
+    /// A rectangle from the properties a scene file would give it.
+    fn rectangle(properties: Value) -> Object {
+        let mut object = json!({ "type": "Rectangle" });
+        object["properties"] = properties;
+        serde_json::from_value(object).expect("rectangle properties")
     }
 
     #[test]
     fn test_linear_gradient_fill_transitions_red_to_blue() {
         let mut objects = HashMap::new();
-        objects.insert("r".into(), rect_object());
-        let mut states = HashMap::new();
-        states.insert("r".into(), json!({
+        objects.insert("r".into(), rectangle(json!({
             "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0, "opacity": 1.0,
             "fill": { "type": "linear", "stops": [[0.0, "#FF0000"], [1.0, "#0000FF"]], "angle": 0.0 }
-        }));
+        })));
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
         let (lr, _, lb, _) = pixel_at(&data, 6, 50, 100);
         let (rr, _, rb, _) = pixel_at(&data, 93, 50, 100);
         assert!(
@@ -624,18 +503,16 @@ mod tests {
     #[test]
     fn test_rounded_rectangle_clips_corner() {
         let mut objects = HashMap::new();
-        objects.insert("r".into(), rect_object());
-        let mut states = HashMap::new();
-        states.insert(
+        objects.insert(
             "r".into(),
-            json!({
+            rectangle(json!({
                 "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0, "opacity": 1.0,
                 "fill": "#FFFFFF", "rx": 40.0, "ry": 40.0
-            }),
+            })),
         );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#000000");
+        let data = render(&mut r, objects, 100, 100, "#000000");
         // Corner is cut away by the radius → background.
         let (cr, cg, cb, _) = pixel_at(&data, 1, 1, 100);
         assert_eq!(
@@ -655,20 +532,18 @@ mod tests {
     #[test]
     fn test_drop_shadow_darkens_outside_shape() {
         let mut objects = HashMap::new();
-        objects.insert("r".into(), rect_object());
-        let mut states = HashMap::new();
         // 20x20 green rect centered at (40..60), black blurred shadow over white bg.
-        states.insert(
+        objects.insert(
             "r".into(),
-            json!({
+            rectangle(json!({
                 "x": 40.0, "y": 40.0, "width": 20.0, "height": 20.0, "opacity": 1.0,
                 "fill": "#00FF00",
                 "shadow": { "color": "#000000", "blur": 8.0, "dx": 0.0, "dy": 0.0, "opacity": 1.0 }
-            }),
+            })),
         );
 
         let mut r = make_renderer();
-        let data = render(&mut r, objects, states, 100, 100, "#FFFFFF");
+        let data = render(&mut r, objects, 100, 100, "#FFFFFF");
         // Just outside the rect's left edge, within the blur radius: darkened by shadow.
         let (sr, sg, sb, _) = pixel_at(&data, 34, 50, 100);
         assert!(
@@ -702,20 +577,11 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "p".into(),
-            json!({
-                "count": 200, "emitter_x": 50.0, "emitter_y": 50.0,
-                "lifetime": 2.0, "speed": 40.0, "spread": 360.0, "size": 3.0,
-                "color": "#FFFFFF", "opacity": 1.0
-            }),
-        );
 
         let mut r1 = make_renderer();
         r1.set_time(0.5);
         let f1 = r1
-            .render_frame(&objects, &states, 100, 100, "#000000", None)
+            .render_frame(&objects, 100, 100, "#000000", None)
             .unwrap();
         // Some pixels must be lit by particles.
         let lit = f1
@@ -728,7 +594,7 @@ mod tests {
         let mut r2 = make_renderer();
         r2.set_time(0.5);
         let f2 = r2
-            .render_frame(&objects, &states, 100, 100, "#000000", None)
+            .render_frame(&objects, 100, 100, "#000000", None)
             .unwrap();
         assert_eq!(
             f1, f2,
@@ -763,18 +629,9 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "p".into(),
-            json!({
-                "count": 300, "emitter_x": 100.0, "emitter_y": 100.0,
-                "lifetime": 2.0, "speed": 40.0, "spread": 360.0, "size": 4.0,
-                "color": "#FFFFFF", "opacity": 1.0
-            }),
-        );
         r.set_time(0.5);
         let frame = r
-            .render_frame(&objects, &states, 200, 200, "#000000", None)
+            .render_frame(&objects, 200, 200, "#000000", None)
             .expect("vello render");
         let lit = frame
             .chunks(4)
@@ -806,13 +663,8 @@ mod tests {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "img".into(),
-            json!({ "asset_id": "logo", "x": 20.0, "y": 20.0, "width": 40.0, "height": 40.0, "rotation": 0.0, "opacity": 1.0 }),
-        );
         let frame = r
-            .render_frame(&objects, &states, 100, 100, "#000000", None)
+            .render_frame(&objects, 100, 100, "#000000", None)
             .expect("vello render");
         // The red square should produce strongly-red, low-blue pixels somewhere.
         let red_pixels = frame
@@ -860,34 +712,6 @@ mod tests {
         assert_eq!(latex_to_unicode(r"\vec{v}"), "v");
         assert_eq!(latex_to_unicode(r"\unknowncmd{x}"), "x");
         assert!(!latex_to_unicode(r"\vec{a} + \hat{b}").contains('\\'));
-    }
-
-    #[test]
-    fn test_missing_object_state_returns_error() {
-        let mut objects = HashMap::new();
-        objects.insert(
-            "c".into(),
-            Object::Circle(CircleProps {
-                cx: 50.0,
-                cy: 50.0,
-                radius: 20.0,
-                z_index: 0,
-                fill: "#FFF".into(),
-                stroke: None,
-                stroke_width: 0.0,
-                shadow: None,
-                opacity: 1.0,
-            }),
-        );
-        // states is intentionally empty
-        let states = HashMap::new();
-
-        let mut r = make_renderer();
-        let result = r.render_frame(&objects, &states, 100, 100, "#000000", None);
-        assert!(
-            result.is_err(),
-            "render_frame should return Err when object has no state"
-        );
     }
 }
 
@@ -938,10 +762,9 @@ mod hash_range {
 mod frame_buffer_reuse {
     use crate::{skia_backend::SkiaRenderer, Renderer};
     use luminafx_schema::{CircleProps, Object, RectangleProps};
-    use serde_json::json;
     use std::collections::HashMap;
 
-    fn circle_scene() -> (HashMap<String, Object>, HashMap<String, serde_json::Value>) {
+    fn circle_scene() -> HashMap<String, Object> {
         let mut objects = HashMap::new();
         objects.insert(
             "c".to_string(),
@@ -957,15 +780,10 @@ mod frame_buffer_reuse {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "c".to_string(),
-            json!({"cx":50.0,"cy":50.0,"radius":30.0,"fill":"#FF0000","opacity":1.0,"z_index":1}),
-        );
-        (objects, states)
+        objects
     }
 
-    fn rect_scene() -> (HashMap<String, Object>, HashMap<String, serde_json::Value>) {
+    fn rect_scene() -> HashMap<String, Object> {
         let mut objects = HashMap::new();
         objects.insert(
             "r".to_string(),
@@ -984,33 +802,27 @@ mod frame_buffer_reuse {
                 opacity: 1.0,
             }),
         );
-        let mut states = HashMap::new();
-        states.insert(
-            "r".to_string(),
-            json!({"x":10.0,"y":10.0,"width":20.0,"height":20.0,"fill":"#00FF00",
-                   "opacity":1.0,"z_index":1,"rx":0.0,"ry":0.0}),
-        );
-        (objects, states)
+        objects
     }
 
     #[test]
     fn a_reused_buffer_renders_the_same_as_a_fresh_one() {
-        let (c_objects, c_states) = circle_scene();
-        let (r_objects, r_states) = rect_scene();
+        let c_objects = circle_scene();
+        let r_objects = rect_scene();
 
         // A renderer that has drawn something else first.
         let mut reused = SkiaRenderer::new();
         let _ = reused
-            .render_frame(&c_objects, &c_states, 100, 100, "#000000", None)
+            .render_frame(&c_objects, 100, 100, "#000000", None)
             .expect("first render");
         let after_reuse = reused
-            .render_frame(&r_objects, &r_states, 100, 100, "#000000", None)
+            .render_frame(&r_objects, 100, 100, "#000000", None)
             .expect("second render");
 
         // A renderer that has drawn nothing.
         let mut fresh = SkiaRenderer::new();
         let from_fresh = fresh
-            .render_frame(&r_objects, &r_states, 100, 100, "#000000", None)
+            .render_frame(&r_objects, 100, 100, "#000000", None)
             .expect("fresh render");
 
         assert_eq!(
@@ -1024,19 +836,19 @@ mod frame_buffer_reuse {
     fn a_large_frame_followed_by_a_small_one_leaves_nothing_behind() {
         // The buffer is only reused when the dimensions match. Shrinking must
         // reallocate rather than render into a corner of the larger buffer.
-        let (objects, states) = circle_scene();
+        let objects = circle_scene();
 
         let mut reused = SkiaRenderer::new();
         let _ = reused
-            .render_frame(&objects, &states, 200, 200, "#123456", None)
+            .render_frame(&objects, 200, 200, "#123456", None)
             .expect("large render");
         let small = reused
-            .render_frame(&objects, &states, 60, 60, "#123456", None)
+            .render_frame(&objects, 60, 60, "#123456", None)
             .expect("small render");
 
         let mut fresh = SkiaRenderer::new();
         let expected = fresh
-            .render_frame(&objects, &states, 60, 60, "#123456", None)
+            .render_frame(&objects, 60, 60, "#123456", None)
             .expect("fresh small render");
 
         assert_eq!(
@@ -1054,14 +866,14 @@ mod frame_buffer_reuse {
     fn repeated_renders_stay_identical() {
         // Determinism is the guarantee the whole engine rests on, and buffer
         // reuse is exactly the kind of change that could quietly break it.
-        let (objects, states) = circle_scene();
+        let objects = circle_scene();
         let mut r = SkiaRenderer::new();
         let first = r
-            .render_frame(&objects, &states, 120, 90, "#0F0F1A", None)
+            .render_frame(&objects, 120, 90, "#0F0F1A", None)
             .expect("render");
         for i in 0..8 {
             let again = r
-                .render_frame(&objects, &states, 120, 90, "#0F0F1A", None)
+                .render_frame(&objects, 120, 90, "#0F0F1A", None)
                 .expect("render");
             assert_eq!(first, again, "render {i} differed from the first");
         }
@@ -1072,36 +884,33 @@ mod frame_buffer_reuse {
         // An error path that dropped the buffer would make the next frame pay
         // the allocation this exists to avoid — a silent performance
         // regression with no test to catch it.
+        // A group naming a child that does not exist. Validation rejects this
+        // (`UNKNOWN_CHILD_ID`), but a renderer is a public API in its own right.
         let mut objects = HashMap::new();
         objects.insert(
             "bad".to_string(),
-            Object::Arrow(luminafx_schema::ArrowProps {
-                from: [0.0, 0.0],
-                to: [1.0, 1.0],
+            Object::Group(luminafx_schema::GroupProps {
+                children: vec!["missing".to_string()],
+                x: 0.0,
+                y: 0.0,
                 z_index: 1,
-                color: "#FFFFFF".into(),
-                stroke_width: 1.0,
+                scale: 1.0,
+                rotation: 0.0,
                 opacity: 1.0,
-                label: None,
             }),
         );
-        let mut states = HashMap::new();
-        // A malformed `from` — the backends agree this is an error (#53).
-        states.insert("bad".to_string(), json!({"from":[0.0],"to":[1.0,1.0]}));
 
         let mut r = SkiaRenderer::new();
-        assert!(r
-            .render_frame(&objects, &states, 64, 64, "#000000", None)
-            .is_err());
+        assert!(r.render_frame(&objects, 64, 64, "#000000", None).is_err());
 
         // The next render must still succeed and be correct.
-        let (c_objects, c_states) = circle_scene();
+        let c_objects = circle_scene();
         let after = r
-            .render_frame(&c_objects, &c_states, 64, 64, "#000000", None)
+            .render_frame(&c_objects, 64, 64, "#000000", None)
             .expect("render after an error");
         let mut fresh = SkiaRenderer::new();
         let expected = fresh
-            .render_frame(&c_objects, &c_states, 64, 64, "#000000", None)
+            .render_frame(&c_objects, 64, 64, "#000000", None)
             .expect("fresh render");
         assert_eq!(after, expected);
     }

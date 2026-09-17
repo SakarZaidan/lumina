@@ -132,9 +132,9 @@ impl SkiaRenderer {
     fn resolve_axes_context(
         &self,
         axes_id: &str,
-        states: &HashMap<String, Value>,
+        objects: &HashMap<String, Object>,
     ) -> Option<AxesContext> {
-        let s = states.get(axes_id)?;
+        let s = &crate::common::untyped::state_of(objects.get(axes_id)?);
         let x = s["x"].as_f64()? as f32;
         let y = s["y"].as_f64()? as f32;
         let x_range = s["x_range"].as_array()?;
@@ -218,7 +218,6 @@ impl SkiaRenderer {
         pixmap: &mut Pixmap,
         id: &str,
         objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
         parent_transform: Transform,
         depth: usize,
     ) -> Result<(), RendererError> {
@@ -231,24 +230,22 @@ impl SkiaRenderer {
         let obj = objects.get(id).ok_or_else(|| {
             RendererError::Failed(format!("Object '{id}' not found in scene graph"))
         })?;
-        let state = states
-            .get(id)
-            .ok_or_else(|| RendererError::Failed(format!("No state for object '{id}'")))?;
+        let state = crate::common::untyped::state_of(obj);
 
         match obj {
             Object::Group(props) => {
                 let transform = crate::common::scene::group_transform(
                     crate::common::scene::Mat2x3::from_tiny(parent_transform),
-                    state,
+                    &state,
                 )
                 .to_tiny();
 
                 for child_id in crate::common::scene::sorted_children(&props.children, objects) {
-                    self.draw_node(pixmap, child_id, objects, states, transform, depth + 1)?;
+                    self.draw_node(pixmap, child_id, objects, transform, depth + 1)?;
                 }
             }
             _ => {
-                self.draw_leaf_object(pixmap, obj, state, parent_transform, states)?;
+                self.draw_leaf_object(pixmap, obj, &state, parent_transform, objects)?;
             }
         }
         Ok(())
@@ -260,7 +257,7 @@ impl SkiaRenderer {
         obj: &Object,
         state: &Value,
         transform: Transform,
-        states: &HashMap<String, Value>,
+        objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
         match obj {
             Object::Circle(_) => {
@@ -802,7 +799,7 @@ impl SkiaRenderer {
                 let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
                 let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
 
-                let Some(ctx) = self.resolve_axes_context(axes_id, states) else {
+                let Some(ctx) = self.resolve_axes_context(axes_id, objects) else {
                     return Ok(());
                 };
 
@@ -953,7 +950,6 @@ impl Renderer for SkiaRenderer {
     fn render_frame(
         &mut self,
         objects: &HashMap<String, Object>,
-        states: &HashMap<String, Value>,
         width: u32,
         height: u32,
         background: &str,
@@ -974,7 +970,7 @@ impl Renderer for SkiaRenderer {
             crate::common::scene::camera_transform(camera, width, height).to_tiny();
 
         for id in crate::common::scene::sorted_root_ids(objects) {
-            if let Err(e) = self.draw_node(&mut pixmap, id, objects, states, root_transform, 0) {
+            if let Err(e) = self.draw_node(&mut pixmap, id, objects, root_transform, 0) {
                 // Put the buffer back before returning, or the next frame pays
                 // the allocation this exists to avoid.
                 self.frame = Some(pixmap);
