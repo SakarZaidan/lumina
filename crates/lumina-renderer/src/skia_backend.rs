@@ -256,8 +256,10 @@ impl SkiaRenderer {
                 let mut pb = PathBuilder::new();
                 pb.push_circle(props.cx, props.cy, props.radius);
                 if let Some(path) = pb.finish() {
-                    let fill = fill_spec(&props.fill, props.opacity)
-                        .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                    let fill = props.fill.as_ref().map(|paint| {
+                        fill_spec(paint, props.opacity)
+                            .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity))
+                    });
                     let stroke = props
                         .stroke
                         .as_ref()
@@ -267,7 +269,7 @@ impl SkiaRenderer {
                         pixmap,
                         &path,
                         transform,
-                        Some(&fill),
+                        fill.as_ref(),
                         stroke.as_ref(),
                         props.stroke_width,
                         shadow.as_ref(),
@@ -281,8 +283,10 @@ impl SkiaRenderer {
                 }
                 let rx = props.rx;
                 let ry = if props.ry > 0.0 { props.ry } else { rx };
-                let fill = fill_spec(&props.fill, props.opacity)
-                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                let fill = props.fill.as_ref().map(|paint| {
+                    fill_spec(paint, props.opacity)
+                        .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity))
+                });
                 let stroke = props
                     .stroke
                     .as_ref()
@@ -306,7 +310,7 @@ impl SkiaRenderer {
                             pixmap,
                             &path,
                             transform,
-                            Some(&fill),
+                            fill.as_ref(),
                             stroke.as_ref(),
                             sw,
                             shadow.as_ref(),
@@ -314,10 +318,12 @@ impl SkiaRenderer {
                     }
                 } else if let Some(rect) = Rect::from_xywh(x, y, width, height) {
                     // Fast path: axis-aligned fill (solid or gradient), no allocation.
-                    let mut paint = Paint::default();
-                    paint.anti_alias = true;
-                    apply_fill(&mut paint, &fill, rect);
-                    pixmap.fill_rect(rect, &paint, transform, None);
+                    if let Some(fill) = &fill {
+                        let mut paint = Paint::default();
+                        paint.anti_alias = true;
+                        apply_fill(&mut paint, fill, rect);
+                        pixmap.fill_rect(rect, &paint, transform, None);
+                    }
 
                     if let Some(s) = &stroke {
                         let mut pb = PathBuilder::new();
@@ -347,8 +353,10 @@ impl SkiaRenderer {
                 pb.close();
 
                 if let Some(path) = pb.finish() {
-                    let fill = fill_spec(&props.fill, props.opacity)
-                        .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity));
+                    let fill = props.fill.as_ref().map(|paint| {
+                        fill_spec(paint, props.opacity)
+                            .unwrap_or_else(|| FillSpec::solid("#FFFFFF", props.opacity))
+                    });
                     let stroke = props
                         .stroke
                         .as_ref()
@@ -358,7 +366,7 @@ impl SkiaRenderer {
                         pixmap,
                         &path,
                         transform,
-                        Some(&fill),
+                        fill.as_ref(),
                         stroke.as_ref(),
                         props.stroke_width,
                         shadow.as_ref(),
@@ -375,7 +383,10 @@ impl SkiaRenderer {
                     let Some(path) = crate::common::path::to_tiny_path(&data) else {
                         return Ok(());
                     };
-                    let fill = fill_spec(&props.fill, props.opacity);
+                    let fill = props
+                        .fill
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, props.opacity));
                     let stroke = props
                         .stroke
                         .as_ref()

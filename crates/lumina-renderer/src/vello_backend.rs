@@ -297,15 +297,18 @@ impl VelloRenderer {
                         draw_shadow_image(scene, canvas, &path, mat, &spec);
                     }
                 }
-                let fill = fill_spec(&props.fill, opacity)
-                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
-                scene.fill(
-                    Fill::NonZero,
-                    affine,
-                    &brush_from_fill(&fill, bbox),
-                    None,
-                    &circle,
-                );
+                let fill = props.fill.as_ref().map(|paint| {
+                    fill_spec(paint, opacity).unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity))
+                });
+                if let Some(fill) = &fill {
+                    scene.fill(
+                        Fill::NonZero,
+                        affine,
+                        &brush_from_fill(fill, bbox),
+                        None,
+                        &circle,
+                    );
+                }
 
                 if let Some(stroke) = props
                     .stroke
@@ -332,8 +335,9 @@ impl VelloRenderer {
                 let rx = props.rx;
                 let ry = if props.ry > 0.0 { props.ry } else { rx };
                 let bbox = (x as f32, y as f32, w as f32, h as f32);
-                let fill = fill_spec(&props.fill, opacity)
-                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
+                let fill = props.fill.as_ref().map(|paint| {
+                    fill_spec(paint, opacity).unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity))
+                });
                 let stroke = props
                     .stroke
                     .as_ref()
@@ -364,13 +368,15 @@ impl VelloRenderer {
                         crate::common::path::to_kurbo_path(&crate::common::path::rounded_rect(
                             x as f32, y as f32, w as f32, h as f32, rx, ry,
                         ));
-                    scene.fill(
-                        Fill::NonZero,
-                        affine,
-                        &brush_from_fill(&fill, bbox),
-                        None,
-                        &path,
-                    );
+                    if let Some(fill) = &fill {
+                        scene.fill(
+                            Fill::NonZero,
+                            affine,
+                            &brush_from_fill(fill, bbox),
+                            None,
+                            &path,
+                        );
+                    }
                     if let Some(s) = &stroke {
                         scene.stroke(
                             &flat_stroke(sw),
@@ -382,13 +388,15 @@ impl VelloRenderer {
                     }
                 } else {
                     let rect = Rect::new(x, y, x + w, y + h);
-                    scene.fill(
-                        Fill::NonZero,
-                        affine,
-                        &brush_from_fill(&fill, bbox),
-                        None,
-                        &rect,
-                    );
+                    if let Some(fill) = &fill {
+                        scene.fill(
+                            Fill::NonZero,
+                            affine,
+                            &brush_from_fill(fill, bbox),
+                            None,
+                            &rect,
+                        );
+                    }
                     if let Some(s) = &stroke {
                         scene.stroke(
                             &flat_stroke(sw),
@@ -513,15 +521,18 @@ impl VelloRenderer {
                         draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
                     }
                 }
-                let fill = fill_spec(&props.fill, opacity)
-                    .unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity));
-                scene.fill(
-                    Fill::NonZero,
-                    affine,
-                    &brush_from_fill(&fill, bbox),
-                    None,
-                    &path,
-                );
+                let fill = props.fill.as_ref().map(|paint| {
+                    fill_spec(paint, opacity).unwrap_or_else(|| FillSpec::solid("#FFFFFF", opacity))
+                });
+                if let Some(fill) = &fill {
+                    scene.fill(
+                        Fill::NonZero,
+                        affine,
+                        &brush_from_fill(fill, bbox),
+                        None,
+                        &path,
+                    );
+                }
 
                 if let Some(stroke) = props
                     .stroke
@@ -553,7 +564,11 @@ impl VelloRenderer {
                             draw_shadow_image(scene, canvas, &tiny_path, mat, &spec);
                         }
                     }
-                    if let Some(fill) = fill_spec(&props.fill, opacity) {
+                    if let Some(fill) = props
+                        .fill
+                        .as_ref()
+                        .and_then(|paint| fill_spec(paint, opacity))
+                    {
                         scene.fill(
                             Fill::NonZero,
                             affine,

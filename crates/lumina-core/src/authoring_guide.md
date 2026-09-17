@@ -103,8 +103,8 @@ other name is an error with the nearest match.
 ## Colour and paint
 
 Colours are hex strings: `"#RGB"`, `"#RRGGBB"` or `"#RRGGBBAA"`. There is no
-`"none"` — for no fill use an alpha of `00`. A `fill` or `stroke` may also be a
-gradient:
+`"none"` colour: a shape with no fill writes `"fill": null`, as `stroke` has
+always done. A `fill` or `stroke` may also be a gradient:
 
 ```json
 { "type": "linear", "stops": [[0.0, "#F78166"], [1.0, "#3D1A12"]], "angle": 45 }
@@ -144,7 +144,7 @@ The errors worth knowing before you write:
 | `PROPERTY_VALUE_INVALID` | Right kind, wrong shape: a point with one coordinate. |
 | `UNKNOWN_OBJECT_ID` | A timeline entry, group child or event names an id that is not in `objects`. |
 | `UNKNOWN_EASING` | Not one of the names above. |
-| `INVALID_COLOR` | Not a hex colour. `"none"` is not a colour. |
+| `INVALID_COLOR` | Not a hex colour. `"none"` is not one; write `null` for no paint. |
 | `UNKNOWN_ASSET_ID` | The asset is not declared under `assets`. |
 | `CIRCULAR_GROUP_REFERENCE` | A group contains itself, directly or through another. |
 | `TOO_MANY_FRAMES`, `CANVAS_TOO_LARGE`, `FPS_TOO_HIGH` | The scene asks for more work than the engine will do; make it smaller. |

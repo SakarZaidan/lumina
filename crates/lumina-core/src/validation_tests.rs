@@ -599,8 +599,8 @@ mod colours {
             .find(|e| e.code == "INVALID_COLOR")
             .expect("rejected");
         assert!(
-            e.fix_suggestion.contains("Omit") || e.fix_suggestion.contains("alpha"),
-            "should suggest the alternative: {}",
+            e.fix_suggestion.contains("null"),
+            "should point at the way to say it: {}",
             e.fix_suggestion
         );
     }

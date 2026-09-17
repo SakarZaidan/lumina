@@ -720,7 +720,7 @@ mod tests {
                         cy: 50.0,
                         radius: 20.0,
                         z_index: 0,
-                        fill: "#FF0000".into(),
+                        fill: Some("#FF0000".into()),
                         stroke: None,
                         stroke_width: 0.0,
                         shadow: None,

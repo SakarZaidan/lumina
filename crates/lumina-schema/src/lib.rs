@@ -315,9 +315,10 @@ pub struct CircleProps {
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,
-    /// Fill paint (solid hex or gradient). Defaults to white.
-    #[serde(default)]
-    pub fill: Paint,
+    /// Fill paint (solid hex or gradient). Absent means white; `null` means no
+    /// fill at all, as it already did for `stroke`.
+    #[serde(default = "default_fill_paint")]
+    pub fill: Option<Paint>,
     /// Optional stroke paint (solid hex or gradient).
     #[serde(default)]
     pub stroke: Option<Paint>,
@@ -346,9 +347,10 @@ pub struct RectangleProps {
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,
-    /// Fill paint (solid hex or gradient). Defaults to white.
-    #[serde(default)]
-    pub fill: Paint,
+    /// Fill paint (solid hex or gradient). Absent means white; `null` means no
+    /// fill at all, as it already did for `stroke`.
+    #[serde(default = "default_fill_paint")]
+    pub fill: Option<Paint>,
     /// Optional stroke paint (solid hex or gradient).
     #[serde(default)]
     pub stroke: Option<Paint>,
@@ -377,9 +379,10 @@ pub struct PolygonProps {
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,
-    /// Fill paint (solid hex or gradient). Defaults to white.
-    #[serde(default)]
-    pub fill: Paint,
+    /// Fill paint (solid hex or gradient). Absent means white; `null` means no
+    /// fill at all, as it already did for `stroke`.
+    #[serde(default = "default_fill_paint")]
+    pub fill: Option<Paint>,
     /// Optional stroke paint (solid hex or gradient).
     #[serde(default)]
     pub stroke: Option<Paint>,
@@ -402,9 +405,10 @@ pub struct PathProps {
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,
-    /// Fill paint (solid hex or gradient). Defaults to white.
-    #[serde(default)]
-    pub fill: Paint,
+    /// Fill paint (solid hex or gradient). Absent means white; `null` means no
+    /// fill at all, as it already did for `stroke`.
+    #[serde(default = "default_fill_paint")]
+    pub fill: Option<Paint>,
     /// Optional stroke paint (solid hex or gradient).
     #[serde(default)]
     pub stroke: Option<Paint>,
@@ -967,6 +971,11 @@ pub struct ParticlesProps {
 fn default_fill() -> String {
     "#FFFFFF".to_string()
 }
+/// A shape written without a `fill` is white, as it always has been. Writing
+/// `"fill": null` is how a shape says it has none.
+fn default_fill_paint() -> Option<Paint> {
+    Some(Paint::default())
+}
 fn default_stroke() -> String {
     "#FFFFFF".to_string()
 }
@@ -1015,7 +1024,7 @@ fn default_sample_count() -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Paint, Shadow};
+    use super::{CircleProps, Paint, Shadow};
     use serde_json::json;
 
     #[test]
@@ -1028,6 +1037,20 @@ mod tests {
         };
         assert_eq!(gradient.kind, "linear");
         assert_eq!(gradient.radius, None);
+    }
+
+    #[test]
+    fn a_shape_without_a_fill_is_white_and_a_null_fill_is_none() {
+        // `null` is how `stroke` has always said "none"; `fill` says it the
+        // same way now, and leaving the field out still means white.
+        let absent: CircleProps =
+            serde_json::from_value(json!({ "cx": 1, "cy": 1, "radius": 5 })).expect("circle");
+        assert!(matches!(absent.fill, Some(Paint::Solid(ref hex)) if hex == "#FFFFFF"));
+
+        let none: CircleProps =
+            serde_json::from_value(json!({ "cx": 1, "cy": 1, "radius": 5, "fill": null }))
+                .expect("circle");
+        assert!(none.fill.is_none());
     }
 
     #[test]

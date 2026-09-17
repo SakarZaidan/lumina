@@ -120,7 +120,7 @@ mod tests {
                 cy: 50.0,
                 radius: 20.0,
                 z_index: 1,
-                fill: "#FF0000".into(),
+                fill: Some("#FF0000".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -149,7 +149,7 @@ mod tests {
                 cy: 50.0,
                 radius: 30.0,
                 z_index: 1,
-                fill: "#FFFFFF".into(),
+                fill: Some("#FFFFFF".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -184,7 +184,7 @@ mod tests {
                 cy: 50.0,
                 radius: 40.0,
                 z_index: 1,
-                fill: "#FFFFFF".into(),
+                fill: Some("#FFFFFF".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -216,7 +216,7 @@ mod tests {
                 cy: 50.0,
                 radius: 30.0,
                 z_index: 1,
-                fill: "#FF0000".into(),
+                fill: Some("#FF0000".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -230,7 +230,7 @@ mod tests {
                 cy: 50.0,
                 radius: 30.0,
                 z_index: 2,
-                fill: "#0000FF".into(),
+                fill: Some("#0000FF".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -259,7 +259,7 @@ mod tests {
                 width: 80.0,
                 height: 80.0,
                 z_index: 1,
-                fill: "#00FF00".into(),
+                fill: Some("#00FF00".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 rx: 0.0,
@@ -498,6 +498,28 @@ mod tests {
             rb > rr,
             "right edge should be blue-dominant, got r={rr} b={rb}"
         );
+    }
+
+    #[test]
+    fn a_null_fill_draws_the_outline_and_nothing_inside() {
+        // `"fill": null` is how a shape says it has none, the way `stroke`
+        // always has. Before, every closed shape had a fill, and an SVG-style
+        // `"none"` was drawn as opaque white.
+        let mut objects = HashMap::new();
+        objects.insert(
+            "ring".into(),
+            rectangle(json!({
+                "x": 20.0, "y": 20.0, "width": 60.0, "height": 60.0,
+                "fill": null, "stroke": "#FF0000", "stroke_width": 6.0
+            })),
+        );
+
+        let mut r = make_renderer();
+        let data = render(&mut r, objects, 100, 100, "#000000");
+        let (mr, mg, mb, _) = pixel_at(&data, 50, 50, 100);
+        assert_eq!((mr, mg, mb), (0, 0, 0), "the interior was filled");
+        let (er, _, _, _) = pixel_at(&data, 50, 20, 100);
+        assert!(er > 200, "the outline is missing, got red={er}");
     }
 
     #[test]
@@ -773,7 +795,7 @@ mod frame_buffer_reuse {
                 cy: 50.0,
                 radius: 30.0,
                 z_index: 1,
-                fill: "#FF0000".into(),
+                fill: Some("#FF0000".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,
@@ -795,7 +817,7 @@ mod frame_buffer_reuse {
                 rx: 0.0,
                 ry: 0.0,
                 z_index: 1,
-                fill: "#00FF00".into(),
+                fill: Some("#00FF00".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,

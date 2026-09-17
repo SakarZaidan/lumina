@@ -35,7 +35,7 @@ fn make_scene(n_objects: usize) -> Scene {
                 cy: (i / 100) as f32 * 10.0,
                 radius: 5.0,
                 z_index: i as i32,
-                fill: "#FF6B6B".into(),
+                fill: Some("#FF6B6B".into()),
                 stroke: None,
                 stroke_width: 0.0,
                 shadow: None,

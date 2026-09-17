@@ -62,6 +62,13 @@ programme to reach reference quality in [plan/](plan/).
   exists to explain what is wrong, and now it does.
 
 ### Added
+- **A shape can say it has no fill: `"fill": null`.** Exactly what `stroke`
+  has always meant by `null`, and what issue #74 asked for. A shape written
+  without a `fill` is still white, so no existing scene changes; `"none"` is
+  still not a colour, and now points at `null` rather than an alpha-zero
+  workaround. `fill` is `Option<Paint>` on `Circle`, `Rectangle`, `Polygon` and
+  `Path` — **breaking for Rust code** that builds those props with a struct
+  literal.
 - **An authoring guide written for models, shipped with the engine.** How to
   write a scene: the document's shape, every object type with its required
   properties, the timeline's rules, the easing names, and what the validator
