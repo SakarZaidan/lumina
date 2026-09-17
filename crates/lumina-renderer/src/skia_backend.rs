@@ -264,9 +264,13 @@ impl SkiaRenderer {
         // pay for it.
         let untyped;
         let state: &Value = match obj {
-            Object::Circle(_) | Object::Rectangle(_) | Object::Polygon(_) | Object::Path(_) => {
-                &Value::Null
-            }
+            Object::Circle(_)
+            | Object::Rectangle(_)
+            | Object::Polygon(_)
+            | Object::Path(_)
+            | Object::Line(_)
+            | Object::Arrow(_)
+            | Object::BezierCurve(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -416,16 +420,9 @@ impl SkiaRenderer {
                     );
                 }
             }
-            Object::Line(_) => {
-                let x1 = state["x1"].as_f64().unwrap_or(0.0) as f32;
-                let y1 = state["y1"].as_f64().unwrap_or(0.0) as f32;
-                let x2 = state["x2"].as_f64().unwrap_or(0.0) as f32;
-                let y2 = state["y2"].as_f64().unwrap_or(0.0) as f32;
-                let stroke_width = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let stroke_color =
-                    parse_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
+            Object::Line(props) => {
+                let (x1, y1, x2, y2) = (props.x1, props.y1, props.x2, props.y2);
+                let stroke_color = parse_color(&props.stroke, props.opacity);
 
                 let mut pb = PathBuilder::new();
                 pb.move_to(x1, y1);
@@ -435,11 +432,11 @@ impl SkiaRenderer {
                     paint.set_color(stroke_color);
                     paint.anti_alias = true;
                     let mut stroke = Stroke::default();
-                    stroke.width = stroke_width;
+                    stroke.width = props.stroke_width;
                     // `draw_fraction` also works by dashing, so it wins when
                     // both are present: a line being revealed should reveal,
                     // not reveal-and-dash. TD-19.
-                    if let Some(frac) = draw_fraction {
+                    if let Some(frac) = props.draw_fraction {
                         let dx = x2 - x1;
                         let dy = y2 - y1;
                         let length = (dx * dx + dy * dy).sqrt().max(0.001);
@@ -447,32 +444,21 @@ impl SkiaRenderer {
                             crate::common::stroke::draw_fraction_dash(frac, length),
                             0.0,
                         );
-                    } else if let Some(pattern) = crate::common::stroke::dash_pattern(state) {
+                    } else if let Some(pattern) =
+                        crate::common::stroke::dash_pattern(props.dash.as_deref())
+                    {
                         stroke.dash = StrokeDash::new(pattern, 0.0);
                     }
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
-            Object::Arrow(_) => {
-                let from = state["from"].as_array().ok_or_else(|| {
-                    RendererError::Failed("Arrow 'from' property is missing or not an array".into())
-                })?;
-                let to = state["to"].as_array().ok_or_else(|| {
-                    RendererError::Failed("Arrow 'to' property is missing or not an array".into())
-                })?;
-                if from.len() < 2 || to.len() < 2 {
-                    return Err(RendererError::Failed(
-                        "Arrow 'from'/'to' arrays must have 2 elements".into(),
-                    ));
-                }
-
-                let fx = from[0].as_f64().unwrap_or(0.0) as f32;
-                let fy = from[1].as_f64().unwrap_or(0.0) as f32;
-                let tx = to[0].as_f64().unwrap_or(0.0) as f32;
-                let ty = to[1].as_f64().unwrap_or(0.0) as f32;
-                let stroke_width = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+            Object::Arrow(props) => {
+                // `[f32; 2]` endpoints: the malformed-array errors this branch
+                // raised (#53) cannot be expressed any more.
+                let [fx, fy] = props.from;
+                let [tx, ty] = props.to;
+                let stroke_width = props.stroke_width;
+                let color = parse_color(&props.color, props.opacity);
 
                 let mut pb = PathBuilder::new();
                 pb.move_to(fx, fy);
@@ -567,40 +553,14 @@ impl SkiaRenderer {
                     transform,
                 );
             }
-            Object::BezierCurve(_) => {
-                let p0 = state["p0"].as_array().ok_or_else(|| {
-                    RendererError::Failed("BezierCurve 'p0' is missing or not an array".into())
-                })?;
-                let p1 = state["p1"].as_array().ok_or_else(|| {
-                    RendererError::Failed("BezierCurve 'p1' is missing or not an array".into())
-                })?;
-                let p2 = state["p2"].as_array().ok_or_else(|| {
-                    RendererError::Failed("BezierCurve 'p2' is missing or not an array".into())
-                })?;
-                let p3 = state["p3"].as_array().ok_or_else(|| {
-                    RendererError::Failed("BezierCurve 'p3' is missing or not an array".into())
-                })?;
-                let get_pt = |arr: &Vec<Value>| -> Result<(f32, f32), RendererError> {
-                    if arr.len() < 2 {
-                        return Err(RendererError::Failed(
-                            "BezierCurve point must have 2 elements".into(),
-                        ));
-                    }
-                    Ok((
-                        arr[0].as_f64().unwrap_or(0.0) as f32,
-                        arr[1].as_f64().unwrap_or(0.0) as f32,
-                    ))
-                };
-
-                let (x0, y0) = get_pt(p0)?;
-                let (x1, y1) = get_pt(p1)?;
-                let (x2, y2) = get_pt(p2)?;
-                let (x3, y3) = get_pt(p3)?;
-                let stroke_width = state["stroke_width"].as_f64().unwrap_or(1.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let stroke_color =
-                    parse_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
+            Object::BezierCurve(props) => {
+                let [x0, y0] = props.p0;
+                let [x1, y1] = props.p1;
+                let [x2, y2] = props.p2;
+                let [x3, y3] = props.p3;
+                let stroke_width = props.stroke_width;
+                let stroke_color = parse_color(&props.stroke, props.opacity);
+                let draw_fraction = props.draw_fraction;
 
                 // Trimmed by arc length, shared with Path. De Casteljau at
                 // parameter `t` was exact but measured the wrong thing: a cubic
