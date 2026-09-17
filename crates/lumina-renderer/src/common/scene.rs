@@ -1,7 +1,6 @@
 //! Shared scene-walk helpers: z-ordering and group transform composition.
 
-use luminafx_schema::Object;
-use serde_json::Value;
+use luminafx_schema::{GroupProps, Object};
 use std::collections::HashMap;
 
 /// The z-index of any object variant.
@@ -170,11 +169,8 @@ pub(crate) fn camera_transform(
 /// scale, then rotation (degrees), exactly as both backends have always
 /// done — computed in f32 via tiny-skia so the matrix is bit-identical on
 /// both backends.
-pub(crate) fn group_transform(parent: Mat2x3, state: &Value) -> Mat2x3 {
-    let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-    let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-    let scale = state["scale"].as_f64().unwrap_or(1.0) as f32;
-    let rotation_deg = state["rotation"].as_f64().unwrap_or(0.0) as f32;
+pub(crate) fn group_transform(parent: Mat2x3, group: &GroupProps) -> Mat2x3 {
+    let (x, y, scale, rotation_deg) = (group.x, group.y, group.scale, group.rotation);
 
     let mut t = parent.to_tiny();
     t = t.pre_translate(x, y);

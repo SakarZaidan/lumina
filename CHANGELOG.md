@@ -97,6 +97,10 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **A `Plot` whose `axes_id` names something other than an `Axes` draws nothing
+  on the GPU backend, as on the CPU backend.** The GPU backend read the other
+  object's missing ranges as -10 to 10 and drew the curve anyway. Validation
+  has always rejected such a scene (`AXES_ID_IS_NOT_AXES`).
 - **A gradient without a `type` is linear, as documented.** The schema called
   `"linear"` the default, but the field was required, so a gradient that left
   it out failed to parse. `radius` was also documented as pixels; it has always

@@ -21,9 +21,13 @@ tiny-skia = { workspace = true }
 resvg = { workspace = true }
 image = { workspace = true }
 thiserror = { workspace = true }
-serde_json = { workspace = true }
 evalexpr = { workspace = true }
 pollster = "0.3"
+
+[dev-dependencies]
+# The renderer reads typed objects; JSON appears only in tests, which build
+# scenes and fixtures from it.
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

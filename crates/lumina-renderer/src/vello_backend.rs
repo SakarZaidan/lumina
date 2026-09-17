@@ -4,7 +4,6 @@ use crate::raster;
 use crate::{Renderer, RendererError};
 use luminafx_schema::{CameraState, Object};
 use luminafx_text::TextEngine;
-use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -246,8 +245,7 @@ impl VelloRenderer {
         })?;
         match obj {
             Object::Group(props) => {
-                let state = crate::common::untyped::state_of(obj);
-                let transform = crate::common::scene::group_transform(parent, &state);
+                let transform = crate::common::scene::group_transform(parent, props);
 
                 for child_id in crate::common::scene::sorted_children(&props.children, ctx.objects)
                 {
@@ -276,29 +274,6 @@ impl VelloRenderer {
         objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
         let affine = mat.to_kurbo();
-        // Branches still reading JSON get the map built from the typed object
-        // (RFC-0002 Stage 2); the ones that have moved to typed fields don't
-        // pay for it.
-        let untyped;
-        let state: &Value = match obj {
-            Object::Circle(_)
-            | Object::Rectangle(_)
-            | Object::Polygon(_)
-            | Object::Path(_)
-            | Object::Line(_)
-            | Object::Arrow(_)
-            | Object::BezierCurve(_)
-            | Object::Text(_)
-            | Object::LaTeX(_)
-            | Object::MathML(_)
-            | Object::Image(_)
-            | Object::SVG(_)
-            | Object::Particles(_) => &Value::Null,
-            _ => {
-                untyped = crate::common::untyped::state_of(obj);
-                &untyped
-            }
-        };
         match obj {
             Object::Circle(props) => {
                 let (cx, cy) = (f64::from(props.cx), f64::from(props.cy));
@@ -602,16 +577,12 @@ impl VelloRenderer {
                     }
                 }
             }
-            Object::NumberLine(_) => {
-                let start = state["start"].as_f64().unwrap_or(0.0);
-                let end = state["end"].as_f64().unwrap_or(10.0);
-                let step = state["step"].as_f64().unwrap_or(1.0);
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let length = state["length"].as_f64().unwrap_or(400.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color =
-                    parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+            Object::NumberLine(props) => {
+                let (start, end) = (f64::from(props.start), f64::from(props.end));
+                let step = f64::from(props.step);
+                let (x, y) = (f64::from(props.x), f64::from(props.y));
+                let length = f64::from(props.length.unwrap_or(400.0));
+                let color = parse_vello_color(&props.color, props.opacity);
                 let range = end - start;
                 if range <= 0.0 || step <= 0.0 {
                     return Ok(());
@@ -629,35 +600,14 @@ impl VelloRenderer {
                     scene.stroke(&stroke, affine, color, None, &tick);
                 }
             }
-            Object::Axes(_) => {
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let x_range = state["x_range"].as_array();
-                let y_range = state["y_range"].as_array();
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color =
-                    parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let scale = state["scale"].as_f64().unwrap_or(40.0);
-                let x_step = state["x_step"].as_f64().unwrap_or(1.0);
-                let y_step = state["y_step"].as_f64().unwrap_or(1.0);
-                let draw_grid = state["grid"].as_bool().unwrap_or(false);
-
-                let x_min = x_range
-                    .and_then(|r| r.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let x_max = x_range
-                    .and_then(|r| r.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0);
-                let y_min = y_range
-                    .and_then(|r| r.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
-                let y_max = y_range
-                    .and_then(|r| r.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0);
+            Object::Axes(props) => {
+                let (x, y) = (f64::from(props.x), f64::from(props.y));
+                let color = parse_vello_color(&props.color, props.opacity);
+                let scale = f64::from(props.scale);
+                let (x_step, y_step) = (f64::from(props.x_step), f64::from(props.y_step));
+                let draw_grid = props.grid;
+                let [x_min, x_max] = props.x_range.map(f64::from);
+                let [y_min, y_max] = props.y_range.map(f64::from);
 
                 let ox = x + (0.0 - x_min) * scale;
                 let oy = y - (0.0 - y_min) * scale;
@@ -741,42 +691,23 @@ impl VelloRenderer {
                 }
             }
             Object::Plot(props) => {
-                let axes_id = state["axes_id"].as_str().unwrap_or(&props.axes_id);
-                let function_str = state["function_str"]
-                    .as_str()
-                    .unwrap_or(&props.function_str);
-                let sw = state["stroke_width"].as_f64().unwrap_or(2.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color =
-                    parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
-                let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0) as f32;
+                let function_str = props.function_str.as_str();
+                let sw = f64::from(props.stroke_width);
+                let color = parse_vello_color(&props.color, props.opacity);
+                let samples = props.sample_count as usize;
+                let draw_fraction = props.draw_fraction.unwrap_or(1.0);
 
-                let axes_s = match objects.get(axes_id) {
-                    Some(axes) => crate::common::untyped::state_of(axes),
-                    None => return Ok(()),
+                // A plot drawn against anything but an Axes draws nothing, as
+                // on the CPU backend; validation reports AXES_ID_IS_NOT_AXES.
+                // This backend used to read such an object's missing ranges as
+                // -10..10 and draw the curve anyway.
+                let Some(Object::Axes(axes)) = objects.get(&props.axes_id) else {
+                    return Ok(());
                 };
-                let x = axes_s["x"].as_f64().unwrap_or(0.0);
-                let y = axes_s["y"].as_f64().unwrap_or(0.0);
-                let x_arr = axes_s["x_range"].as_array();
-                let y_arr = axes_s["y_range"].as_array();
-                let x_min = x_arr
-                    .and_then(|a| a.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(-10.0);
-                let x_max = x_arr
-                    .and_then(|a| a.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0);
-                let y_min = y_arr
-                    .and_then(|a| a.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(-10.0);
-                let y_max = y_arr
-                    .and_then(|a| a.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0);
-                let scale = axes_s["scale"].as_f64().unwrap_or(40.0);
+                let (x, y) = (f64::from(axes.x), f64::from(axes.y));
+                let [x_min, x_max] = axes.x_range.map(f64::from);
+                let [y_min, y_max] = axes.y_range.map(f64::from);
+                let scale = f64::from(axes.scale);
                 let ox = x + (0.0 - x_min) * scale;
                 let oy = y - (0.0 - y_min) * scale;
                 let x_end = x_min + (x_max - x_min) * draw_fraction as f64;

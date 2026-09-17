@@ -7,7 +7,6 @@ use crate::{Renderer, RendererError};
 use image::AnimationDecoder;
 use luminafx_schema::{CameraState, Object};
 use luminafx_text::TextEngine;
-use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -137,20 +136,17 @@ impl SkiaRenderer {
         axes_id: &str,
         objects: &HashMap<String, Object>,
     ) -> Option<AxesContext> {
-        let s = &crate::common::untyped::state_of(objects.get(axes_id)?);
-        let x = s["x"].as_f64()? as f32;
-        let y = s["y"].as_f64()? as f32;
-        let x_range = s["x_range"].as_array()?;
-        let y_range = s["y_range"].as_array()?;
-        let x_min = x_range.first()?.as_f64()? as f32;
-        let x_max = x_range.get(1)?.as_f64()? as f32;
-        let y_min = y_range.first()?.as_f64()? as f32;
-        let y_max = y_range.get(1)?.as_f64()? as f32;
-        let scale = s["scale"].as_f64().unwrap_or(40.0) as f32;
+        // A plot drawn against anything but an Axes draws nothing; validation
+        // reports it as AXES_ID_IS_NOT_AXES.
+        let Some(Object::Axes(axes)) = objects.get(axes_id) else {
+            return None;
+        };
+        let [x_min, x_max] = axes.x_range;
+        let [y_min, y_max] = axes.y_range;
         Some(AxesContext {
-            origin_screen_x: x + (0.0 - x_min) * scale,
-            origin_screen_y: y - (0.0 - y_min) * scale,
-            scale,
+            origin_screen_x: axes.x + (0.0 - x_min) * axes.scale,
+            origin_screen_y: axes.y - (0.0 - y_min) * axes.scale,
+            scale: axes.scale,
             x_min,
             x_max,
             y_min,
@@ -228,10 +224,9 @@ impl SkiaRenderer {
         })?;
         match obj {
             Object::Group(props) => {
-                let state = crate::common::untyped::state_of(obj);
                 let transform = crate::common::scene::group_transform(
                     crate::common::scene::Mat2x3::from_tiny(parent_transform),
-                    &state,
+                    props,
                 )
                 .to_tiny();
 
@@ -253,29 +248,6 @@ impl SkiaRenderer {
         transform: Transform,
         objects: &HashMap<String, Object>,
     ) -> Result<(), RendererError> {
-        // Branches still reading JSON get the map built from the typed object
-        // (RFC-0002 Stage 2); the ones that have moved to typed fields don't
-        // pay for it.
-        let untyped;
-        let state: &Value = match obj {
-            Object::Circle(_)
-            | Object::Rectangle(_)
-            | Object::Polygon(_)
-            | Object::Path(_)
-            | Object::Line(_)
-            | Object::Arrow(_)
-            | Object::BezierCurve(_)
-            | Object::Text(_)
-            | Object::LaTeX(_)
-            | Object::MathML(_)
-            | Object::Image(_)
-            | Object::SVG(_)
-            | Object::Particles(_) => &Value::Null,
-            _ => {
-                untyped = crate::common::untyped::state_of(obj);
-                &untyped
-            }
-        };
         match obj {
             Object::Circle(props) => {
                 if props.radius <= 0.0 {
@@ -529,15 +501,11 @@ impl SkiaRenderer {
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
-            Object::NumberLine(_) => {
-                let start = state["start"].as_f64().unwrap_or(0.0) as f32;
-                let end = state["end"].as_f64().unwrap_or(10.0) as f32;
-                let step = state["step"].as_f64().unwrap_or(1.0) as f32;
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let length = state["length"].as_f64().unwrap_or(400.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+            Object::NumberLine(props) => {
+                let (start, end, step) = (props.start, props.end, props.step);
+                let (x, y) = (props.x, props.y);
+                let length = props.length.unwrap_or(400.0);
+                let color = parse_color(&props.color, props.opacity);
                 let range = end - start;
                 if range == 0.0 || step <= 0.0 {
                     return Ok(());
@@ -570,34 +538,14 @@ impl SkiaRenderer {
                     }
                 }
             }
-            Object::Axes(_) => {
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let x_range_arr = state["x_range"].as_array();
-                let y_range_arr = state["y_range"].as_array();
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let scale = state["scale"].as_f64().unwrap_or(40.0) as f32;
-                let x_step = state["x_step"].as_f64().unwrap_or(1.0) as f32;
-                let y_step = state["y_step"].as_f64().unwrap_or(1.0) as f32;
-                let draw_grid = state["grid"].as_bool().unwrap_or(false);
-
-                let x_min = x_range_arr
-                    .and_then(|r| r.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0) as f32;
-                let x_max = x_range_arr
-                    .and_then(|r| r.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0) as f32;
-                let y_min = y_range_arr
-                    .and_then(|r| r.first())
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0) as f32;
-                let y_max = y_range_arr
-                    .and_then(|r| r.get(1))
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(10.0) as f32;
+            Object::Axes(props) => {
+                let (x, y) = (props.x, props.y);
+                let opacity = props.opacity;
+                let color = parse_color(&props.color, opacity);
+                let (scale, x_step, y_step) = (props.scale, props.x_step, props.y_step);
+                let draw_grid = props.grid;
+                let [x_min, x_max] = props.x_range;
+                let [y_min, y_max] = props.y_range;
 
                 // Screen position of math origin (0, 0)
                 let ox = x + (0.0 - x_min) * scale;
@@ -625,8 +573,7 @@ impl SkiaRenderer {
                 }
 
                 // Grid + ticks
-                let grid_color =
-                    parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity * 0.2);
+                let grid_color = parse_color(&props.color, opacity * 0.2);
                 let mut grid_paint = Paint::default();
                 grid_paint.set_color(grid_color);
                 grid_paint.anti_alias = true;
@@ -683,17 +630,13 @@ impl SkiaRenderer {
                 }
             }
             Object::Plot(props) => {
-                let axes_id = state["axes_id"].as_str().unwrap_or(&props.axes_id);
-                let function_str = state["function_str"]
-                    .as_str()
-                    .unwrap_or(&props.function_str);
-                let stroke_width = state["stroke_width"].as_f64().unwrap_or(2.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color = parse_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let samples = state["sample_count"].as_u64().unwrap_or(200) as usize;
-                let draw_fraction = state["draw_fraction"].as_f64().map(|f| f as f32);
+                let function_str = props.function_str.as_str();
+                let stroke_width = props.stroke_width;
+                let color = parse_color(&props.color, props.opacity);
+                let samples = props.sample_count as usize;
+                let draw_fraction = props.draw_fraction;
 
-                let Some(ctx) = self.resolve_axes_context(axes_id, objects) else {
+                let Some(ctx) = self.resolve_axes_context(&props.axes_id, objects) else {
                     return Ok(());
                 };
 
