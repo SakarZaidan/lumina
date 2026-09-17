@@ -281,9 +281,13 @@ impl VelloRenderer {
         // pay for it.
         let untyped;
         let state: &Value = match obj {
-            Object::Circle(_) | Object::Rectangle(_) | Object::Polygon(_) | Object::Path(_) => {
-                &Value::Null
-            }
+            Object::Circle(_)
+            | Object::Rectangle(_)
+            | Object::Polygon(_)
+            | Object::Path(_)
+            | Object::Line(_)
+            | Object::Arrow(_)
+            | Object::BezierCurve(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -415,52 +419,36 @@ impl VelloRenderer {
                     }
                 }
             }
-            Object::Line(_) => {
-                let x1 = state["x1"].as_f64().unwrap_or(0.0);
-                let y1 = state["y1"].as_f64().unwrap_or(0.0);
-                let x2 = state["x2"].as_f64().unwrap_or(0.0);
-                let y2 = state["y2"].as_f64().unwrap_or(0.0);
-                let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let stroke_color =
-                    parse_vello_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
+            Object::Line(props) => {
+                let (x1, y1) = (f64::from(props.x1), f64::from(props.y1));
+                let (x2, y2) = (f64::from(props.x2), f64::from(props.y2));
+                let stroke_color = parse_vello_color(&props.stroke, props.opacity);
 
                 let line = Line::new((x1, y1), (x2, y2));
-                let mut stroke = flat_stroke(sw);
-                if let Some(frac) = state["draw_fraction"].as_f64() {
+                let mut stroke = flat_stroke(f64::from(props.stroke_width));
+                if let Some(frac) = props.draw_fraction {
                     // Same partial-reveal dash the CPU backend uses.
                     let dx = (x2 - x1) as f32;
                     let dy = (y2 - y1) as f32;
                     let length = (dx * dx + dy * dy).sqrt().max(0.001);
-                    let dashes = crate::common::stroke::draw_fraction_dash(frac as f32, length);
+                    let dashes = crate::common::stroke::draw_fraction_dash(frac, length);
                     stroke = stroke.with_dashes(0.0, dashes.iter().map(|d| f64::from(*d)));
-                } else if let Some(pattern) = crate::common::stroke::dash_pattern(state) {
+                } else if let Some(pattern) =
+                    crate::common::stroke::dash_pattern(props.dash.as_deref())
+                {
                     // Shared with the CPU backend so both read and normalise
                     // the pattern identically (TD-19).
                     stroke = stroke.with_dashes(0.0, pattern.iter().map(|d| f64::from(*d)));
                 }
                 scene.stroke(&stroke, affine, stroke_color, None, &line);
             }
-            Object::Arrow(_) => {
-                let from = state["from"].as_array().ok_or_else(|| {
-                    RendererError::Failed("Arrow 'from' property is missing or not an array".into())
-                })?;
-                let to = state["to"].as_array().ok_or_else(|| {
-                    RendererError::Failed("Arrow 'to' property is missing or not an array".into())
-                })?;
-                if from.len() < 2 || to.len() < 2 {
-                    return Err(RendererError::Failed(
-                        "Arrow 'from'/'to' arrays must have 2 elements".into(),
-                    ));
-                }
-                let fx = from[0].as_f64().unwrap_or(0.0);
-                let fy = from[1].as_f64().unwrap_or(0.0);
-                let tx = to[0].as_f64().unwrap_or(0.0);
-                let ty = to[1].as_f64().unwrap_or(0.0);
-                let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color =
-                    parse_vello_color(state["color"].as_str().unwrap_or("#FFFFFF"), opacity);
+            Object::Arrow(props) => {
+                // `[f32; 2]` endpoints: the malformed-array errors this branch
+                // raised (#53) cannot be expressed any more.
+                let (fx, fy) = (f64::from(props.from[0]), f64::from(props.from[1]));
+                let (tx, ty) = (f64::from(props.to[0]), f64::from(props.to[1]));
+                let sw = f64::from(props.stroke_width);
+                let color = parse_vello_color(&props.color, props.opacity);
 
                 let line = Line::new((fx, fy), (tx, ty));
                 scene.stroke(&flat_stroke(sw), affine, color, None, &line);
@@ -485,47 +473,26 @@ impl VelloRenderer {
                 ));
                 scene.stroke(&flat_stroke(sw), affine, color, None, &head);
             }
-            Object::BezierCurve(_) => {
-                let get_pt = |key: &str| -> Option<(f64, f64)> {
-                    let arr = state[key].as_array()?;
-                    Some((arr.first()?.as_f64()?, arr.get(1)?.as_f64()?))
-                };
-                let (x0, y0) = match get_pt("p0") {
-                    Some(p) => p,
-                    None => return Ok(()),
-                };
-                let (x1, y1) = match get_pt("p1") {
-                    Some(p) => p,
-                    None => return Ok(()),
-                };
-                let (x2, y2) = match get_pt("p2") {
-                    Some(p) => p,
-                    None => return Ok(()),
-                };
-                let (x3, y3) = match get_pt("p3") {
-                    Some(p) => p,
-                    None => return Ok(()),
-                };
-                let sw = state["stroke_width"].as_f64().unwrap_or(1.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let stroke_color =
-                    parse_vello_color(state["stroke"].as_str().unwrap_or("#FFFFFF"), opacity);
-                let draw_fraction = state["draw_fraction"].as_f64().unwrap_or(1.0);
+            Object::BezierCurve(props) => {
+                let stroke_color = parse_vello_color(&props.stroke, props.opacity);
 
                 // Trimmed by arc length through the shared helper, so both
                 // backends reveal the same portion of the same curve. Cutting
                 // at parameter `t` was exact but measured the wrong quantity:
                 // a cubic traversed at uniform `t` does not move at uniform
                 // speed.
-                let curve = crate::common::path::PathData::cubic(
-                    (x0 as f32, y0 as f32),
-                    (x1 as f32, y1 as f32),
-                    (x2 as f32, y2 as f32),
-                    (x3 as f32, y3 as f32),
-                );
-                let curve = crate::common::path::trim(&curve, draw_fraction as f32);
+                let [p0, p1, p2, p3] =
+                    [props.p0, props.p1, props.p2, props.p3].map(|[x, y]| (x, y));
+                let curve = crate::common::path::PathData::cubic(p0, p1, p2, p3);
+                let curve = crate::common::path::trim(&curve, props.draw_fraction.unwrap_or(1.0));
                 let path = crate::common::path::to_kurbo_path(&curve);
-                scene.stroke(&flat_stroke(sw), affine, stroke_color, None, &path);
+                scene.stroke(
+                    &flat_stroke(f64::from(props.stroke_width)),
+                    affine,
+                    stroke_color,
+                    None,
+                    &path,
+                );
             }
             Object::Polygon(props) => {
                 let opacity = props.opacity;
