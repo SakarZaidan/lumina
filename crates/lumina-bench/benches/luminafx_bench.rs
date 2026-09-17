@@ -386,6 +386,7 @@ fn bench_latex_render(c: &mut Criterion) {
                     draw_fraction: None,
                     align: "left".into(),
                     letter_spacing: 0.0,
+                    font_id: None,
                 }),
             );
         }

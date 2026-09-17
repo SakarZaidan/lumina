@@ -18,10 +18,10 @@ name = "luminafx_mcp"
 path = "src/lib.rs"
 
 [dependencies]
-luminafx-core = { path = "../lumina-core", version = "0.5.0" }
-luminafx-renderer = { path = "../lumina-renderer", version = "0.5.0" }
-luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
-luminafx-export = { path = "../lumina-export", version = "0.5.0" }
+luminafx-core = { path = "../lumina-core", version = "0.6.0" }
+luminafx-renderer = { path = "../lumina-renderer", version = "0.6.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.6.0" }
+luminafx-export = { path = "../lumina-export", version = "0.6.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }

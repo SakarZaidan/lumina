@@ -37,6 +37,17 @@ programme to reach reference quality in [plan/](plan/).
   `200` with `valid: false` and the reasons, instead of a `400` — the endpoint
   exists to explain what is wrong, and now it does.
 
+### Breaking (Rust API)
+- **`LaTeXProps` and `MathMLProps` gain a `font_id` field.** Code constructing
+  either with a struct literal must add `font_id: None`. This is why the
+  workspace moves to **0.6.0**: `cargo-semver-checks` rejected the change against
+  the published 0.5.0 and was right to — the repository's own benchmark was
+  such a literal, and stopped compiling. Scene files are unaffected.
+
+  Every props struct is exhaustively constructible, so any new property is a
+  breaking change of this kind. That is recorded as TD-27 to be settled once,
+  deliberately, before 1.0.
+
 ### Fixed
 - **`font_id` on `LaTeX` and `MathML` objects was silently ignored.** Both
   renderers read it through the same text path as `Text`, but only `TextProps`

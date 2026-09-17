@@ -53,6 +53,18 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
   Integers accept fractions because interpolating `z_index` produces them.
 - Built and tested with `CARGO_BUILD_JOBS=4` throughout on a 7.5 GB machine;
   memory peaked at 3.9 GB. The renderer-heavy workspace gate is left to CI.
+- **CI caught two things local checks missed, both from the same line.**
+  Clippy: the benchmark crate builds a `LaTeXProps { … }` literal and no longer
+  compiled — local lint had covered only the edited crates, not their
+  dependents; for a schema change the whole workspace is in scope, and
+  `cargo clippy --workspace` with 4 jobs costs 3.7 GB. Semver: adding a public
+  field to an exhaustively constructible struct is breaking, and
+  `cargo-semver-checks` refused it against the published 0.5.0. The gate from
+  #98 doing exactly its job on its first real catch.
+- Resolved by moving to **0.6.0**, where RFC-0002 always placed Stage 1 — it is a
+  behaviour change too. Recorded **TD-27**: every props struct is exhaustively
+  constructible, so every future property is semver-major. Better settled once,
+  before 1.0, than paid for on every addition.
 
 ## 2026-09-17 — Versioned documentation; Wave 5 closes but for npm
 
