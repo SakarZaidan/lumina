@@ -103,12 +103,11 @@ fn bench_timeline_evaluation(c: &mut Criterion) {
 /// The typed path beside the untyped one, at the same sizes.
 ///
 /// RFC-0002 Stage 2 replaces `get_state_at`'s string-keyed JSON with typed
-/// objects, and promised that would not cost performance. `resolve_at` does
-/// everything `get_state_at` does and then deserialises each object, so this
-/// group measures the price of that step directly — before 216 renderer read
-/// sites are rewritten to depend on it. Compare `resolve_eval/N` with
-/// `timeline_eval/N` from the same run; numbers from different machines say
-/// nothing.
+/// objects, and promised that would not cost performance. `resolve_at`
+/// evaluates the same tracks and deserialises each animated object into its
+/// props type, so this group measures the typed path against the untyped one
+/// directly. Compare `resolve_eval/N` with `timeline_eval/N` from the same
+/// run; numbers from different machines say nothing.
 fn bench_typed_resolution(c: &mut Criterion) {
     let mut group = c.benchmark_group("resolve_eval");
     for n in [100usize, 500, 1000, 2000] {
@@ -127,26 +126,25 @@ fn bench_typed_resolution(c: &mut Criterion) {
 /// The whole per-frame cost a user pays: evaluate the timeline, then render.
 ///
 /// `timeline_eval` and `skia_render` each measure half, and `skia_render` is
-/// handed states computed once outside the loop. Neither can say whether
+/// handed objects resolved once outside the loop. Neither can say whether
 /// RFC-0002 Stage 2 is a net win, because Stage 2 moves cost *between* the
 /// halves: typed resolution adds deserialisation to the timeline side, and the
 /// renderer migration removes 216 string-keyed lookups from the render side.
 ///
-/// Added before that migration, on today's untyped path, so it has a baseline
-/// on `main`. When the renderer switches to typed state, this group keeps its
-/// name and the CI gate compares like with like.
+/// It was added on the untyped path, before the renderer took resolved objects,
+/// and kept its name when it moved, so the CI gate compares like with like
+/// across the migration.
 fn bench_frame_total(c: &mut Criterion) {
     let mut group = c.benchmark_group("frame_total");
     for n in [10usize, 100, 500] {
         let scene = make_scene(n);
-        let scene_graph = SceneGraph::from_scene(&scene);
         let timeline = Timeline::from_scene(&scene);
         let mut renderer = SkiaRenderer::new();
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
             b.iter(|| {
-                let states = timeline.get_state_at(black_box(1.0));
+                let objects = timeline.resolve_at(black_box(1.0));
                 let pixels = renderer
-                    .render_frame(&scene_graph.objects, &states, 1920, 1080, "#0F0F1A", None)
+                    .render_frame(&objects, 1920, 1080, "#0F0F1A", None)
                     .unwrap();
                 black_box(pixels);
             })
@@ -159,15 +157,13 @@ fn bench_skia_frame_render(c: &mut Criterion) {
     let mut group = c.benchmark_group("skia_render");
     for n in [10usize, 100, 500] {
         let scene = make_scene(n);
-        let scene_graph = SceneGraph::from_scene(&scene);
-        let timeline = Timeline::from_scene(&scene);
-        let states = timeline.get_state_at(1.0);
+        let objects = Timeline::from_scene(&scene).resolve_at(1.0);
         let mut renderer = SkiaRenderer::new();
 
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
             b.iter(|| {
                 let pixels = renderer
-                    .render_frame(&scene_graph.objects, &states, 1920, 1080, "#0F0F1A", None)
+                    .render_frame(&objects, 1920, 1080, "#0F0F1A", None)
                     .unwrap();
                 black_box(pixels);
             })
@@ -283,9 +279,7 @@ fn bench_text_render(c: &mut Criterion) {
 
     for (labels, chars) in [(10usize, 40usize), (40, 40)] {
         let scene = make_text_scene(labels, chars);
-        let graph = SceneGraph::from_scene(&scene);
-        let timeline = Timeline::from_scene(&scene);
-        let states = timeline.get_state_at(0.0);
+        let objects = Timeline::from_scene(&scene).resolve_at(0.0);
         let mut renderer = SkiaRenderer::new();
         load_bench_font(&mut renderer);
 
@@ -295,14 +289,7 @@ fn bench_text_render(c: &mut Criterion) {
                 b.iter(|| {
                     black_box(
                         renderer
-                            .render_frame(
-                                &graph.objects,
-                                &states,
-                                1920,
-                                1080,
-                                &scene.canvas.background,
-                                None,
-                            )
+                            .render_frame(&objects, 1920, 1080, &scene.canvas.background, None)
                             .expect("render"),
                     )
                 })
@@ -319,9 +306,7 @@ fn bench_plot_render(c: &mut Criterion) {
 
     for (plots, samples) in [(1usize, 200u32), (8, 200), (8, 2000)] {
         let scene = make_plot_scene(plots, samples);
-        let graph = SceneGraph::from_scene(&scene);
-        let timeline = Timeline::from_scene(&scene);
-        let states = timeline.get_state_at(0.0);
+        let objects = Timeline::from_scene(&scene).resolve_at(0.0);
         let mut renderer = SkiaRenderer::new();
 
         group.bench_function(
@@ -330,14 +315,7 @@ fn bench_plot_render(c: &mut Criterion) {
                 b.iter(|| {
                     black_box(
                         renderer
-                            .render_frame(
-                                &graph.objects,
-                                &states,
-                                1920,
-                                1080,
-                                &scene.canvas.background,
-                                None,
-                            )
+                            .render_frame(&objects, 1920, 1080, &scene.canvas.background, None)
                             .expect("render"),
                     )
                 })
@@ -358,7 +336,6 @@ fn bench_frame_sequence(c: &mut Criterion) {
     group.sample_size(10);
 
     let scene = make_scene(100);
-    let graph = SceneGraph::from_scene(&scene);
     let timeline = Timeline::from_scene(&scene);
     let mut renderer = SkiaRenderer::new();
 
@@ -369,17 +346,10 @@ fn bench_frame_sequence(c: &mut Criterion) {
                 b.iter(|| {
                     for i in 0..frames {
                         let t = i as f32 / 30.0;
-                        let states = timeline.get_state_at(t);
+                        let objects = timeline.resolve_at(t);
                         black_box(
                             renderer
-                                .render_frame(
-                                    &graph.objects,
-                                    &states,
-                                    1280,
-                                    720,
-                                    &scene.canvas.background,
-                                    None,
-                                )
+                                .render_frame(&objects, 1280, 720, &scene.canvas.background, None)
                                 .expect("render"),
                         );
                     }
@@ -449,8 +419,7 @@ fn bench_latex_render(c: &mut Criterion) {
         scene.objects = objects;
         scene.timeline = Vec::new();
 
-        let graph = SceneGraph::from_scene(&scene);
-        let states = Timeline::from_scene(&scene).get_state_at(0.0);
+        let objects = Timeline::from_scene(&scene).resolve_at(0.0);
         let mut renderer = SkiaRenderer::new();
         load_bench_font(&mut renderer);
 
@@ -458,7 +427,7 @@ fn bench_latex_render(c: &mut Criterion) {
             b.iter(|| {
                 black_box(
                     renderer
-                        .render_frame(&graph.objects, &states, 1920, 1080, "#0F0F1A", None)
+                        .render_frame(&objects, 1920, 1080, "#0F0F1A", None)
                         .expect("render"),
                 )
             })

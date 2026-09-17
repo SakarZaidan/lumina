@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use luminafx_core::{SceneGraph, Timeline};
+use luminafx_core::Timeline;
 use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
 use luminafx_schema::Scene;
 
@@ -50,7 +50,6 @@ fn frame_at(x: f64) -> Vec<u8> {
     }))
     .expect("scene");
 
-    let graph = SceneGraph::from_scene(&scene);
     let timeline = Timeline::from_scene(&scene);
     let mut renderer = SkiaRenderer::new();
     for font in &scene.assets.fonts {
@@ -59,8 +58,7 @@ fn frame_at(x: f64) -> Vec<u8> {
     }
     renderer
         .render_frame(
-            &graph.objects,
-            &timeline.get_state_at(0.0),
+            &timeline.resolve_at(0.0),
             W,
             H,
             &scene.canvas.background,

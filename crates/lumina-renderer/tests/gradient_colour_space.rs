@@ -11,7 +11,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use luminafx_core::{SceneGraph, Timeline};
+use luminafx_core::Timeline;
 use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
 use luminafx_schema::Scene;
 
@@ -36,11 +36,10 @@ fn gradient_midpoint(from: &str, to: &str) -> [u8; 4] {
     }))
     .expect("fixture");
 
-    let graph = SceneGraph::from_scene(&scene);
-    let states = Timeline::from_scene(&scene).get_state_at(0.0);
+    let objects = Timeline::from_scene(&scene).resolve_at(0.0);
     let mut r = SkiaRenderer::new();
     let px = r
-        .render_frame(&graph.objects, &states, W, H, "#000000", None)
+        .render_frame(&objects, W, H, "#000000", None)
         .expect("render");
     let i = (((H / 2) * W) + (W / 2)) as usize * 4;
     [px[i], px[i + 1], px[i + 2], px[i + 3]]
@@ -115,11 +114,10 @@ fn gradient_edges(from: &str, to: &str) -> ([u8; 4], [u8; 4]) {
         "timeline": []
     }))
     .expect("fixture");
-    let graph = SceneGraph::from_scene(&scene);
-    let states = Timeline::from_scene(&scene).get_state_at(0.0);
+    let objects = Timeline::from_scene(&scene).resolve_at(0.0);
     let mut r = SkiaRenderer::new();
     let px = r
-        .render_frame(&graph.objects, &states, W, H, "#000000", None)
+        .render_frame(&objects, W, H, "#000000", None)
         .expect("render");
     let row = (H / 2) * W;
     let at = |x: u32| {
@@ -163,11 +161,10 @@ fn multi_stop_gradients_keep_every_author_stop() {
         "timeline": []
     }))
     .expect("fixture");
-    let graph = SceneGraph::from_scene(&scene);
-    let states = Timeline::from_scene(&scene).get_state_at(0.0);
+    let objects = Timeline::from_scene(&scene).resolve_at(0.0);
     let mut r = SkiaRenderer::new();
     let px = r
-        .render_frame(&graph.objects, &states, W, H, "#000000", None)
+        .render_frame(&objects, W, H, "#000000", None)
         .expect("render");
     let i = (((H / 2) * W) + (W / 2)) as usize * 4;
     let mid = [px[i], px[i + 1], px[i + 2]];

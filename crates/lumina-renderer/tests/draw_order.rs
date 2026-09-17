@@ -14,7 +14,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use luminafx_core::{SceneGraph, Timeline};
+use luminafx_core::Timeline;
 use luminafx_renderer::{skia_backend::SkiaRenderer, Renderer};
 use luminafx_schema::Scene;
 
@@ -59,12 +59,10 @@ fn tied_scene(order: &[&str]) -> Scene {
 }
 
 fn render(scene: &Scene) -> Vec<u8> {
-    let graph = SceneGraph::from_scene(scene);
-    let states = Timeline::from_scene(scene).get_state_at(0.0);
+    let objects = Timeline::from_scene(scene).resolve_at(0.0);
     let mut r = SkiaRenderer::new();
     r.render_frame(
-        &graph.objects,
-        &states,
+        &objects,
         scene.canvas.width,
         scene.canvas.height,
         &scene.canvas.background,

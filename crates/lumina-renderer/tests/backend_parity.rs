@@ -22,7 +22,7 @@
 // silently skipped.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use luminafx_core::{SceneGraph, Timeline};
+use luminafx_core::Timeline;
 use luminafx_renderer::skia_backend::SkiaRenderer;
 use luminafx_renderer::vello_backend::VelloRenderer;
 use luminafx_renderer::Renderer;
@@ -142,15 +142,13 @@ fn load_assets(renderer: &mut dyn Renderer, scene: &Scene) {
 }
 
 fn render_at(renderer: &mut dyn Renderer, scene: &Scene, t: f32) -> Vec<u8> {
-    let graph = SceneGraph::from_scene(scene);
     let timeline = Timeline::from_scene(scene);
-    let states = timeline.get_state_at(t);
+    let objects = timeline.resolve_at(t);
     let camera = timeline.get_camera_at(t, scene);
     renderer.set_time(t);
     renderer
         .render_frame(
-            &graph.objects,
-            &states,
+            &objects,
             scene.canvas.width,
             scene.canvas.height,
             &scene.canvas.background,
@@ -424,84 +422,83 @@ fn parity_20_camera_rotation() {
 // frame without the object, and the same scene gave different output depending
 // on `--backend`.
 //
-// These tests assert the backends agree on *failure*, not on pixels.
+// These tests assert the backends agree on what happens to malformed input,
+// not only on pixels. Since renderers take resolved objects, malformed
+// geometry is stopped before either backend sees it, so agreement on that is
+// what they check.
 
-/// A scene whose Arrow is well-formed until a timeline keyframe overwrites
-/// `from` with a one-element array.
-///
-/// `ArrowProps.from` is `[f32; 2]`, so serde guarantees two elements at parse
-/// time. Timeline state is untyped `serde_json::Value` (TD-07), so a keyframe
-/// is the one route by which malformed geometry reaches a renderer.
-fn malformed_arrow_state() -> (
-    std::collections::HashMap<String, luminafx_schema::Object>,
-    std::collections::HashMap<String, serde_json::Value>,
-) {
-    let scene: Scene = serde_json::from_value(serde_json::json!({
+fn arrow_scene(timeline: serde_json::Value) -> Scene {
+    let mut scene = serde_json::json!({
         "version": "1.0",
         "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
         "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0, "background": "#000000" },
         "objects": {
             "a": { "type": "Arrow", "properties": { "from": [8.0, 8.0], "to": [56.0, 56.0] } }
-        },
-        "timeline": []
-    }))
-    .expect("fixture scene must deserialise");
-
-    let graph = SceneGraph::from_scene(&scene);
-    let mut states = Timeline::from_scene(&scene).get_state_at(0.0);
-    // What a bad generator, or a hand-edited keyframe, produces.
-    if let Some(state) = states.get_mut("a") {
-        state["from"] = serde_json::json!([8.0]);
-    }
-    (graph.objects, states)
+        }
+    });
+    scene["timeline"] = timeline;
+    serde_json::from_value(scene).expect("fixture scene must deserialise")
 }
 
 #[test]
-fn both_backends_reject_a_malformed_arrow() {
-    let (objects, states) = malformed_arrow_state();
+fn a_malformed_arrow_keyframe_draws_the_authored_arrow_on_both_backends() {
+    // A keyframe that sets `from` to a one-element array — what a bad
+    // generator, or a hand-edited keyframe, produces.
+    //
+    // This used to reach both renderers as untyped state, and the test asserted
+    // they agreed on *rejecting* it: the CPU backend had aborted the export
+    // while the GPU backend silently skipped the arrow, so the same scene
+    // rendered differently by `--backend`. Renderers now take resolved objects,
+    // where `from` is `[f32; 2]` and a one-element array cannot be expressed.
+    // The keyframe fails to resolve, the arrow keeps its authored geometry, and
+    // both backends draw exactly what the scene without the keyframe draws.
+    let malformed = arrow_scene(serde_json::json!([
+        { "time": 0.0, "object": "a", "state": { "from": [8.0] } }
+    ]));
+    // After its last keyframe, so the malformed value is the live one.
+    let t = 0.5;
+    let timeline = Timeline::from_scene(&malformed);
+    assert_eq!(
+        timeline.get_state_at(t)["a"]["from"],
+        serde_json::json!([8.0]),
+        "the fixture no longer puts a malformed value in play"
+    );
+    let objects = timeline.resolve_at(t);
+    let Some(luminafx_schema::Object::Arrow(arrow)) = objects.get("a") else {
+        panic!("the arrow did not resolve to an Arrow");
+    };
+    assert_eq!(arrow.from, [8.0, 8.0]);
 
+    let authored = arrow_scene(serde_json::json!([]));
     let mut skia = SkiaRenderer::new();
-    let skia_result = skia.render_frame(&objects, &states, 64, 64, "#000000", None);
-    assert!(
-        skia_result.is_err(),
-        "the CPU backend must reject a malformed Arrow rather than drawing something"
+    assert_eq!(
+        render_at(&mut skia, &malformed, t),
+        render_at(&mut skia, &authored, t),
+        "the CPU backend drew the malformed keyframe differently from the authored arrow"
     );
 
     let Some(mut vello) = vello_or_skip() else {
         return;
     };
-    let vello_result = vello.render_frame(&objects, &states, 64, 64, "#000000", None);
-    assert!(
-        vello_result.is_err(),
-        "the GPU backend must reject the same input the CPU backend rejects. Silently skipping \
-         the object makes the render depend on --backend, and the pixel suite cannot catch it."
+    assert_eq!(
+        render_at(&mut vello, &malformed, t),
+        render_at(&mut vello, &authored, t),
+        "the GPU backend drew the malformed keyframe differently from the authored arrow"
     );
 }
 
 #[test]
 fn both_backends_render_a_well_formed_arrow() {
-    // The guard above must not reject valid input on either backend.
-    let scene: Scene = serde_json::from_value(serde_json::json!({
-        "version": "1.0",
-        "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
-        "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0, "background": "#000000" },
-        "objects": {
-            "a": { "type": "Arrow", "properties": { "from": [8.0, 8.0], "to": [56.0, 56.0] } }
-        },
-        "timeline": []
-    }))
-    .expect("fixture scene must deserialise");
-    let objects = SceneGraph::from_scene(&scene).objects;
-    let states = Timeline::from_scene(&scene).get_state_at(0.0);
+    // The fallback above must not stand in for valid input on either backend.
+    let scene = arrow_scene(serde_json::json!([]));
+    let objects = Timeline::from_scene(&scene).resolve_at(0.0);
 
     let mut skia = SkiaRenderer::new();
-    assert!(skia
-        .render_frame(&objects, &states, 64, 64, "#000000", None)
-        .is_ok());
+    assert!(skia.render_frame(&objects, 64, 64, "#000000", None).is_ok());
 
     if let Some(mut vello) = vello_or_skip() {
         assert!(vello
-            .render_frame(&objects, &states, 64, 64, "#000000", None)
+            .render_frame(&objects, 64, 64, "#000000", None)
             .is_ok());
     }
 }
