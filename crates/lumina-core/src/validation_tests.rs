@@ -1224,3 +1224,45 @@ mod assignments {
         the_one(&errors, "UNKNOWN_PROPERTY");
     }
 }
+
+/// An axis has to have somewhere to put its ticks.
+#[cfg(test)]
+mod ranges {
+    use crate::validation::validate_scene_json;
+    use serde_json::{json, Value};
+
+    fn with(properties: Value) -> Value {
+        let mut document = json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "objects": { "line": { "type": "NumberLine", "properties": {} } },
+            "timeline": []
+        });
+        document["objects"]["line"]["properties"] = properties;
+        document
+    }
+
+    #[test]
+    fn a_range_that_does_not_increase_is_an_error() {
+        // The backends disagreed about this scene: the CPU one drew a bare
+        // axis line, the GPU one drew nothing. Neither is right, so it is
+        // reported rather than rendered either way.
+        for (start, end) in [(10, 0), (5, 5)] {
+            let raw = with(json!({ "start": start, "end": end, "step": 1, "x": 0, "y": 0 }));
+            let errors = validate_scene_json(&raw).errors;
+            assert!(
+                errors.iter().any(|e| e.code == "INVALID_RANGE"),
+                "[{start}, {end}] was accepted: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_increasing_range_is_fine() {
+        let raw = with(json!({ "start": 0, "end": 10, "step": 1, "x": 0, "y": 0 }));
+        let response = validate_scene_json(&raw);
+        assert!(response.valid, "{:?}", response.errors);
+    }
+}

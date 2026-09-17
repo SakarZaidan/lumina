@@ -465,7 +465,13 @@ impl VelloRenderer {
                 let [p0, p1, p2, p3] =
                     [props.p0, props.p1, props.p2, props.p3].map(|[x, y]| (x, y));
                 let curve = crate::common::path::PathData::cubic(p0, p1, p2, p3);
-                let curve = crate::common::path::trim(&curve, props.draw_fraction.unwrap_or(1.0));
+                // Trimmed only when a reveal was asked for, as on the CPU
+                // backend. Trimming at 1.0 rebuilds the curve from its own
+                // samples, which is not quite the same geometry.
+                let curve = match props.draw_fraction {
+                    Some(frac) => crate::common::path::trim(&curve, frac),
+                    None => curve,
+                };
                 let path = crate::common::path::to_kurbo_path(&curve);
                 scene.stroke(
                     &flat_stroke(f64::from(props.stroke_width)),
@@ -695,7 +701,9 @@ impl VelloRenderer {
                 let sw = f64::from(props.stroke_width);
                 let color = parse_vello_color(&props.color, props.opacity);
                 let samples = props.sample_count as usize;
-                let draw_fraction = props.draw_fraction.unwrap_or(1.0);
+                // Clamped, as on the CPU backend: a reveal past the end of the
+                // domain would sample beyond the axes.
+                let draw_fraction = props.draw_fraction.unwrap_or(1.0).clamp(0.0, 1.0);
 
                 // A plot drawn against anything but an Axes draws nothing, as
                 // on the CPU backend; validation reports AXES_ID_IS_NOT_AXES.

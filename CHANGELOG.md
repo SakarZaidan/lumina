@@ -126,6 +126,14 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **Three scenes that rendered differently depending on `--backend`.** A
+  `NumberLine` whose range does not increase drew a bare axis line on the CPU
+  backend and nothing on the GPU one; a `Plot` with a `draw_fraction` above 1
+  was clamped on the CPU backend only; and a `BezierCurve` with no
+  `draw_fraction` was left alone on the CPU backend while the GPU backend
+  trimmed it at 1.0, rebuilding the curve from its own samples. The backends
+  now agree, a new parity fixture holds them to it, and a range that does not
+  increase is `INVALID_RANGE` rather than something to draw at all.
 - **The MCP `lumina_schema` tool's `objects` returned a broken schema for the
   names it documents.** It matched Rust definition names, so `["Circle"]`
   pruned every definition and left the root referring to types it no longer
