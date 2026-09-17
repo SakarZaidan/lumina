@@ -813,7 +813,7 @@ impl VelloRenderer {
                 let rendered: String = match obj {
                     Object::Text(_) => state["content"].as_str().unwrap_or("").to_string(),
                     Object::LaTeX(_) => {
-                        let mut s = crate::skia_backend::latex_to_unicode(
+                        let mut s = crate::common::notation::latex_to_unicode(
                             state["expression"].as_str().unwrap_or(""),
                         );
                         if let Some(frac) = state["draw_fraction"].as_f64() {
@@ -823,7 +823,7 @@ impl VelloRenderer {
                         }
                         s
                     }
-                    _ => crate::skia_backend::mathml_to_unicode(
+                    _ => crate::common::notation::mathml_to_unicode(
                         state["markup"].as_str().unwrap_or(""),
                     ),
                 };
