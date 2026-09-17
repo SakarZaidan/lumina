@@ -47,6 +47,23 @@ pub struct EventOutcome {
     pub playing: bool,
     /// Custom events emitted toward the host application.
     pub emitted: Vec<EmittedEvent>,
+    /// Actions that were not applied, and why.
+    ///
+    /// A `set_property` or `tween_to` naming a property the object does not
+    /// have, or carrying a value it cannot take, is refused rather than stored
+    /// and ignored. A host that shows nothing happening can say why.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<RejectedAction>,
+}
+
+/// An action the engine refused to apply, with the reason validation gives.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RejectedAction {
+    /// The action, with `$drag.*` placeholders already substituted.
+    pub action: SchemaAction,
+    /// Why it was refused: the same `code`, `path`, `message` and
+    /// `fix_suggestion` a scene's validation would carry.
+    pub error: crate::validation::ValidationError,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +102,7 @@ impl EventBus {
     ) -> EventOutcome {
         let mut actions = Vec::new();
         let mut emitted = Vec::new();
+        let mut rejected = Vec::new();
 
         // Snapshot matched actions first so the borrow on `self.event_definitions`
         // doesn't overlap the `&mut self` execution.
@@ -97,7 +115,7 @@ impl EventBus {
 
         for action in matched {
             let resolved = substitute_drag(&action, event.payload.as_ref());
-            self.execute_action(&resolved, timeline, &mut emitted);
+            self.execute_action(&resolved, timeline, &mut emitted, &mut rejected);
             actions.push(resolved);
         }
 
@@ -106,6 +124,7 @@ impl EventBus {
             current_time: self.playback.current_time,
             playing: self.playback.playing,
             emitted,
+            rejected,
         }
     }
 
@@ -114,6 +133,7 @@ impl EventBus {
         action: &SchemaAction,
         timeline: &mut crate::timeline::Timeline,
         emitted: &mut Vec<EmittedEvent>,
+        rejected: &mut Vec<RejectedAction>,
     ) {
         match action {
             SchemaAction::JumpToTime { value } => {
@@ -131,7 +151,12 @@ impl EventBus {
                 property,
                 value,
             } => {
-                timeline.override_property(target, property, value.clone());
+                if let Err(error) = timeline.override_property(target, property, value.clone()) {
+                    rejected.push(RejectedAction {
+                        action: action.clone(),
+                        error,
+                    });
+                }
             }
             // The current value is applied immediately via the override channel.
             // Hosts that want a smooth on-demand tween can read the returned
@@ -142,7 +167,12 @@ impl EventBus {
                 value,
                 ..
             } => {
-                timeline.override_property(target, property, value.clone());
+                if let Err(error) = timeline.override_property(target, property, value.clone()) {
+                    rejected.push(RejectedAction {
+                        action: action.clone(),
+                        error,
+                    });
+                }
             }
             SchemaAction::ShowTooltip { .. } => {
                 // Purely a host-side overlay; no engine state changes.

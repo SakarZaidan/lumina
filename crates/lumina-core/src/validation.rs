@@ -7,7 +7,7 @@
 
 use crate::easing::{is_valid_easing, suggest_easing};
 use luminafx_schema::{Action, Object, Scene};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -63,7 +63,7 @@ pub struct ValidationResponse {
     pub warnings: Vec<ValidationWarning>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 /// A render-blocking validation finding.
 pub struct ValidationError {
     /// Stable machine-readable code (e.g. `UNKNOWN_EASING`).
@@ -457,6 +457,76 @@ fn authored_properties(object: &Object) -> Option<serde_json::Map<String, Value>
     };
     crate::timeline::deserialize_like(object, Value::Object(props.clone())).ok()?;
     Some(props)
+}
+
+/// Check one value against one property of one object, as the keyframe checks
+/// do — for callers that hold an object rather than a scene.
+///
+/// The event bus applies this before an override reaches the timeline: a
+/// `set_property` naming a property the object does not have, or carrying a
+/// value it cannot take, used to be stored and then quietly ignored by every
+/// reader.
+///
+/// # Errors
+///
+/// Returns the same error validation would report for the same assignment.
+pub fn check_property_value(
+    object_id: &str,
+    object: &Object,
+    property: &str,
+    value: &Value,
+) -> Result<(), ValidationError> {
+    let ty = object_type_name(object);
+    let path = format!("$.objects.{object_id}.properties.{property}");
+    let Some(props) = crate::property_schema::PropertySchema::get().properties_of(ty) else {
+        return Ok(());
+    };
+    let mut errors = Vec::new();
+    // No patch: a runtime override is not a document to patch.
+    let Some(kinds) = check_one(
+        ty,
+        props,
+        property,
+        value,
+        &path,
+        &path,
+        |_| None,
+        &mut errors,
+    ) else {
+        return Err(errors.remove(0));
+    };
+    // Any number fits an integer property; the timeline rounds it.
+    if kinds.is_integer() {
+        return Ok(());
+    }
+    let Some(authored) = authored_properties(object) else {
+        return Ok(());
+    };
+    let mut candidate = authored.clone();
+    candidate.insert(property.to_string(), value.clone());
+    if let Err(e) = crate::timeline::deserialize_like(object, Value::Object(candidate)) {
+        let example = authored
+            .get(property)
+            .filter(|v| !v.is_null())
+            .map(Value::to_string)
+            .filter(|text| text.len() <= 120);
+        return Err(ValidationError {
+            code: "PROPERTY_VALUE_INVALID".to_string(),
+            path,
+            message: format!(
+                "\"{property}\" on {ty} cannot take this value: {}.",
+                value_error_reason(&e)
+            ),
+            fix_suggestion: match example {
+                Some(example) => {
+                    format!("Use a value shaped like the object's own \"{property}\": {example}")
+                }
+                None => format!("`lumina-cli schema` shows the shape of \"{property}\" on {ty}."),
+            },
+            fix_patch: None,
+        });
+    }
+    Ok(())
 }
 
 /// Perform semantic validation of a parsed Scene.

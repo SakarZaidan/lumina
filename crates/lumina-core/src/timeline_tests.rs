@@ -155,7 +155,8 @@ mod tests {
         let scene = make_scene(objs, vec![kf]);
         let mut tl = Timeline::from_scene(&scene);
 
-        tl.override_property("c", "opacity", json!(0.42));
+        tl.override_property("c", "opacity", json!(0.42))
+            .expect("a real property with a value it can take");
         let state = tl.get_state_at(0.5);
         let opacity = state["c"]["opacity"].as_f64().unwrap();
         assert!(
@@ -528,21 +529,56 @@ mod resolve_at {
     }
 
     #[test]
-    fn an_unresolvable_override_falls_back_to_the_authored_object() {
-        // A wrong-typed interactive override on a scene nobody validated. The
-        // object must come back as authored, never be dropped: dropping it
-        // would make it vanish from the frame, which is the silent failure
-        // RFC-0002 exists to remove.
+    fn an_override_a_property_cannot_take_is_refused_with_the_reason() {
+        // It used to be stored, and then ignored by everything that read it —
+        // indistinguishable from an event that never fired.
         let mut timeline = Timeline::from_scene(&scene());
-        timeline.override_property("c", "radius", json!("big"));
+        let refused = timeline
+            .override_property("c", "radius", json!("big"))
+            .expect_err("a string is not a radius");
+        assert_eq!(refused.code, "PROPERTY_TYPE_MISMATCH");
+        assert_eq!(refused.path, "$.objects.c.properties.radius");
+
+        // And nothing was stored, so the object still resolves as authored.
         let resolved = timeline.resolve_at(1.0);
         let Some(Object::Circle(c)) = resolved.get("c") else {
-            panic!("the circle vanished instead of falling back");
+            panic!("the circle vanished");
         };
-        assert_eq!(
-            c.radius, 10.0,
-            "fell back to something other than the authored value"
-        );
+        assert_eq!(c.radius, 15.0, "the animation stopped running");
+    }
+
+    #[test]
+    fn an_override_of_something_the_object_does_not_have_says_what_it_does() {
+        let mut timeline = Timeline::from_scene(&scene());
+        let refused = timeline
+            .override_property("c", "raduis", json!(20))
+            .expect_err("not a property of Circle");
+        assert_eq!(refused.code, "UNKNOWN_PROPERTY");
+        assert!(refused.fix_suggestion.contains("radius"), "{refused:?}");
+
+        let missing = timeline
+            .override_property("circel", "radius", json!(20))
+            .expect_err("not an object in this scene");
+        assert_eq!(missing.code, "UNKNOWN_OBJECT_ID");
+        assert!(missing.fix_suggestion.contains('c'), "{missing:?}");
+    }
+
+    #[test]
+    fn an_override_of_the_wrong_shape_is_refused_too() {
+        let scene: Scene = serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "objects": { "a": { "type": "Arrow",
+                                "properties": { "from": [8, 8], "to": [56, 56] } } },
+            "timeline": []
+        }))
+        .expect("scene");
+        let refused = Timeline::from_scene(&scene)
+            .override_property("a", "from", json!([8.0]))
+            .expect_err("a point needs two coordinates");
+        assert_eq!(refused.code, "PROPERTY_VALUE_INVALID");
     }
 
     #[test]
@@ -552,7 +588,9 @@ mod resolve_at {
         // deserialise, and the fallback would silently discard the override
         // together with every other animated value on the object.
         let mut timeline = Timeline::from_scene(&scene());
-        timeline.override_property("c", "radius", json!(42));
+        timeline
+            .override_property("c", "radius", json!(42))
+            .expect("a radius can be 42");
         let resolved = timeline.resolve_at(1.0);
         let Some(Object::Circle(c)) = resolved.get("c") else {
             panic!("not a circle");
@@ -565,7 +603,9 @@ mod resolve_at {
         // `still` has no timeline entries, so it resolves without evaluating
         // anything. An override has to take it off that path.
         let mut timeline = Timeline::from_scene(&scene());
-        timeline.override_property("still", "width", json!(9));
+        timeline
+            .override_property("still", "width", json!(9))
+            .expect("a width can be 9");
         let resolved = timeline.resolve_at(1.0);
         let Some(Object::Rectangle(r)) = resolved.get("still") else {
             panic!("not a rectangle");
@@ -621,7 +661,9 @@ mod resolve_at {
     #[test]
     fn a_fractional_override_of_an_integer_is_rounded() {
         let mut timeline = Timeline::from_scene(&integer_scene());
-        timeline.override_property("c", "z_index", json!(6.4));
+        timeline
+            .override_property("c", "z_index", json!(6.4))
+            .expect("an integer property takes any number");
         let resolved = timeline.resolve_at(1.0);
         let Some(Object::Circle(c)) = resolved.get("c") else {
             panic!("not a circle");

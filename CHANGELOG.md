@@ -126,6 +126,14 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **An event action that sets a property the object does not have is refused,
+  with the reason.** `set_property` and `tween_to` stored whatever they were
+  given, and every reader then ignored it — indistinguishable from an event
+  that never fired. The value is now checked the way a keyframe is (name, kind
+  and shape) and a refusal comes back in the event outcome's `rejected` list,
+  carrying the same `code`, `path`, `message` and `fix_suggestion` validation
+  would give. Two of the engine's own tests were asserting the old behaviour:
+  one set `rotation` on a `Circle`, which has none.
 - **The MCP `lumina_schema` tool's `objects` returned a broken schema for the
   names it documents.** It matched Rust definition names, so `["Circle"]`
   pruned every definition and left the root referring to types it no longer

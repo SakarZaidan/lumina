@@ -29,15 +29,20 @@ mod tests {
         }
     }
 
-    fn fire(bus: &mut EventBus, timeline: &mut Timeline, object: &str, trigger: &str) {
-        let _ = bus.process_event(
+    fn fire(
+        bus: &mut EventBus,
+        timeline: &mut Timeline,
+        object: &str,
+        trigger: &str,
+    ) -> crate::events::EventOutcome {
+        bus.process_event(
             &Event {
                 object_id: object.into(),
                 trigger: trigger.into(),
                 payload: None,
             },
             timeline,
-        );
+        )
     }
 
     #[test]
@@ -81,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_set_property_creates_override() {
-        let scene = scene_with_events(vec![EventEntry {
+        let mut scene = scene_with_events(vec![EventEntry {
             object: "vec".into(),
             trigger: "hover_enter".into(),
             action: Action::SetProperty {
@@ -90,13 +95,51 @@ mod tests {
                 value: json!("#F39C12"),
             },
         }]);
+        // The action needs a real object with that property: an override for
+        // one the scene does not have is refused rather than stored.
+        scene.objects.insert(
+            "vec".into(),
+            serde_json::from_value(json!({
+                "type": "Arrow", "properties": { "from": [0, 0], "to": [10, 10] }
+            }))
+            .expect("arrow"),
+        );
         let mut bus = EventBus::new(&scene);
         let mut timeline = Timeline::from_scene(&scene);
-        fire(&mut bus, &mut timeline, "vec", "hover_enter");
+        let outcome = fire(&mut bus, &mut timeline, "vec", "hover_enter");
+        assert!(outcome.rejected.is_empty(), "{:?}", outcome.rejected);
         assert_eq!(
             timeline.overrides.get("vec").and_then(|m| m.get("color")),
             Some(&json!("#F39C12"))
         );
+    }
+
+    #[test]
+    fn an_action_the_engine_cannot_apply_comes_back_with_the_reason() {
+        // It used to be stored and then ignored by every reader, which looks
+        // exactly like an event that never fired.
+        let mut scene = scene_with_events(vec![EventEntry {
+            object: "dot".into(),
+            trigger: "click".into(),
+            action: Action::SetProperty {
+                target: "dot".into(),
+                property: "colour".into(),
+                value: json!("#F39C12"),
+            },
+        }]);
+        scene.objects.insert(
+            "dot".into(),
+            serde_json::from_value(json!({
+                "type": "Circle", "properties": { "cx": 1, "cy": 1, "radius": 5 }
+            }))
+            .expect("circle"),
+        );
+        let mut bus = EventBus::new(&scene);
+        let mut timeline = Timeline::from_scene(&scene);
+        let outcome = fire(&mut bus, &mut timeline, "dot", "click");
+        assert_eq!(outcome.rejected.len(), 1, "{:?}", outcome.rejected);
+        assert_eq!(outcome.rejected[0].error.code, "UNKNOWN_PROPERTY");
+        assert!(timeline.overrides.is_empty(), "it was stored anyway");
     }
 
     #[test]
