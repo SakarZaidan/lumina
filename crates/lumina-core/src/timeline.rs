@@ -368,9 +368,16 @@ impl Timeline {
             return Value::Null;
         }
 
-        // Clamp to first keyframe if before start
+        // At or before the first keyframe's time. Several keyframes can share
+        // that time — the authored value and a timeline entry at t = 0, most
+        // often — and the last one written wins, as it does at every other
+        // time on the track. Taking the first let the authored value beat the
+        // entry on exactly one frame: a circle authored at `opacity: 1` with a
+        // fade-in keyed from `{ "time": 0, "opacity": 0 }` drew frame 0 fully
+        // opaque and frame 1 at 0.03.
         if time <= track[0].time {
-            return track[0].value.clone();
+            let tied = track.partition_point(|k| k.time <= track[0].time);
+            return track[tied - 1].value.clone();
         }
 
         // Clamp to last keyframe if after end

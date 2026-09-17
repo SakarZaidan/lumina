@@ -767,3 +767,80 @@ mod resolve_cost {
         }
     }
 }
+
+/// Frame 0, where a keyframe at t = 0 and the authored value both apply.
+#[cfg(test)]
+mod first_frame {
+    use crate::Timeline;
+    use luminafx_schema::{Object, Scene};
+    use serde_json::json;
+
+    fn fade_in() -> Scene {
+        serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": { "c": { "type": "Circle",
+                "properties": { "cx": 32, "cy": 32, "radius": 10, "opacity": 1.0 } } },
+            "timeline": [
+                { "time": 0.0, "object": "c", "state": { "opacity": 0.0 } },
+                { "time": 1.0, "object": "c", "state": { "opacity": 1.0 } }
+            ]
+        }))
+        .expect("scene")
+    }
+
+    #[test]
+    fn a_keyframe_at_zero_beats_the_authored_value_on_frame_zero() {
+        // The authored `opacity: 1` sorts first, and frame 0 used to take it,
+        // so this fade-in flashed fully opaque for one frame and then started
+        // again from nearly transparent.
+        let timeline = Timeline::from_scene(&fade_in());
+        assert_eq!(timeline.get_state_at(0.0)["c"]["opacity"], json!(0.0));
+        let Some(Object::Circle(c)) = timeline.resolve_at(0.0).remove("c") else {
+            panic!("not a circle");
+        };
+        assert_eq!(c.opacity, 0.0);
+    }
+
+    #[test]
+    fn frame_zero_leads_smoothly_into_frame_one() {
+        let timeline = Timeline::from_scene(&fade_in());
+        let at = |t: f32| {
+            timeline.get_state_at(t)["c"]["opacity"]
+                .as_f64()
+                .unwrap_or(-1.0)
+        };
+        assert!(
+            at(0.0) <= at(1.0 / 30.0),
+            "opacity fell from frame 0 ({}) to frame 1 ({})",
+            at(0.0),
+            at(1.0 / 30.0)
+        );
+    }
+
+    #[test]
+    fn of_two_entries_at_zero_the_later_one_wins() {
+        // The same rule as at any other time on a track, where the bracketing
+        // search already lands on the last of a run of equal times.
+        let mut scene = fade_in();
+        scene.timeline.insert(
+            1,
+            serde_json::from_value(json!(
+                { "time": 0.0, "object": "c", "state": { "opacity": 0.25 } }
+            ))
+            .expect("entry"),
+        );
+        let state = Timeline::from_scene(&scene).get_state_at(0.0);
+        assert_eq!(state["c"]["opacity"], json!(0.25));
+    }
+
+    #[test]
+    fn with_no_keyframe_at_zero_the_authored_value_holds() {
+        let mut scene = fade_in();
+        scene.timeline.remove(0);
+        let state = Timeline::from_scene(&scene).get_state_at(0.0);
+        assert_eq!(state["c"]["opacity"], json!(1.0));
+    }
+}
