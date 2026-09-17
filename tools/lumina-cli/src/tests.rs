@@ -7,6 +7,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
+use luminafx_core::validation::validate_scene_data;
 
 fn write_temp(name: &str, contents: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("lumina-cli-test-{}", std::process::id()));

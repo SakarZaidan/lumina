@@ -230,8 +230,11 @@ fn load_scene(path: &PathBuf) -> anyhow::Result<Scene> {
 
 /// Run semantic validation, print every finding, and fail on errors.
 /// Warnings (duplicate keyframes, missing easing params, …) never block.
-fn validate_scene(scene: &Scene, path: &PathBuf) -> anyhow::Result<()> {
-    let result = luminafx_core::validation::validate_scene_data(scene);
+fn validate_scene(_scene: &Scene, path: &PathBuf) -> anyhow::Result<()> {
+    // From the file, not from `_scene`: a misspelled property has already been
+    // dropped from the parsed value, so checking it would pass a scene that
+    // `validate` rejects. Render and validate must agree (RFC-0002).
+    let result = luminafx_cli::validate_file(path)?;
     for w in &result.warnings {
         eprintln!("[warn]  {} at {}: {}", w.code, w.path, w.message);
     }

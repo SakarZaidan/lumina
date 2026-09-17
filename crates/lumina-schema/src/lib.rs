@@ -506,6 +506,15 @@ pub struct LaTeXProps {
     pub y: f32,
     /// Font size in pixels.
     pub font_size: f32,
+    /// Id of a loaded font asset; falls back to the first loaded font.
+    ///
+    /// Both renderers always read this for `LaTeX` and `MathML` — they share one
+    /// text branch with `Text` — but the field was missing from this struct, so
+    /// serde dropped it on parse and the lookup could only ever find nothing.
+    /// Scenes asking for a bold formula got the regular weight, silently.
+    /// Surfaced by RFC-0002's property validation on its first run.
+    #[serde(default)]
+    pub font_id: Option<String>,
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,
@@ -879,6 +888,15 @@ pub struct MathMLProps {
     pub y: f32,
     /// Font size in pixels.
     pub font_size: f32,
+    /// Id of a loaded font asset; falls back to the first loaded font.
+    ///
+    /// Both renderers always read this for `LaTeX` and `MathML` — they share one
+    /// text branch with `Text` — but the field was missing from this struct, so
+    /// serde dropped it on parse and the lookup could only ever find nothing.
+    /// Scenes asking for a bold formula got the regular weight, silently.
+    /// Surfaced by RFC-0002's property validation on its first run.
+    #[serde(default)]
+    pub font_id: Option<String>,
     /// Draw order; higher values draw on top.
     #[serde(default)]
     pub z_index: i32,

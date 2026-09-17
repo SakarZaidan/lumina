@@ -284,9 +284,14 @@ async fn a_well_formed_body_of_the_wrong_shape_says_so_distinctly() {
     // Valid JSON, wrong document. Distinguishing this from a syntax error is
     // the difference between "fix your braces" and "read the schema", and an
     // agent branches on the code rather than the prose.
+    //
+    // Sent to `/scene_patch`, which still extracts a typed body. `/validate`
+    // takes raw JSON since RFC-0002 — so it can see misspelled properties —
+    // and answers this case with a validation result instead; see
+    // `validate_reports_a_non_scene_as_a_failed_validation`.
     let (status, json) = send(
         &open(),
-        post("/validate", &serde_json::json!({ "nope": 1 })),
+        post("/scene_patch", &serde_json::json!({ "nope": 1 })),
     )
     .await;
     assert!(status.is_client_error(), "got {status}");
@@ -303,4 +308,42 @@ async fn a_missing_content_type_is_named_rather_than_guessed_at() {
     let (status, json) = send(&open(), request).await;
     assert!(status.is_client_error(), "got {status}");
     assert_eq!(json["code"], "MISSING_CONTENT_TYPE");
+}
+
+#[tokio::test]
+async fn validate_reports_a_non_scene_as_a_failed_validation() {
+    // `/validate` answers the question it was asked — "what is wrong with this
+    // document?" — rather than refusing to look. Valid JSON that is not a
+    // scene is a validation result with the reason, not a transport error.
+    let (status, json) = send(
+        &open(),
+        post("/validate", &serde_json::json!({ "nope": 1 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["valid"], false, "got {json}");
+    assert!(json["errors"].as_array().is_some_and(|e| !e.is_empty()));
+}
+
+#[tokio::test]
+async fn validate_catches_a_misspelled_property_over_http() {
+    // RFC-0002 end to end through the real server. Before it, extracting a
+    // typed `Scene` let serde drop the typo before this handler ran, and
+    // `/validate` answered `valid: true` for a scene that rendered wrong.
+    let mut scene = minimal_scene();
+    scene["objects"] = serde_json::json!({
+        "c": { "type": "Circle",
+               "properties": { "cx": 1, "cy": 1, "radius": 5, "opacty": 0.5 } }
+    });
+    let (status, json) = send(&open(), post("/validate", &scene)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["valid"], false, "got {json}");
+    let first = &json["errors"][0];
+    assert_eq!(first["code"], "UNKNOWN_PROPERTY");
+    assert!(
+        first["fix_suggestion"]
+            .as_str()
+            .is_some_and(|s| s.contains("opacity")),
+        "got {first}"
+    );
 }

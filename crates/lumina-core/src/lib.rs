@@ -36,6 +36,8 @@ pub mod easing;
 pub mod events;
 /// JSON-value interpolation (numbers, arrays, LAB-space colors).
 pub mod interpolator;
+/// Each object type's properties and their JSON types, read from the structs.
+pub mod property_schema;
 /// Scene graph: object map with root/child resolution.
 pub mod scene;
 pub mod scene_patch;

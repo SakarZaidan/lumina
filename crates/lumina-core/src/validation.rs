@@ -87,6 +87,173 @@ pub struct ValidationWarning {
     pub message: String,
 }
 
+/// Validate a scene from its raw JSON, including the property names and types
+/// that parsing throws away.
+///
+/// RFC-0002 Stage 1. This is the entry point for anything holding a scene as
+/// text or JSON — the CLI, the server, the MCP tools. [`validate_scene_data`]
+/// remains for embedders who build a `Scene` in code, and this calls it.
+///
+/// It has to see the raw document, because the checks it adds are for exactly
+/// the information deserialisation discards. Before this existed, all of these
+/// passed validation:
+///
+/// - `"raduis": 20` in a timeline — interpolated under the wrong key and never
+///   read, so the animation silently did nothing;
+/// - `"radius": "big"` in a timeline — read back as a missing number, so the
+///   circle rendered with radius 0 and vanished;
+/// - `"opacty": 0.5` in `properties` — dropped by serde before any check ran.
+///
+/// Property errors are reported *before* the document is parsed into a
+/// `Scene`, and they are returned on their own if parsing then fails. A wrong
+/// type inside `properties` is also a serde error, but serde reports it with no
+/// path and no suggestion; the property error says the same thing usefully.
+#[must_use]
+pub fn validate_scene_json(raw: &Value) -> ValidationResponse {
+    let mut errors = Vec::new();
+    check_properties(raw, &mut errors);
+
+    match serde_json::from_value::<Scene>(raw.clone()) {
+        Ok(scene) => {
+            let mut response = validate_scene_data(&scene);
+            // Property findings first: they are usually the root cause of
+            // anything the semantic pass reports about the same object.
+            errors.append(&mut response.errors);
+            response.valid = errors.is_empty();
+            response.errors = errors;
+            response
+        }
+        Err(e) if errors.is_empty() => ValidationResponse {
+            valid: false,
+            errors: vec![ValidationError {
+                code: "PARSE_ERROR".to_string(),
+                path: "$".to_string(),
+                message: format!("the document is not a valid scene: {e}"),
+                fix_suggestion: "Check the scene against the schema (`lumina-cli schema`)."
+                    .to_string(),
+            }],
+            warnings: Vec::new(),
+        },
+        // Parsing failed, but a property error already explains why, and says
+        // it with a path and a fix.
+        Err(_) => ValidationResponse {
+            valid: false,
+            errors,
+            warnings: Vec::new(),
+        },
+    }
+}
+
+/// Check every property name and value against the object type's struct.
+fn check_properties(raw: &Value, errors: &mut Vec<ValidationError>) {
+    let schema = crate::property_schema::PropertySchema::get();
+    let Some(objects) = raw.get("objects").and_then(Value::as_object) else {
+        return;
+    };
+
+    // Object id -> type name, for resolving timeline entries below.
+    let mut type_of: HashMap<&str, &str> = HashMap::new();
+
+    for (id, obj) in objects {
+        let Some(ty) = obj.get("type").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(props) = schema.properties_of(ty) else {
+            // An unknown object type is itself an error — and the most useful
+            // one to report, since none of its properties can be checked.
+            errors.push(ValidationError {
+                code: "UNKNOWN_OBJECT_TYPE".to_string(),
+                path: format!("$.objects.{id}.type"),
+                message: format!("\"{ty}\" is not an object type."),
+                fix_suggestion: crate::suggest::did_you_mean(
+                    ty,
+                    schema.object_types(),
+                    "`lumina-cli objects` lists every object type.",
+                ),
+            });
+            continue;
+        };
+        type_of.insert(id.as_str(), ty);
+
+        if let Some(fields) = obj.get("properties").and_then(Value::as_object) {
+            for (name, value) in fields {
+                check_one(
+                    ty,
+                    props,
+                    name,
+                    value,
+                    &format!("$.objects.{id}.properties.{name}"),
+                    errors,
+                );
+            }
+        }
+    }
+
+    let Some(timeline) = raw.get("timeline").and_then(Value::as_array) else {
+        return;
+    };
+    for (i, entry) in timeline.iter().enumerate() {
+        // An entry naming an object that does not exist is reported by the
+        // semantic pass (`UNKNOWN_OBJECT_ID`); reporting its properties too
+        // would bury that one real error under several derived ones.
+        let Some(ty) = entry
+            .get("object")
+            .and_then(Value::as_str)
+            .and_then(|id| type_of.get(id))
+        else {
+            continue;
+        };
+        let Some(props) = schema.properties_of(ty) else {
+            continue;
+        };
+        if let Some(state) = entry.get("state").and_then(Value::as_object) {
+            for (name, value) in state {
+                check_one(
+                    ty,
+                    props,
+                    name,
+                    value,
+                    &format!("$.timeline[{i}].state.{name}"),
+                    errors,
+                );
+            }
+        }
+    }
+}
+
+fn check_one(
+    ty: &str,
+    props: &HashMap<String, crate::property_schema::JsonKinds>,
+    name: &str,
+    value: &Value,
+    path: &str,
+    errors: &mut Vec<ValidationError>,
+) {
+    match props.get(name) {
+        None => errors.push(ValidationError {
+            code: "UNKNOWN_PROPERTY".to_string(),
+            path: path.to_string(),
+            message: format!("\"{name}\" is not a property of {ty}."),
+            fix_suggestion: crate::suggest::did_you_mean(
+                name,
+                props.keys().map(String::as_str),
+                &format!("`lumina-cli objects` lists the properties of {ty}."),
+            ),
+        }),
+        Some(kinds) if !kinds.accepts(value) => errors.push(ValidationError {
+            code: "PROPERTY_TYPE_MISMATCH".to_string(),
+            path: path.to_string(),
+            message: format!(
+                "\"{name}\" on {ty} is {}; got {}.",
+                kinds.describe(),
+                crate::property_schema::kind_of(value)
+            ),
+            fix_suggestion: format!("Give \"{name}\" {}.", kinds.describe()),
+        }),
+        Some(_) => {}
+    }
+}
+
 /// Perform semantic validation of a parsed Scene.
 /// Returns errors (render-blocking) and warnings (non-blocking).
 pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {

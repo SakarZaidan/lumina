@@ -1715,6 +1715,7 @@ dependencies = [
  "log",
  "luminafx-schema",
  "proptest",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

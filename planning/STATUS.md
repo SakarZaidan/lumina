@@ -24,6 +24,36 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-17 (later) — RFC-0002 accepted; Stage 1 finds a bug in the showcases
+
+- **TD-07 reproduced before a line of design.** Against `main`, a timeline typo
+  (`"raduis"`), a wrong type (`"radius": "big"`) and an unknown property
+  (`"opacty"`) all passed `validate`. Rendered: an animation that did nothing,
+  a circle that vanished (0 red pixels), and a dropped field.
+- **The investigation changed the plan.** The master plan assumed LSF v2 and a
+  migration command. The schema turned out to be typed already — the types are
+  discarded after parsing, and the renderer reads properties back by string at
+  216 sites. Every failure was one of checking, not of the format, so RFC-0002
+  proposed fixing it with no format change. Accepted by the maintainer;
+  ADR-0015 records it and the Wave 6 gate now tests the behaviour instead of a
+  migration.
+- **Stage 1 shipped.** Properties and their JSON types come from the real
+  structs via `schemars`, walked as emitted JSON Schema rather than schemars'
+  Rust types, so the held 1.x upgrade (#50) touches one file.
+- **The gate test earned itself immediately.** "Every shipped scene still
+  validates" failed on its first run: three examples use `font_id` on LaTeX
+  objects, which `LaTeXProps` never declared. The renderers read it through the
+  same branch as `Text` — so the field was silently dropped every time, and
+  `showcase_grand` and `showcase_neural_network` rendered formulas meant to be
+  **bold** in the regular weight. The validator was right; the structs were
+  missing a field. Fixed for `LaTeX` and `MathML`, proven by a state-level test
+  rather than a heavy release render.
+- A resolver gap makes validation *more* permissive (`ANY`), never less: a false
+  "wrong type" on a valid scene leaves the author with no correct answer.
+  Integers accept fractions because interpolating `z_index` produces them.
+- Built and tested with `CARGO_BUILD_JOBS=4` throughout on a 7.5 GB machine;
+  memory peaked at 3.9 GB. The renderer-heavy workspace gate is left to CI.
+
 ## 2026-09-17 — Versioned documentation; Wave 5 closes but for npm
 
 - `AAA-REL-12`. The published site is now assembled from the tags: the newest

@@ -11,6 +11,40 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Planned work is tracked in [planning/ROADMAP.md](planning/ROADMAP.md), and the
 programme to reach reference quality in [plan/](plan/).
 
+### Changed
+- **A misspelled or mistyped property is now a validation error**
+  (RFC-0002, Stage 1). All of these used to pass `validate` and then render
+  wrong:
+
+  | Scene | Before | Now |
+  |---|---|---|
+  | `"raduis": 20` in a timeline | `ok`; the animation silently did nothing | `UNKNOWN_PROPERTY` — did you mean `radius`? |
+  | `"radius": "big"` in a timeline | `ok`; the circle vanished | `PROPERTY_TYPE_MISMATCH` — a number; got a string |
+  | `"opacty": 0.5` in `properties` | `ok`; the field was dropped | `UNKNOWN_PROPERTY` — did you mean `opacity`? |
+  | `"type": "Cirle"` | a parse error with no path | `UNKNOWN_OBJECT_TYPE` — did you mean `Circle`? |
+
+  **This rejects scenes that used to validate.** Each such scene was already
+  rendering something other than what it says, and the error names the property
+  and the fix. No format change: `version` stays `"1.0"`, and every example and
+  fixture in the repository still validates.
+
+  The permitted properties and their types are read from the real structs
+  through `schemars`, not from a second table that could drift from them.
+  `/validate`, `lumina-cli validate`, and the MCP `lumina_validate` tool all use
+  it, and `render` refuses exactly what `validate` refuses.
+
+  `/validate` now takes raw JSON, so a body that is JSON but not a scene gets a
+  `200` with `valid: false` and the reasons, instead of a `400` — the endpoint
+  exists to explain what is wrong, and now it does.
+
+### Fixed
+- **`font_id` on `LaTeX` and `MathML` objects was silently ignored.** Both
+  renderers read it through the same text path as `Text`, but only `TextProps`
+  declared the field, so it was dropped on parse and the lookup always found
+  nothing. `showcase_grand` and `showcase_neural_network` asked their formulas
+  for the bold font and rendered them in the regular weight. Found by the new
+  property validation rejecting those examples the first time it ran.
+
 ## [0.5.0] — 2026-09-03
 
 The first release published to a registry, and the release that had to change
