@@ -7,20 +7,60 @@ Updated with every entry below (and re-verified at every release). 🟢 healthy
 
 | Area | | Notes |
 |---|---|---|
-| CI on `main` | 🟢 | 10 jobs green on ubuntu/macos/windows + MSRV + wasm |
-| Tests | 🟢 | 117 native + 3 wasm passing; zero flakes |
-| Coverage | 🟢 | 83.4% lines / 83.8% regions, measured in CI and gated at an 80% floor that ratchets |
-| Benchmarks | 🟡 | exist, manual only; not in CI (TD-14 remainder, `AAA-TEST-07`) |
-| Docs (book + rustdoc) | 🟢 | book live on Pages; every public item documented, lint-enforced |
-| Examples | 🟢 | portable on any OS; CI renders none of them yet (`AAA-TEST-09`) |
-| Security | 🟡 | server unhardened pre-v0.5 by design (TD-09); five audited DoS vectors open (`AAA-SEC-01..05`) |
-| Backend parity | 🟢 | full visual parity, 16-fixture pixel-diff suite gating in CI; Windows probe suppressed (TD-20) |
-| Release | 🟢 | **v0.5.0 released** — all seven crates live on crates.io |
-| Distribution | 🟡 | **crates.io: published** (7 crates). PyPI: wheels pending an abi3 fix. npm: still blocked on TD-12 |
-| Dependencies | 🟢 | deny green; 386 locked crates (mitex removed); rustybuzz tracked as TD-22 |
+| CI on `main` | 🟢 | 14 jobs: fmt, clippy, tests on ubuntu/macos/windows, MSRV, wasm, semver, coverage, benchmarks, examples, deny, docs, book, JS SDK |
+| Tests | 🟢 | 400 test functions across the workspace; zero flakes |
+| Coverage | 🟢 | 85.98% lines, measured in CI and gated at an 80% floor that ratchets |
+| Benchmarks | 🟢 | run in CI against the merge base on one runner, gated at 25% |
+| Docs (book + rustdoc) | 🟢 | book live on Pages, versioned; every public item documented, lint-enforced |
+| Examples | 🟢 | portable on any OS; every example rendered in CI (`cargo xtask examples`) |
+| Security | 🟢 | server hardened (TD-09): bearer auth, rate limiting, CORS allowlist, 8 MiB cap, loopback default. Resource bounds enforced in validation |
+| Backend parity | 🟢 | 19-fixture pixel-diff suite gating in CI, plus behavioural parity tests; Windows probe suppressed (TD-20) |
+| Release | 🟢 | **v0.5.0 released** — all seven crates on crates.io |
+| Distribution | 🟡 | crates.io (7 crates) and PyPI (`luminafx`) published; npm waits on a token |
+| Dependencies | 🟢 | deny green; 409 locked crates; `rustybuzz` tracked as TD-22, `ttf-parser` as TD-17 |
 
 Rolling log, newest first. One dated entry per work session; ≤ 10 lines each.
 For the release-by-release story see [HISTORY.md](./HISTORY.md).
+
+---
+
+## 2026-09-17 (evening) — RFC-0002 Stage 2 lands; the fix loop; the guide
+
+- **The renderer reads no JSON.** `Timeline::resolve_at` resolves each object
+  to its typed value (0.64–0.71× `get_state_at` on CI, faster than the untyped
+  state it replaces), the `Renderer` trait takes those objects, and all 17
+  object types in both backends read typed fields. The 216 string reads, the
+  per-object map and the renderer's second set of defaults are gone;
+  `serde_json` is a dev-dependency of `luminafx-renderer` now. `frame_total`
+  fell 19–20% against `main` on the way.
+- **Migrating in batches with an equivalence test made it safe.** Core holds
+  `resolve_at` to exactly what `get_state_at` produced for every example and
+  fixture at six times, and each typed helper was held equal to the JSON
+  reading it replaced before the branches moved.
+- **Five bugs the typing exposed**, each with a test: a keyframe at `time: 0`
+  lost to the authored value on frame 0 (a one-frame flash at the start of
+  every fade-in); interpolation produced fractions for integer properties, so
+  animating a particle `count` drew no particles at all; a `Plot` against a
+  non-`Axes` drew on the GPU backend only; a group naming a missing child
+  errored on one backend and not the other; and three reveal edges disagreed
+  between backends.
+- **Validation now checks what it claimed to.** Keyframe and event values are
+  checked by name, kind *and* shape, from every entry point rather than only
+  the raw-JSON one; paints are checked wherever written, gradients included;
+  ranges must increase. `/render` and `/patch` validate the raw document, and
+  so does the Python SDK, whose `validate` had been reporting scenes valid that
+  every other surface rejected — nothing in CI built that crate, which is now a
+  job with the SDK's first tests.
+- **The fix step exists** (`AAA-AI-03`): errors carry an RFC 6902 `fix_patch`
+  where the repair is certain, and `lumina-cli fix`, `lumina_fix` and the
+  Python SDK apply them in rounds. `--write` edits only the misspelled words:
+  key order and layout survive, because the patcher works on the file's text.
+- **Context costs less** (`AAA-AI-05`, `AAA-AI-07`): the schema can be scoped to
+  the object types a task needs and compacted (under a third of 38 kB), and the
+  engine ships the authoring guide it wants a model to follow, served by the
+  CLI, HTTP, MCP and the book from one file that tests hold to the registry.
+- Everything heavy stayed on CI: the machine has 7.5 GB and the renderer's test
+  binaries link wgpu. Local runs were core, clippy and one crate's unit tests.
 
 ---
 
