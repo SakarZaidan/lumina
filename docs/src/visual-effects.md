@@ -13,7 +13,18 @@ accept either a hex string or a gradient object:
 "fill": { "type": "radial", "stops": [[0.0, "#FFFFFF"], [1.0, "#0B132B"]], "radius": 0.8 }
 ```
 
-`angle` is in degrees; `radius` is a fraction of the shape's bounding box. Stops are `[position 0..1, "#hex"]`.
+`angle` is in degrees; `radius` is a fraction of half the shape's larger side.
+Stops are `[position 0..1, "#hex"]`, and there must be at least two.
+
+A shape written without a `fill` is white. To draw the outline and nothing
+inside, say so:
+
+```json
+"fill": null, "stroke": "#F78166", "stroke_width": 3
+```
+
+`null` means "no paint" for `fill` exactly as it always has for `stroke`.
+There is no `"none"` colour.
 
 ## Drop shadows / glow
 

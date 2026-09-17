@@ -1499,8 +1499,8 @@ fn check_colour(value: &str, path: &str, errors: &mut Vec<ValidationError>) {
              reporting anything."
         ),
         fix_suggestion: if value.eq_ignore_ascii_case("none") {
-            "There is no \"none\" value. Omit `fill` for a shape with no fill, or use an \
-             alpha of 00 (e.g. \"#00000000\")."
+            "There is no \"none\" colour. Write `\"fill\": null` for a shape with no fill, \
+             as `stroke` already takes."
                 .to_string()
         } else {
             "Use #RGB, #RRGGBB, or #RRGGBBAA.".to_string()

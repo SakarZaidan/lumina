@@ -36,7 +36,7 @@ mod tests {
             cy: 0.0,
             radius: 10.0,
             z_index: 0,
-            fill: "#FFF".into(),
+            fill: Some("#FFF".into()),
             stroke: None,
             stroke_width: 0.0,
             shadow: None,
