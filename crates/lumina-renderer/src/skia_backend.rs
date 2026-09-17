@@ -507,7 +507,10 @@ impl SkiaRenderer {
                 let length = props.length.unwrap_or(400.0);
                 let color = parse_color(&props.color, props.opacity);
                 let range = end - start;
-                if range == 0.0 || step <= 0.0 {
+                // As on the GPU backend: a range that does not increase has no
+                // tick layout, so nothing is drawn rather than a bare axis line
+                // (validation reports it as INVALID_RANGE).
+                if range <= 0.0 || step <= 0.0 {
                     return Ok(());
                 }
 

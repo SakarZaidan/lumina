@@ -413,6 +413,16 @@ fn parity_20_camera_rotation() {
     assert_parity("20_camera_rotation", PATH_TOL);
 }
 
+#[test]
+fn parity_21_reveal_edges() {
+    // Two cases the backends disagreed on while nothing rendered them: a plot
+    // whose `draw_fraction` runs past 1, which the CPU backend clamped and the
+    // GPU backend did not, and a bezier curve with no `draw_fraction`, which
+    // the GPU backend trimmed at 1.0 — rebuilding the curve from its own
+    // samples rather than leaving it alone.
+    assert_parity("21_reveal_edges", PATH_TOL);
+}
+
 // ── Behavioural parity ──────────────────────────────────────────────────────
 //
 // The pixel suite above compares frames that *both* backends produced. When

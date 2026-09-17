@@ -1410,6 +1410,21 @@ fn check_tick_count(
         });
         return;
     }
+    // A range that does not increase has no tick layout, and the backends did
+    // not agree on what to draw for one: the CPU backend drew a bare axis line
+    // and the GPU backend drew nothing.
+    if max <= min {
+        errors.push(ValidationError {
+            code: "INVALID_RANGE".to_string(),
+            path,
+            message: format!(
+                "Range [{min}, {max}] does not increase, so it has no ticks and no scale."
+            ),
+            fix_suggestion: "Put the smaller bound first, e.g. [0, 10].".to_string(),
+            fix_patch: None,
+        });
+        return;
+    }
     let ticks = (max - min).abs() / step;
     if ticks > MAX_TICK_COUNT {
         errors.push(ValidationError {
