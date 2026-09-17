@@ -347,3 +347,44 @@ async fn validate_catches_a_misspelled_property_over_http() {
         "got {first}"
     );
 }
+
+#[tokio::test]
+async fn render_refuses_what_validate_refuses() {
+    // `/render` typed its body before validating, and a typed scene has
+    // already lost a misspelled property, so it rendered a scene `/validate`
+    // rejects. Refused here before any rendering starts, so no ffmpeg needed.
+    let mut scene = minimal_scene();
+    scene["objects"] = serde_json::json!({
+        "c": { "type": "Circle",
+               "properties": { "cx": 1, "cy": 1, "radius": 5, "opacty": 0.5 } }
+    });
+    let body = serde_json::json!({ "scene": scene, "format": "mp4" });
+    let (status, json) = send(&open(), post("/render", &body)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(json["valid"], false, "got {json}");
+    assert_eq!(json["errors"][0]["code"], "UNKNOWN_PROPERTY");
+}
+
+#[tokio::test]
+async fn render_without_a_scene_gets_the_envelope() {
+    let body = serde_json::json!({ "format": "mp4" });
+    let (status, json) = send(&open(), post("/render", &body)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(json["code"], "SCHEMA_MISMATCH");
+    assert!(json["fix_suggestion"].is_string());
+}
+
+#[tokio::test]
+async fn patch_reports_a_misspelled_property_it_adds() {
+    let body = serde_json::json!({
+        "scene": minimal_scene(),
+        "patch": [{ "op": "add", "path": "/objects/c",
+                    "value": { "type": "Circle",
+                               "properties": { "cx": 1, "cy": 1, "radius": 5,
+                                               "raduis": 6 } } }]
+    });
+    let (status, json) = send(&open(), post("/patch", &body)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["validation"]["valid"], false, "got {json}");
+    assert_eq!(json["validation"]["errors"][0]["code"], "UNKNOWN_PROPERTY");
+}
