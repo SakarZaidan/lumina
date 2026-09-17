@@ -20,7 +20,7 @@
 
 use std::path::{Path, PathBuf};
 
-use luminafx_core::validation::{validate_scene_data, ValidationResponse};
+use luminafx_core::validation::ValidationResponse;
 use luminafx_schema::Scene;
 
 /// Read and parse a scene file.
@@ -97,8 +97,27 @@ pub fn format_validation(result: &ValidationResponse, style: Report) -> (String,
 /// code, because `render` and `validate` want different things from the same
 /// answer.
 pub fn validate(path: &Path, style: Report) -> anyhow::Result<(String, bool)> {
-    let scene = load_scene(path)?;
-    Ok(format_validation(&validate_scene_data(&scene), style))
+    Ok(format_validation(&validate_file(path)?, style))
+}
+
+/// Read a scene file and validate it from the raw JSON.
+///
+/// From the raw document rather than a parsed `Scene`, because the property
+/// checks are for exactly what parsing discards: a misspelled property is
+/// dropped by serde before any check on the typed value could see it
+/// (RFC-0002).
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or is not JSON at all. A file
+/// that is JSON but not a valid scene is *not* an error here: it comes back as
+/// a failed validation with the reasons, which is the point of validating.
+pub fn validate_file(path: &Path) -> anyhow::Result<ValidationResponse> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+    let raw: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("{} is not valid JSON: {e}", path.display()))?;
+    Ok(luminafx_core::validation::validate_scene_json(&raw))
 }
 
 /// The JSON Schema for the scene format.

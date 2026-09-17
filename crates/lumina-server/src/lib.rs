@@ -134,8 +134,13 @@ async fn health_check() -> &'static str {
     "Lumina OK"
 }
 
-async fn validate_scene(ApiJson(scene): ApiJson<Scene>) -> impl IntoResponse {
-    Json(validate_scene_data(&scene))
+async fn validate_scene(ApiJson(raw): ApiJson<serde_json::Value>) -> impl IntoResponse {
+    // Raw JSON, not a typed `Scene`. Extracting `Scene` let serde discard a
+    // misspelled property before this handler ran, so `/validate` answered
+    // "valid" for scenes that rendered wrong (RFC-0002). It also means a body
+    // that is JSON but not a scene now gets the validation it asked for — the
+    // specific problems, with paths — instead of a transport-level rejection.
+    Json(luminafx_core::validation::validate_scene_json(&raw))
 }
 
 /// `GET /schema` — returns the LSF JSON Schema derived from the Rust types.

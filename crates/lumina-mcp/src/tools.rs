@@ -172,11 +172,28 @@ pub fn call(name: &str, args: &Value) -> ToolResult {
                 .collect();
             ToolResult::ok(scope_schema(&schema, &names))
         }
-        "lumina_validate" => match scene_arg(args) {
-            Ok(scene) => ToolResult::ok(
-                serde_json::to_value(validate_scene_data(&scene)).unwrap_or_else(|_| json!({})),
+        "lumina_validate" => match args.get("scene") {
+            None => ToolResult::err(
+                "MISSING_ARGUMENT",
+                "this tool needs a `scene` argument",
+                Some("Pass the LSF document as `scene`. Call lumina_objects for its shape."),
             ),
-            Err(e) => e,
+            // Not an object at all is a malformed *call*, not a scene with
+            // problems, so it stays a tool error.
+            Some(raw) if !raw.is_object() => ToolResult::err(
+                "SCHEMA_MISMATCH",
+                format!(
+                    "`scene` must be an object; got {}",
+                    luminafx_core::property_schema::kind_of(raw)
+                ),
+                Some("Pass the LSF document itself, not a string containing it."),
+            ),
+            // Validated from the raw value, so a misspelled property is
+            // reported rather than silently dropped by parsing (RFC-0002).
+            Some(raw) => ToolResult::ok(
+                serde_json::to_value(luminafx_core::validation::validate_scene_json(raw))
+                    .unwrap_or_else(|_| json!({})),
+            ),
         },
         "lumina_patch" => {
             let mut scene = match scene_arg(args) {
@@ -315,7 +332,10 @@ fn render(args: &Value) -> ToolResult {
         );
     };
 
-    let validation = validate_scene_data(&scene);
+    // From the raw argument, so render refuses exactly what validate refuses.
+    let validation = luminafx_core::validation::validate_scene_json(
+        args.get("scene").unwrap_or(&serde_json::Value::Null),
+    );
     if !validation.valid {
         return ToolResult {
             value: json!({

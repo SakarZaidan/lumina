@@ -5,7 +5,7 @@
 
 [package]
 name = "luminafx-py"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 description = "Python bindings for the Lumina animation engine"
@@ -26,10 +26,10 @@ crate-type = ["cdylib"]
 # there — and the server is `publish = false`, so an sdist naming it could
 # never have been built by anyone installing from PyPI. Dropping it also takes
 # axum and tokio out of this crate's build.
-luminafx-core = { path = "../../crates/lumina-core", version = "0.5.0" }
-luminafx-schema = { path = "../../crates/lumina-schema", version = "0.5.0" }
-luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.5.0" }
-luminafx-export = { path = "../../crates/lumina-export", version = "0.5.0" }
+luminafx-core = { path = "../../crates/lumina-core", version = "0.6.0" }
+luminafx-schema = { path = "../../crates/lumina-schema", version = "0.6.0" }
+luminafx-renderer = { path = "../../crates/lumina-renderer", version = "0.6.0" }
+luminafx-export = { path = "../../crates/lumina-export", version = "0.6.0" }
 # `abi3-py39` builds against Python's stable ABI, so one wheel per platform
 # works on 3.9 and every version after it — including ones that did not exist
 # when the wheel was built. Without it pyo3 compiles against the exact

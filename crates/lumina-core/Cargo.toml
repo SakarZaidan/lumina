@@ -13,9 +13,13 @@ categories = ["graphics", "multimedia"]
 readme = "../../README.md"
 
 [dependencies]
-luminafx-schema = { path = "../lumina-schema", version = "0.5.0" }
+luminafx-schema = { path = "../lumina-schema", version = "0.6.0" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+# Read at validation time to learn each object type's properties from the
+# real structs (RFC-0002). Already in the graph through luminafx-schema, so
+# this adds an edge, not a crate.
+schemars = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 

@@ -744,3 +744,274 @@ mod unknown_references {
         );
     }
 }
+
+/// Property names and types, checked against the structs (RFC-0002 Stage 1).
+///
+/// The first four tests are the reproductions from the RFC, run against `main`
+/// before any of this was written: each passed validation and rendered wrong.
+#[cfg(test)]
+mod typed_properties {
+    use crate::validation::validate_scene_json;
+    use serde_json::{json, Value};
+
+    fn scene(properties: &Value, timeline: &Value) -> Value {
+        let mut props = json!({ "cx": 32, "cy": 32, "radius": 10, "fill": "#FF0000" });
+        if let (Some(base), Some(extra)) = (props.as_object_mut(), properties.as_object()) {
+            for (k, v) in extra {
+                base.insert(k.clone(), v.clone());
+            }
+        }
+        json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": { "c": { "type": "Circle", "properties": props } },
+            "timeline": timeline
+        })
+    }
+
+    fn codes(v: &Value) -> Vec<String> {
+        validate_scene_json(v)
+            .errors
+            .iter()
+            .map(|e| e.code.clone())
+            .collect()
+    }
+
+    #[test]
+    fn a_correct_scene_has_no_property_errors() {
+        let r = validate_scene_json(&scene(
+            &json!({}),
+            &json!([{ "time": 1.0, "object": "c", "state": { "radius": 20 } }]),
+        ));
+        assert!(r.valid, "a correct scene was rejected: {:?}", r.errors);
+    }
+
+    #[test]
+    fn a_misspelled_animated_property_is_an_error_with_a_suggestion() {
+        // Repro 1: the animation silently did nothing.
+        let r = validate_scene_json(&scene(
+            &json!({}),
+            &json!([{ "time": 1.0, "object": "c", "state": { "raduis": 20 } }]),
+        ));
+        let e = r
+            .errors
+            .iter()
+            .find(|e| e.code == "UNKNOWN_PROPERTY")
+            .expect("must be reported");
+        assert_eq!(e.path, "$.timeline[0].state.raduis");
+        assert!(e.fix_suggestion.contains("radius"), "{}", e.fix_suggestion);
+    }
+
+    #[test]
+    fn a_wrong_typed_animated_property_is_an_error_naming_the_type() {
+        // Repro 2: read back as a missing number, so the circle vanished.
+        let r = validate_scene_json(&scene(
+            &json!({}),
+            &json!([{ "time": 1.0, "object": "c", "state": { "radius": "big" } }]),
+        ));
+        let e = r
+            .errors
+            .iter()
+            .find(|e| e.code == "PROPERTY_TYPE_MISMATCH")
+            .expect("must be reported");
+        assert_eq!(e.path, "$.timeline[0].state.radius");
+        assert!(e.message.contains("a number"), "{}", e.message);
+        assert!(e.message.contains("a string"), "{}", e.message);
+    }
+
+    #[test]
+    fn an_unknown_static_property_is_an_error_even_though_serde_drops_it() {
+        // Repro 3: serde discarded the field before any check could see it —
+        // which is why this has to read the raw document.
+        let r = validate_scene_json(&scene(&json!({ "opacty": 0.5 }), &json!([])));
+        let e = r
+            .errors
+            .iter()
+            .find(|e| e.code == "UNKNOWN_PROPERTY")
+            .expect("must be reported");
+        assert_eq!(e.path, "$.objects.c.properties.opacty");
+        assert!(e.fix_suggestion.contains("opacity"), "{}", e.fix_suggestion);
+    }
+
+    #[test]
+    fn a_wrong_type_in_properties_is_reported_with_a_path_not_a_serde_message() {
+        // serde rejects this too, but with no path and no suggestion. The
+        // property error must be what comes back, not PARSE_ERROR.
+        let c = codes(&scene(&json!({ "radius": "big" }), &json!([])));
+        assert!(c.contains(&"PROPERTY_TYPE_MISMATCH".to_string()), "{c:?}");
+        assert!(!c.contains(&"PARSE_ERROR".to_string()), "{c:?}");
+    }
+
+    #[test]
+    fn a_misspelled_object_type_suggests_the_real_one() {
+        let mut s = scene(&json!({}), &json!([]));
+        s["objects"]["c"]["type"] = json!("Cirle");
+        let r = validate_scene_json(&s);
+        let e = r
+            .errors
+            .iter()
+            .find(|e| e.code == "UNKNOWN_OBJECT_TYPE")
+            .expect("must be reported");
+        assert!(e.fix_suggestion.contains("Circle"), "{}", e.fix_suggestion);
+    }
+
+    #[test]
+    fn an_entry_for_a_missing_object_reports_only_the_missing_object() {
+        // Not one UNKNOWN_OBJECT_ID plus a pile of property errors derived from
+        // it — that buries the one real mistake.
+        let c = codes(&scene(
+            &json!({}),
+            &json!([{ "time": 1.0, "object": "nope", "state": { "anything": 1 } }]),
+        ));
+        assert!(c.contains(&"UNKNOWN_OBJECT_ID".to_string()), "{c:?}");
+        assert!(!c.contains(&"UNKNOWN_PROPERTY".to_string()), "{c:?}");
+    }
+
+    #[test]
+    fn integer_properties_accept_the_fractions_interpolation_produces() {
+        // A timeline interpolates z_index through fractional values. Rejecting
+        // 2.5 would reject a scene the engine renders correctly.
+        let r = validate_scene_json(&scene(
+            &json!({ "z_index": 1 }),
+            &json!([{ "time": 1.0, "object": "c", "state": { "z_index": 2.5 } }]),
+        ));
+        assert!(r.valid, "{:?}", r.errors);
+    }
+
+    #[test]
+    fn optional_properties_accept_null() {
+        let r = validate_scene_json(&scene(
+            &json!({ "stroke": null, "shadow": null }),
+            &json!([]),
+        ));
+        assert!(r.valid, "{:?}", r.errors);
+    }
+
+    #[test]
+    fn every_object_type_has_a_derived_property_list() {
+        // If a variant stopped resolving, every property on it would become
+        // UNKNOWN_PROPERTY. This catches that before any scene does.
+        let schema = crate::property_schema::PropertySchema::get();
+        let mut types: Vec<&str> = schema.object_types().collect();
+        types.sort_unstable();
+        assert_eq!(types.len(), 17, "object types derived: {types:?}");
+        for t in &types {
+            let props = schema.properties_of(t).expect("listed");
+            assert!(!props.is_empty(), "{t} derived no properties");
+        }
+    }
+
+    /// The RFC-0002 gate: every scene this repository ships still validates.
+    ///
+    /// This is the test that decides whether Stage 1 is safe to ship. The
+    /// adapter reads property types out of a generated schema, and a single
+    /// mis-resolved `$ref` or composition keyword would make it reject a scene
+    /// the engine renders perfectly well — for every user of that scene.
+    #[test]
+    fn every_shipped_scene_still_validates() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("workspace root");
+        let mut checked = 0;
+        let mut failures = Vec::new();
+        for dir in ["examples", "crates/lumina-renderer/tests/fixtures"] {
+            let Ok(entries) = std::fs::read_dir(root.join(dir)) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("lsf") {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let Ok(raw) = serde_json::from_str::<Value>(&text) else {
+                    continue;
+                };
+                checked += 1;
+                let r = validate_scene_json(&raw);
+                let property_errors: Vec<_> = r
+                    .errors
+                    .iter()
+                    .filter(|e| {
+                        matches!(
+                            e.code.as_str(),
+                            "UNKNOWN_PROPERTY" | "PROPERTY_TYPE_MISMATCH" | "UNKNOWN_OBJECT_TYPE"
+                        )
+                    })
+                    .map(|e| format!("{} {} — {}", e.code, e.path, e.message))
+                    .collect();
+                if !property_errors.is_empty() {
+                    failures.push(format!(
+                        "{}:\n    {}",
+                        path.display(),
+                        property_errors.join("\n    ")
+                    ));
+                }
+            }
+        }
+        assert!(
+            checked > 10,
+            "only {checked} scenes found — the walk is broken"
+        );
+        assert!(
+            failures.is_empty(),
+            "{} of {checked} shipped scenes are now rejected:\n{}",
+            failures.len(),
+            failures.join("\n")
+        );
+    }
+}
+
+/// `font_id` on `LaTeX` and `MathML` reaches the renderer's state.
+///
+/// Both backends read `state["font_id"]` for `Text`, `LaTeX` and `MathML` in one
+/// shared text branch, but only `TextProps` declared the field. Serde dropped it
+/// from the other two on parse and `Timeline::from_scene` re-serialised the
+/// struct without it, so the renderer's lookup could only ever find nothing:
+/// `showcase_grand` and `showcase_neural_network` asked their formulas for the
+/// bold font and got the regular one. Found by RFC-0002's property validation
+/// rejecting those examples on its first run.
+#[cfg(test)]
+mod font_id_reaches_state {
+    use crate::Timeline;
+    use luminafx_schema::Scene;
+    use serde_json::json;
+
+    fn state_font(object_type: &str, content_key: &str) -> Option<String> {
+        let scene: Scene = serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "objects": { "f": { "type": object_type, "properties": {
+                content_key: "x", "x": 0, "y": 0, "font_size": 20, "font_id": "bold"
+            } } },
+            "timeline": []
+        }))
+        .expect("scene");
+        Timeline::from_scene(&scene).get_state_at(0.0)["f"]["font_id"]
+            .as_str()
+            .map(String::from)
+    }
+
+    #[test]
+    fn latex_keeps_its_font() {
+        assert_eq!(state_font("LaTeX", "expression").as_deref(), Some("bold"));
+    }
+
+    #[test]
+    fn mathml_keeps_its_font() {
+        assert_eq!(state_font("MathML", "markup").as_deref(), Some("bold"));
+    }
+
+    #[test]
+    fn text_still_keeps_its_font() {
+        // The path that always worked, as the control.
+        assert_eq!(state_font("Text", "content").as_deref(), Some("bold"));
+    }
+}
