@@ -198,10 +198,7 @@ fn a_scoped_schema_is_smaller_and_still_complete() {
     // test — but a schema with a dangling `$ref` is worse than a large one,
     // because a model will either invent the missing type or refuse.
     let full = exchange(&[call("lumina_schema", &json!({}))]);
-    let scoped = exchange(&[call(
-        "lumina_schema",
-        &json!({ "objects": ["CircleProps"] }),
-    )]);
+    let scoped = exchange(&[call("lumina_schema", &json!({ "objects": ["Circle"] }))]);
 
     let full_len = full[0]["result"]["content"][0]["text"]
         .as_str()
@@ -223,7 +220,9 @@ fn a_scoped_schema_is_smaller_and_still_complete() {
         .or_else(|| body.get("$defs"))
         .and_then(Value::as_object)
         .expect("definitions");
-    for name in refs_of(&Value::Object(defs.clone())) {
+    // From the whole document, root included: the root's own references are
+    // the ones the first version broke.
+    for name in refs_of(&body) {
         assert!(
             defs.contains_key(&name),
             "scoped schema references `{name}` but does not define it"
@@ -301,4 +300,14 @@ fn fix_repairs_what_needs_no_judgement_and_reports_the_rest() {
         body["remaining"]["errors"][0]["code"],
         "PROPERTY_TYPE_MISMATCH"
     );
+}
+
+#[test]
+fn a_schema_request_for_a_type_that_does_not_exist_says_so() {
+    let out = exchange(&[call("lumina_schema", &json!({ "objects": ["Cirle"] }))]);
+    let body = payload(&out[0]);
+    assert_eq!(body["code"], "UNKNOWN_OBJECT_TYPE", "got {body}");
+    assert!(body["message"]
+        .as_str()
+        .is_some_and(|m| m.contains("Circle")));
 }

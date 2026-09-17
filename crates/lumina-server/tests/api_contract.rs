@@ -388,3 +388,24 @@ async fn patch_reports_a_misspelled_property_it_adds() {
     assert_eq!(json["validation"]["valid"], false, "got {json}");
     assert_eq!(json["validation"]["errors"][0]["code"], "UNKNOWN_PROPERTY");
 }
+
+#[tokio::test]
+async fn schema_can_be_scoped_and_compacted() {
+    let (status, full) = send(&open(), get("/schema")).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, small) = send(&open(), get("/schema?objects=Circle,%20Text&compact=true")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(small.to_string().len() * 2 < full.to_string().len());
+    let variants = small["definitions"]["Object"]["oneOf"]
+        .as_array()
+        .expect("object variants");
+    assert_eq!(variants.len(), 2, "got {small}");
+}
+
+#[tokio::test]
+async fn a_schema_for_an_unknown_type_gets_the_envelope() {
+    let (status, json) = send(&open(), get("/schema?objects=Cirle")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["code"], "UNKNOWN_OBJECT_TYPE");
+    assert_eq!(json["fix_suggestion"], "Did you mean 'Circle'?");
+}

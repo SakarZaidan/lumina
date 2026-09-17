@@ -148,7 +148,14 @@ enum Command {
         json: bool,
     },
     /// Print the JSON Schema for the scene format.
-    Schema,
+    Schema {
+        /// Only these object types, e.g. `Circle,Text`.
+        #[arg(long)]
+        objects: Option<String>,
+        /// Leave out the descriptions, about half the size.
+        #[arg(long)]
+        compact: bool,
+    },
     /// Print every object type with its required and optional properties.
     Objects,
     /// Write a starter scene that renders and animates.
@@ -171,8 +178,8 @@ enum Command {
 fn run_command(command: &Command) -> anyhow::Result<i32> {
     use luminafx_cli as lib;
     match command {
-        Command::Schema => {
-            println!("{}", lib::schema_json());
+        Command::Schema { objects, compact } => {
+            println!("{}", lib::scoped_schema_json(objects.as_deref(), *compact)?);
             Ok(0)
         }
         Command::Objects => {

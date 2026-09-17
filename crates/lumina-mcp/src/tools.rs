@@ -36,6 +36,12 @@ pub fn descriptors() -> Value {
                         "description":
                             "Object type names to restrict the schema to, e.g. [\"Circle\", \
                              \"Text\"]. Omit for the whole schema."
+                    },
+                    "compact": {
+                        "type": "boolean",
+                        "description":
+                            "Drop the descriptions, about half the schema's size. Use it once \
+                             you know what the fields mean."
                     }
                 }
             }
@@ -173,20 +179,25 @@ pub fn call(name: &str, args: &Value) -> ToolResult {
     match name {
         "lumina_objects" => ToolResult::ok(luminafx_core::object_registry()),
         "lumina_schema" => {
-            let schema =
-                serde_json::to_value(schemars::schema_for!(Scene)).unwrap_or_else(|_| json!({}));
-            let Some(wanted) = args.get("objects").and_then(Value::as_array) else {
-                return ToolResult::ok(schema);
-            };
-            // A scoped schema is not a smaller schema with fields dropped: the
-            // definitions a model needs are exactly the ones it will be asked
-            // to fill in, and pruning the rest is what makes the difference
-            // between a 40 kB paste and a 3 kB one (AAA-AI-05).
-            let names: Vec<String> = wanted
-                .iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect();
-            ToolResult::ok(scope_schema(&schema, &names))
+            // By LSF type names, as the tool describes. The first version
+            // matched Rust definition names, so `["Circle"]` pruned every
+            // definition and returned a schema whose root pointed at nothing.
+            let names: Option<Vec<&str>> = args
+                .get("objects")
+                .and_then(Value::as_array)
+                .map(|list| list.iter().filter_map(Value::as_str).collect());
+            let compact = args
+                .get("compact")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match luminafx_core::scene_schema::scene_schema(names.as_deref(), compact) {
+                Ok(schema) => ToolResult::ok(schema),
+                Err(unknown) => ToolResult::err(
+                    "UNKNOWN_OBJECT_TYPE",
+                    unknown.to_string(),
+                    Some("Call lumina_objects for every object type name."),
+                ),
+            }
         }
         "lumina_validate" => match args.get("scene") {
             None => ToolResult::err(
@@ -277,76 +288,6 @@ pub fn call(name: &str, args: &Value) -> ToolResult {
             Some("Call tools/list for the available tools."),
         ),
     }
-}
-
-/// Keep only the definitions for `wanted`, plus everything they reference.
-///
-/// Transitive on purpose: `Circle` alone is useless without `Shadow`, and a
-/// model handed a schema with a dangling `$ref` will either invent the missing
-/// type or refuse. Anything unrecognised is left in rather than dropped —
-/// erring toward a larger schema is a cost, erring toward a broken one is a
-/// failure.
-fn scope_schema(schema: &Value, wanted: &[String]) -> Value {
-    let mut out = schema.clone();
-    let Some(defs) = schema.get("definitions").or_else(|| schema.get("$defs")) else {
-        return out;
-    };
-    let Some(defs) = defs.as_object() else {
-        return out;
-    };
-
-    let mut keep: Vec<String> = wanted.to_vec();
-    let mut i = 0;
-    while i < keep.len() {
-        let name = keep[i].clone();
-        i += 1;
-        let Some(def) = defs.get(&name) else { continue };
-        for r in refs_in(def) {
-            if !keep.contains(&r) {
-                keep.push(r);
-            }
-        }
-    }
-
-    let pruned: serde_json::Map<String, Value> = defs
-        .iter()
-        .filter(|(k, _)| keep.contains(k))
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    if let Some(obj) = out.as_object_mut() {
-        let key = if obj.contains_key("$defs") {
-            "$defs"
-        } else {
-            "definitions"
-        };
-        obj.insert(key.to_string(), Value::Object(pruned));
-    }
-    out
-}
-
-/// Every definition name a `$ref` in `value` points at, at any depth.
-fn refs_in(value: &Value) -> Vec<String> {
-    let mut found = Vec::new();
-    match value {
-        Value::Object(map) => {
-            for (k, v) in map {
-                if k == "$ref" {
-                    if let Some(name) = v.as_str().and_then(|r| r.rsplit('/').next()) {
-                        found.push(name.to_string());
-                    }
-                } else {
-                    found.extend(refs_in(v));
-                }
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                found.extend(refs_in(item));
-            }
-        }
-        _ => {}
-    }
-    found
 }
 
 /// Render a scene to a file and answer with the path.

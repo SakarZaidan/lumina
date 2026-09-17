@@ -94,6 +94,9 @@ curl localhost:3000/objects | jq
 
 # Fetch the live JSON Schema for prompt-time grounding / IDE autocomplete
 curl localhost:3000/schema | jq '.title'
+
+# Only the object types a task needs, without descriptions: a fraction of the size
+curl 'localhost:3000/schema?objects=Circle,Text&compact=true'
 ```
 
 ## Prompting tips
@@ -101,3 +104,4 @@ curl localhost:3000/schema | jq '.title'
 - Inject `luminafx.schema()` (or `/schema`) into the system prompt so the model grounds property names.
 - Tell the model: object IDs are snake_case; the timeline is sorted by `time`; colors are hex; group children use coordinates relative to the group.
 - Use `/objects` to give the model a compact "required vs optional" cheat sheet instead of the full schema when context is tight.
+- When the task touches only a few object types, send the schema scoped to them: `/schema?objects=Circle,Text`, `lumina-cli schema --objects Circle,Text`, or the `lumina_schema` tool's `objects`. It keeps the whole scene structure and every definition those types need. Add `compact` once the model knows what the fields mean.

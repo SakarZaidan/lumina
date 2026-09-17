@@ -143,10 +143,38 @@ async fn validate_scene(ApiJson(raw): ApiJson<serde_json::Value>) -> impl IntoRe
     Json(luminafx_core::validation::validate_scene_json(&raw))
 }
 
-/// `GET /schema` — returns the LSF JSON Schema derived from the Rust types.
-async fn get_schema() -> impl IntoResponse {
-    let schema = schemars::schema_for!(Scene);
-    Json(schema)
+/// Query parameters for `GET /schema`.
+#[derive(Debug, Deserialize)]
+struct SchemaQuery {
+    /// Comma-separated object type names to restrict the schema to.
+    objects: Option<String>,
+    /// Drop every description.
+    #[serde(default)]
+    compact: bool,
+}
+
+/// `GET /schema` — the LSF JSON Schema derived from the Rust types.
+///
+/// `?objects=Circle,Text` keeps only those object types, and `?compact=true`
+/// drops the descriptions (`AAA-AI-05`). An agent pays for the schema in
+/// context, and a narrow task rarely needs 38 kB of it.
+async fn get_schema(axum::extract::Query(query): axum::extract::Query<SchemaQuery>) -> Response {
+    let names: Option<Vec<&str>> = query.objects.as_deref().map(|list| {
+        list.split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect()
+    });
+    match luminafx_core::scene_schema::scene_schema(names.as_deref(), query.compact) {
+        Ok(schema) => Json(schema).into_response(),
+        Err(unknown) => ApiError::bad_request("UNKNOWN_OBJECT_TYPE", unknown.to_string())
+            .at("$.objects")
+            .fix(match &unknown.suggestion {
+                Some(s) => format!("Did you mean '{s}'?"),
+                None => "GET /objects lists every object type.".to_string(),
+            })
+            .into_response(),
+    }
 }
 
 /// `GET /objects` — returns the object-type registry: for each LSF object type,

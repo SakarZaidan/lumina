@@ -62,6 +62,13 @@ programme to reach reference quality in [plan/](plan/).
   exists to explain what is wrong, and now it does.
 
 ### Added
+- **The schema can be scoped to the object types a task needs, and compacted.**
+  `GET /schema?objects=Circle,Text&compact=true`, `lumina-cli schema --objects
+  Circle,Text --compact`, and the `lumina_schema` tool's `objects` and `compact`
+  all keep the whole scene structure but only those types' definitions, and
+  compact mode drops the descriptions, about half the bytes. A scoped, compact
+  schema for one type is under a third of the full one. An unknown type is
+  named with a did-you-mean.
 - **`lumina-cli fix`, and the `lumina_fix` MCP tool, repair what needs no
   judgement.** A misspelled property name, object id, object type, asset id,
   axes id, group child or easing name with exactly one near match is corrected,
@@ -112,6 +119,12 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **The MCP `lumina_schema` tool's `objects` returned a broken schema for the
+  names it documents.** It matched Rust definition names, so `["Circle"]`
+  pruned every definition and left the root referring to types it no longer
+  defined; its test passed `"CircleProps"` and checked only references inside
+  the definitions. Scoping now takes LSF type names and keeps whatever the root
+  still reaches.
 - **The Python SDK validates like every other entry point, and `render` checks
   first.** `luminafx.validate` parsed the dict into a scene before validating,
   so a misspelled property was dropped unseen and the scene reported valid;
