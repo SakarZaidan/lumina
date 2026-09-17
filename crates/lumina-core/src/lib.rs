@@ -52,6 +52,8 @@ pub mod timeline;
 pub mod validation;
 
 #[cfg(test)]
+mod authoring_guide_tests;
+#[cfg(test)]
 mod easing_proptests;
 #[cfg(test)]
 mod easing_tests;
@@ -87,6 +89,19 @@ pub use timeline::Timeline;
 /// Deliberately a hand-written summary rather than generated from the schema:
 /// it is what an agent reads *first*, and the point is that it is small enough
 /// to read. The full `schemars` output is available separately for when the
+/// How to write a scene, written for a model that is about to write one
+/// (`AAA-AI-07`).
+///
+/// Ships inside the crate, so it is versioned with the schema it describes and
+/// every entry point can hand it over: `GET /guide`, `lumina-cli guide`, and
+/// the `lumina_guide` tool. Tests hold it to the engine — a new object type, a
+/// new easing name or an error code it names that no longer exists fails the
+/// build.
+#[must_use]
+pub fn authoring_guide() -> &'static str {
+    include_str!("authoring_guide.md")
+}
+
 /// exact shape matters.
 #[must_use]
 pub fn object_registry() -> serde_json::Value {

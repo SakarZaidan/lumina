@@ -6,6 +6,7 @@
 - [The Scene Format (LSF)](./scene-format.md)
 - [Visual Effects & Assets](./visual-effects.md)
 - [Events & Interactivity](./events.md)
+- [Writing Scenes (for models)](./authoring-guide.md)
 - [AI Integration Cookbook](./ai-integration.md)
 - [Architecture](./architecture.md)
 - [Performance](./performance.md)

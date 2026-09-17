@@ -147,6 +147,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Print the authoring guide: how to write a scene, for a person or a model.
+    Guide,
     /// Print the JSON Schema for the scene format.
     Schema {
         /// Only these object types, e.g. `Circle,Text`.
@@ -178,6 +180,10 @@ enum Command {
 fn run_command(command: &Command) -> anyhow::Result<i32> {
     use luminafx_cli as lib;
     match command {
+        Command::Guide => {
+            println!("{}", luminafx_core::authoring_guide());
+            Ok(0)
+        }
         Command::Schema { objects, compact } => {
             println!("{}", lib::scoped_schema_json(objects.as_deref(), *compact)?);
             Ok(0)

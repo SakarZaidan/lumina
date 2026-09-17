@@ -47,6 +47,16 @@ pub fn descriptors() -> Value {
             }
         },
         {
+            "name": "lumina_guide",
+            "description":
+                "Read this before writing a scene for the first time. The authoring guide for \
+                 the Lumina Scene Format: the document's shape, every object type with its \
+                 required properties, how the timeline and easing work, and the mistakes the \
+                 validator rejects. Shipped with the engine, so it always describes this \
+                 version.",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
             "name": "lumina_objects",
             "description":
                 "List every LSF object type with its required and optional properties. Cheaper \
@@ -177,6 +187,7 @@ fn scene_arg(args: &Value) -> Result<Scene, ToolResult> {
 /// Dispatch a tool call.
 pub fn call(name: &str, args: &Value) -> ToolResult {
     match name {
+        "lumina_guide" => ToolResult::ok(json!(luminafx_core::authoring_guide())),
         "lumina_objects" => ToolResult::ok(luminafx_core::object_registry()),
         "lumina_schema" => {
             // By LSF type names, as the tool describes. The first version
