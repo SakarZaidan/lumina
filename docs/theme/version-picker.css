@@ -1,0 +1,28 @@
+/* Version bar, above everything mdBook renders. Styled to read as part of the
+   page chrome rather than as content, and to stay legible in both themes. */
+.lumina-version-bar {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  background: var(--sidebar-bg, #14191f);
+  color: var(--sidebar-fg, #c8c9db);
+  border-bottom: 1px solid var(--table-border-color, #2b3038);
+}
+/* An old or unreleased version is a warning, not a label. */
+.lumina-version-bar.is-old { background: #6b4a00; color: #ffe9b0; }
+.lumina-version-bar.is-dev { background: #1f3a5f; color: #cfe3ff; }
+.lumina-version-bar a { color: inherit; text-decoration: underline; }
+.lumina-version-bar select {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font: inherit;
+}
