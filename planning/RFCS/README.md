@@ -35,3 +35,4 @@ already covered by an accepted RFC.
 | RFC | Title | Status |
 |---|---|---|
 | [0001](0001-render-into.md) | `Renderer::render_into` — render without allocating the output | **Rejected** — measured no benefit; every caller needs owned bytes |
+| [0002](0002-typed-properties.md) | Typed properties without a format change (TD-07) | **Accepted** — Stage 1 v0.6, Stage 2 v0.7; no LSF v2 ([ADR-0015](../ADR/0015-typed-properties-no-format-change.md)) |

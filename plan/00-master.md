@@ -116,12 +116,20 @@ CLI binaries, with SBOM, provenance, and signed tags.
 
 ### Wave 6 — Typed schema and the AI-native interface
 
-The largest pre-1.0 breaking change: typed properties replacing the raw
-`serde_json::Value` flow, so a typo stops degrading silently to a default.
-LSF v2 with a migration guide and a `migrate` command. A decision on LaTeX,
+Typed properties, so a typo stops degrading silently to a default — in two
+stages under [RFC-0002](../planning/RFCS/0002-typed-properties.md): validation
+against the structs (v0.6), then typed render state (v0.7). A decision on LaTeX,
 recorded either way. An MCP server, so any agent can drive the engine natively.
 
-**Gate:** schema v2 documented; a v1 scene migrates and renders identically.
+*Amended 2026-09-17 (ADR-0015).* This wave originally called for **LSF v2 with a
+migration guide and a `migrate` command**. Reproducing TD-07 before designing
+the fix showed every failure to be a failure of *checking*, not of the format —
+the file already says what the author meant, and the engine discards the
+information needed to notice when it doesn't. A format bump would have forced a
+migration on every existing scene for no behavioural gain, so it was dropped.
+
+**Gate:** every unknown or mistyped property is a validation error with a
+suggestion; every existing example validates and renders identically.
 
 ### Wave 7 — Playground, extension, CLI
 
