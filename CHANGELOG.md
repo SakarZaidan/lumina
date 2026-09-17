@@ -62,6 +62,13 @@ programme to reach reference quality in [plan/](plan/).
   exists to explain what is wrong, and now it does.
 
 ### Added
+- **An authoring guide written for models, shipped with the engine.** How to
+  write a scene: the document's shape, every object type with its required
+  properties, the timeline's rules, the easing names, and what the validator
+  rejects. `lumina-cli guide`, `GET /guide`, the `lumina_guide` MCP tool, and a
+  chapter in the book, all from one file inside `luminafx-core`, so it is
+  versioned with the schema it describes. Tests fail the build if it drifts
+  from the object registry, the easing names, or the error codes it names.
 - **The schema can be scoped to the object types a task needs, and compacted.**
   `GET /schema?objects=Circle,Text&compact=true`, `lumina-cli schema --objects
   Circle,Text --compact`, and the `lumina_schema` tool's `objects` and `compact`

@@ -2,7 +2,8 @@
 //!
 //! An `axum` REST service designed for AI/authoring loops:
 //!
-//! - `GET /health`, `GET /schema` (JSON Schema of the scene format),
+//! - `GET /health`, `GET /guide` (how to write a scene), `GET /schema`
+//!   (JSON Schema of the scene format),
 //!   `GET /objects` (object-type registry for introspection)
 //! - `POST /validate` — structural validation with structured errors, each
 //!   carrying a `code`, `path`, and machine-actionable `fix_suggestion`
@@ -141,6 +142,20 @@ async fn validate_scene(ApiJson(raw): ApiJson<serde_json::Value>) -> impl IntoRe
     // that is JSON but not a scene now gets the validation it asked for — the
     // specific problems, with paths — instead of a transport-level rejection.
     Json(luminafx_core::validation::validate_scene_json(&raw))
+}
+
+/// `GET /guide` — how to write a scene, for a model about to write one.
+///
+/// Markdown rather than JSON, because it is prose: an agent puts it in its
+/// context, a person reads it.
+async fn get_guide() -> impl IntoResponse {
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/markdown; charset=utf-8",
+        )],
+        luminafx_core::authoring_guide(),
+    )
 }
 
 /// Query parameters for `GET /schema`.
@@ -488,6 +503,7 @@ pub fn build_router_with(config: &ServerConfig) -> Router {
 
     let router = Router::new()
         .route("/health", get(health_check))
+        .route("/guide", get(get_guide))
         .route("/schema", get(get_schema))
         .route("/objects", get(get_objects))
         .route("/validate", post(validate_scene))

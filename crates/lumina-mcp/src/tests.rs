@@ -311,3 +311,19 @@ fn a_schema_request_for_a_type_that_does_not_exist_says_so() {
         .as_str()
         .is_some_and(|m| m.contains("Circle")));
 }
+
+#[test]
+fn the_guide_arrives_as_prose_a_model_can_read() {
+    // Not a JSON string full of escaped newlines: a tool answering with prose
+    // sends the prose.
+    let out = exchange(&[call("lumina_guide", &json!({}))]);
+    let text = out[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text");
+    assert!(
+        text.starts_with("# Writing Lumina scenes"),
+        "got {text:.60}"
+    );
+    assert!(text.contains("| `Circle` |"));
+    assert_eq!(out[0]["result"]["isError"], false);
+}

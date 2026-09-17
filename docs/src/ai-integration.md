@@ -82,6 +82,21 @@ lumina-cli fix scene.lsf --json     # the fixes, the repaired scene, and what is
 - **HTTP:** send an error's `fix_patch` to `POST /patch` with the scene.
 
 Then hand the model only what is left in `remaining`: the errors that need it.
+## One guide to put in the system prompt
+
+The engine ships the authoring guide it wants a model to follow — the
+document's shape, every object type with its required properties, how the
+timeline and easing behave, and the mistakes the validator rejects. It is
+versioned with the schema, so it always describes the engine you are talking
+to, and tests fail the build if it drifts from the object registry, the easing
+names or the error codes.
+
+```bash
+lumina-cli guide            # or: curl localhost:3000/guide
+```
+
+Over MCP it is the `lumina_guide` tool, which answers with the markdown itself.
+[Read it here](./authoring-guide.md).
 
 ## Over HTTP
 

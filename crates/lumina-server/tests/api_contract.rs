@@ -409,3 +409,30 @@ async fn a_schema_for_an_unknown_type_gets_the_envelope() {
     assert_eq!(json["code"], "UNKNOWN_OBJECT_TYPE");
     assert_eq!(json["fix_suggestion"], "Did you mean 'Circle'?");
 }
+
+#[tokio::test]
+async fn the_guide_is_served_as_markdown() {
+    let response = build_router_with(&open())
+        .oneshot(get("/guide"))
+        .await
+        .expect("responded");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("text/markdown; charset=utf-8")
+    );
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    let text = String::from_utf8(body.to_vec()).expect("utf-8");
+    assert!(
+        text.starts_with("# Writing Lumina scenes"),
+        "got {text:.60}"
+    );
+}

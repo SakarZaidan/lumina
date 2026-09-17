@@ -130,8 +130,14 @@ fn handle(request: &Request, id: Value) -> Response {
                 json!({
                     "content": [{
                         "type": "text",
-                        "text": serde_json::to_string_pretty(&result.value)
-                            .unwrap_or_else(|_| result.value.to_string()),
+                        // A tool answering with prose — the authoring guide —
+                        // sends it as itself. Pretty-printing a JSON string
+                        // would hand a model escaped newlines to read through.
+                        "text": match &result.value {
+                            Value::String(text) => text.clone(),
+                            value => serde_json::to_string_pretty(value)
+                                .unwrap_or_else(|_| value.to_string()),
+                        },
                     }],
                     "isError": result.is_error,
                 }),
