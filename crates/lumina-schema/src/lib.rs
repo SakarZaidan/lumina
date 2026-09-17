@@ -252,15 +252,23 @@ impl From<String> for Paint {
 /// of `[position (0..1), "#RRGGBB"]` pairs.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GradientSpec {
-    /// Gradient type: `"linear"` (default) or `"radial"`.
-    #[serde(rename = "type")]
+    /// Gradient type: `"linear"` (the default) or `"radial"`. Anything else
+    /// draws as linear.
+    ///
+    /// Documented as defaulting to `"linear"` long before it did: the field was
+    /// required, so a gradient written without it failed to parse.
+    #[serde(rename = "type", default = "default_gradient_kind")]
     pub kind: String,
     /// Gradient stops as `[position, "#hex"]` pairs (positions in `[0, 1]`).
     pub stops: Vec<(f32, String)>,
     /// Linear gradient direction in degrees (0 = left→right).
     #[serde(default)]
     pub angle: f32,
-    /// Radius in pixels.
+    /// Radial only: the radius as a fraction of half the shape's larger side,
+    /// so `1.0` reaches the middle of its longer edges. `0.5` when omitted.
+    ///
+    /// Documented as pixels until v0.6; the renderer has always read a
+    /// fraction, and every scene in the repository writes one.
     #[serde(default)]
     pub radius: Option<f32>,
 }
@@ -962,6 +970,9 @@ fn default_fill() -> String {
 fn default_stroke() -> String {
     "#FFFFFF".to_string()
 }
+fn default_gradient_kind() -> String {
+    "linear".to_string()
+}
 fn default_shadow_color() -> String {
     "#000000".to_string()
 }
@@ -1000,4 +1011,29 @@ fn default_particle_size() -> f32 {
 }
 fn default_sample_count() -> u32 {
     200
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Paint, Shadow};
+    use serde_json::json;
+
+    #[test]
+    fn a_gradient_without_a_type_is_linear() {
+        let paint: Paint =
+            serde_json::from_value(json!({ "stops": [[0, "#FF0000"], [1, "#0000FF"]] }))
+                .expect("a gradient may omit its type");
+        let Paint::Gradient(gradient) = paint else {
+            panic!("parsed as a solid colour");
+        };
+        assert_eq!(gradient.kind, "linear");
+        assert_eq!(gradient.radius, None);
+    }
+
+    #[test]
+    fn a_shadow_without_a_color_is_black() {
+        let shadow: Shadow = serde_json::from_value(json!({ "blur": 4 })).expect("shadow");
+        assert_eq!(shadow.color, "#000000");
+        assert_eq!(shadow.opacity, 1.0);
+    }
 }
