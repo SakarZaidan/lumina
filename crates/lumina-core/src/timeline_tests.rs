@@ -544,6 +544,96 @@ mod resolve_at {
             "fell back to something other than the authored value"
         );
     }
+
+    #[test]
+    fn an_override_replaces_its_track_instead_of_colliding_with_it() {
+        // `radius` has a track and an override. Handed to serde as two
+        // entries, the struct would name the field twice and fail to
+        // deserialise, and the fallback would silently discard the override
+        // together with every other animated value on the object.
+        let mut timeline = Timeline::from_scene(&scene());
+        timeline.override_property("c", "radius", json!(42));
+        let resolved = timeline.resolve_at(1.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("not a circle");
+        };
+        assert_eq!(c.radius, 42.0);
+    }
+
+    #[test]
+    fn an_override_reaches_an_object_nothing_animates() {
+        // `still` has no timeline entries, so it resolves without evaluating
+        // anything. An override has to take it off that path.
+        let mut timeline = Timeline::from_scene(&scene());
+        timeline.override_property("still", "width", json!(9));
+        let resolved = timeline.resolve_at(1.0);
+        let Some(Object::Rectangle(r)) = resolved.get("still") else {
+            panic!("not a rectangle");
+        };
+        assert_eq!(r.width, 9.0);
+    }
+
+    /// The untyped state deserialised the obvious way: the reference
+    /// `resolve_at` has to agree with.
+    fn from_untyped_state(authored: &Object, state: Option<&serde_json::Value>) -> Object {
+        let Some(props) = state else {
+            return authored.clone();
+        };
+        let mut tagged = serde_json::to_value(authored).expect("objects serialise");
+        tagged["properties"] = props.clone();
+        serde_json::from_value(tagged).unwrap_or_else(|_| authored.clone())
+    }
+
+    #[test]
+    fn resolving_agrees_with_the_untyped_state_on_every_shipped_scene() {
+        // What lets the renderer move onto `resolve_at` without changing a
+        // pixel. It takes two shortcuts past the untyped state — no
+        // intermediate map, and no evaluation at all for an object nothing
+        // animates — and both have to land exactly where the long way does.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("workspace root");
+        let mut checked = 0;
+        for dir in ["examples", "crates/lumina-renderer/tests/fixtures"] {
+            let Ok(entries) = std::fs::read_dir(root.join(dir)) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("lsf") {
+                    continue;
+                }
+                let Some(scene) = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|text| serde_json::from_str::<Scene>(&text).ok())
+                else {
+                    continue;
+                };
+                checked += 1;
+                let timeline = Timeline::from_scene(&scene);
+                let d = scene.canvas.duration;
+                for time in [0.0, d * 0.25, d * 0.5, d * 0.75, d, d + 1.0] {
+                    let state = timeline.get_state_at(time);
+                    let resolved = timeline.resolve_at(time);
+                    assert_eq!(resolved.len(), scene.objects.len(), "{}", path.display());
+                    for (id, authored) in &scene.objects {
+                        let expected = from_untyped_state(authored, state.get(id));
+                        assert_eq!(
+                            serde_json::to_value(&resolved[id]).expect("serialise"),
+                            serde_json::to_value(&expected).expect("serialise"),
+                            "{} disagrees on {id} at t={time}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            checked >= 20,
+            "only {checked} scenes found; the walk is broken"
+        );
+    }
 }
 
 /// A quick ratio check for `resolve_at`, run by hand: `cargo test --release

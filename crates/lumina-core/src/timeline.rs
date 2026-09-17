@@ -1,7 +1,9 @@
 use crate::interpolator::interpolate_value;
 use luminafx_schema::{Object, Scene};
+use serde::de::value::MapDeserializer;
+use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Per-object, per-property keyframe tracks; evaluation is deterministic
 /// and scrub-safe (any time can be queried in any order).
@@ -17,10 +19,13 @@ pub struct Timeline {
     /// `object_id` → the object as authored.
     ///
     /// Kept for [`Timeline::resolve_at`]: its variant says which props type to
-    /// rebuild from the interpolated properties, and it is the fallback when an
-    /// animated value will not deserialise. Private, so adding it does not grow
-    /// the struct's constructible surface (TD-27).
+    /// rebuild from the interpolated properties, it is the whole answer for an
+    /// object nothing animates, and it is the fallback when an animated value
+    /// will not deserialise. Private, like `animated`, so neither grows the
+    /// struct's constructible surface (TD-27).
     seeds: HashMap<String, Object>,
+    /// Ids of the objects at least one timeline entry animates.
+    animated: HashSet<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -43,6 +48,7 @@ impl Timeline {
         let mut tracks: HashMap<String, HashMap<String, Vec<Keyframe>>> = HashMap::new();
 
         let mut seeds = HashMap::with_capacity(scene.objects.len());
+        let mut animated = HashSet::new();
 
         // Initialize with initial property values from objects
         for (id, obj) in &scene.objects {
@@ -71,6 +77,9 @@ impl Timeline {
         // Add keyframes from timeline entries
         for entry in &scene.timeline {
             if let Value::Object(state) = &entry.state {
+                if !state.is_empty() {
+                    animated.insert(entry.object.clone());
+                }
                 for (prop_name, prop_value) in state {
                     let track = tracks
                         .entry(entry.object.clone())
@@ -100,6 +109,7 @@ impl Timeline {
             tracks,
             overrides: HashMap::new(),
             seeds,
+            animated,
         }
     }
 
@@ -120,20 +130,83 @@ impl Timeline {
     /// failure this work exists to remove.
     #[must_use]
     pub fn resolve_at(&self, time: f32) -> HashMap<String, Object> {
-        // Owned, so each object's properties can be moved into the
-        // deserialiser rather than deep-cloned first. The first version cloned
-        // them, and together with a per-object tagged wrapper that measured at
-        // 2.1–2.4x `get_state_at` on CI — more than typing is worth.
-        let mut state = self.get_state_at(time);
         let mut resolved = HashMap::with_capacity(self.seeds.len());
         for (id, authored) in &self.seeds {
-            let object = state
-                .remove(id)
-                .and_then(|props| rebuild(authored, props))
-                .unwrap_or_else(|| authored.clone());
+            let overrides = self.overrides.get(id);
+            // Nothing animates or overrides it, so at every time it is exactly
+            // what was authored. Evaluating its tracks would only rebuild it.
+            let object = if overrides.is_none() && !self.animated.contains(id) {
+                authored.clone()
+            } else {
+                self.rebuild(id, authored, overrides, time)
+                    .unwrap_or_else(|| authored.clone())
+            };
             resolved.insert(id.clone(), object);
         }
         resolved
+    }
+
+    /// One object's properties at `time`, deserialised into its props type.
+    ///
+    /// The values go to serde one at a time, straight from the tracks. Putting
+    /// them in a `serde_json::Map` first and calling `from_value` allocates a
+    /// key and a tree node for every property, and deserialising frees them
+    /// again at once. That version measured 1.24–1.30× `get_state_at` on CI;
+    /// the one before it, which also deep-cloned the map, measured 2.1–2.4×.
+    fn rebuild(
+        &self,
+        id: &str,
+        authored: &Object,
+        overrides: Option<&HashMap<String, Value>>,
+        time: f32,
+    ) -> Option<Object> {
+        // An override replaces its property's track instead of joining it:
+        // serde refuses a struct that names the same field twice, which would
+        // throw away every other animated value on the object.
+        let keyframed = self
+            .tracks
+            .get(id)
+            .into_iter()
+            .flatten()
+            .filter(move |(name, _)| overrides.is_none_or(|o| !o.contains_key(*name)))
+            .map(move |(name, track)| (name.as_str(), self.evaluate_track(track, time)));
+        let overridden = overrides
+            .into_iter()
+            .flatten()
+            .map(|(name, value)| (name.as_str(), value.clone()));
+        let props = MapDeserializer::<_, serde_json::Error>::new(keyframed.chain(overridden));
+
+        // Matching on the authored variant, rather than on a type name, makes
+        // this exhaustive: a new object type does not compile until it is
+        // listed here, where a string match would silently never animate it.
+        macro_rules! rebuild {
+            ($($variant:ident),* $(,)?) => {
+                match authored {
+                    $(Object::$variant(_) => {
+                        Deserialize::deserialize(props).ok().map(Object::$variant)
+                    })*
+                }
+            };
+        }
+        rebuild!(
+            Circle,
+            Rectangle,
+            Polygon,
+            Path,
+            Line,
+            Arrow,
+            Text,
+            LaTeX,
+            Group,
+            Image,
+            SVG,
+            NumberLine,
+            Axes,
+            Plot,
+            BezierCurve,
+            MathML,
+            Particles,
+        )
     }
 
     /// Set an interactive override that takes precedence over keyframes
@@ -278,42 +351,4 @@ impl Timeline {
             upper.easing_params.as_ref(),
         )
     }
-}
-
-/// Rebuild `authored`'s variant from interpolated properties.
-///
-/// Dispatches on the authored `Object` rather than on a type-name string, for
-/// two reasons. It deserialises straight into the concrete props struct, so no
-/// tagged `{"type": .., "properties": ..}` wrapper has to be allocated for every
-/// object on every frame just to tell serde which struct to build. And the
-/// match is **exhaustive**: a new `Object` variant is a compile error here until
-/// it is handled, where a string match with a catch-all would have quietly
-/// resolved every such object to its authored value and never animated it.
-fn rebuild(authored: &Object, props: Value) -> Option<Object> {
-    macro_rules! rebuild {
-        ($($variant:ident),* $(,)?) => {
-            match authored {
-                $(Object::$variant(_) => serde_json::from_value(props).ok().map(Object::$variant),)*
-            }
-        };
-    }
-    rebuild!(
-        Circle,
-        Rectangle,
-        Polygon,
-        Path,
-        Line,
-        Arrow,
-        Text,
-        LaTeX,
-        Group,
-        Image,
-        SVG,
-        NumberLine,
-        Axes,
-        Plot,
-        BezierCurve,
-        MathML,
-        Particles,
-    )
 }
