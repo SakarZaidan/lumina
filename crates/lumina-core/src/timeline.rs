@@ -202,15 +202,43 @@ impl Timeline {
     ///
     /// A fractional value for an integer property is rounded, as it would be
     /// if the timeline had animated it there.
-    pub fn override_property(&mut self, object_id: &str, property: &str, value: Value) {
-        let value = match self.seeds.get(object_id) {
-            Some(object) if is_integer_property(object, property) => round_to_integer(value),
-            _ => value,
+    ///
+    /// # Errors
+    ///
+    /// Returns why the override was refused, having stored nothing: an object
+    /// that is not in the scene, a property it does not have, or a value it
+    /// cannot take. Storing one anyway meant every reader ignored it, which
+    /// looks exactly like an event that never fired (RFC-0002).
+    pub fn override_property(
+        &mut self,
+        object_id: &str,
+        property: &str,
+        value: Value,
+    ) -> Result<(), crate::validation::ValidationError> {
+        let Some(object) = self.seeds.get(object_id) else {
+            return Err(crate::validation::ValidationError {
+                code: "UNKNOWN_OBJECT_ID".to_string(),
+                path: format!("$.objects.{object_id}"),
+                message: format!("'{object_id}' is not an object in this scene."),
+                fix_suggestion: crate::suggest::did_you_mean(
+                    object_id,
+                    self.seeds.keys().map(String::as_str),
+                    "Check the 'objects' block for valid IDs.",
+                ),
+                fix_patch: None,
+            });
+        };
+        crate::validation::check_property_value(object_id, object, property, &value)?;
+        let value = if is_integer_property(object, property) {
+            round_to_integer(value)
+        } else {
+            value
         };
         self.overrides
             .entry(object_id.to_string())
             .or_default()
             .insert(property.to_string(), value);
+        Ok(())
     }
 
     /// Evaluate every object's full property state at `time`.

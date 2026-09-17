@@ -153,7 +153,9 @@ mod tests {
                 trigger: "mouse_move".into(),
                 action: luminafx_schema::Action::SetProperty {
                     target: "eyes".into(),
-                    property: "rotation".into(),
+                    // A property a Circle actually has: an override for one it
+                    // does not is refused now, rather than stored and ignored.
+                    property: "radius".into(),
                     value: serde_json::json!(45.0),
                 },
             }],
@@ -173,6 +175,6 @@ mod tests {
         }
 
         let state = timeline.get_state_at(0.0);
-        assert_eq!(state["eyes"]["rotation"], serde_json::json!(45.0));
+        assert_eq!(state["eyes"]["radius"], serde_json::json!(45.0));
     }
 }
