@@ -236,10 +236,12 @@ impl VelloRenderer {
                 luminafx_core::validation::MAX_GROUP_DEPTH
             )));
         }
-        let obj = match ctx.objects.get(id) {
-            Some(o) => o,
-            None => return Ok(()),
-        };
+        // An error, as on the CPU backend. Skipping the missing object drew the
+        // rest of the frame without it, so the same scene failed on one backend
+        // and rendered on the other.
+        let obj = ctx.objects.get(id).ok_or_else(|| {
+            RendererError::Failed(format!("Object '{id}' not found in scene graph"))
+        })?;
         let state = crate::common::untyped::state_of(obj);
 
         match obj {

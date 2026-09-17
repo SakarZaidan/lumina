@@ -502,3 +502,39 @@ fn both_backends_render_a_well_formed_arrow() {
             .is_ok());
     }
 }
+
+#[test]
+fn both_backends_reject_a_group_naming_a_missing_child() {
+    // Validation rejects this as `UNKNOWN_CHILD_ID`, but a renderer is a public
+    // API in its own right. The CPU backend returned an error while the GPU
+    // backend drew the group without the child, so the same objects failed or
+    // rendered depending on `--backend`.
+    let mut objects = std::collections::HashMap::new();
+    objects.insert(
+        "g".to_string(),
+        luminafx_schema::Object::Group(luminafx_schema::GroupProps {
+            children: vec!["missing".to_string()],
+            x: 0.0,
+            y: 0.0,
+            z_index: 0,
+            scale: 1.0,
+            rotation: 0.0,
+            opacity: 1.0,
+        }),
+    );
+
+    let mut skia = SkiaRenderer::new();
+    assert!(skia
+        .render_frame(&objects, 64, 64, "#000000", None)
+        .is_err());
+
+    let Some(mut vello) = vello_or_skip() else {
+        return;
+    };
+    assert!(
+        vello
+            .render_frame(&objects, 64, 64, "#000000", None)
+            .is_err(),
+        "the GPU backend must reject the missing child the CPU backend rejects"
+    );
+}

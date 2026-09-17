@@ -73,6 +73,11 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **Both backends now reject a group naming a child that does not exist.** The
+  CPU backend returned an error; the GPU backend drew the group without the
+  child, so the same objects failed or rendered depending on `--backend`.
+  Validation has always rejected such a scene (`UNKNOWN_CHILD_ID`); this is for
+  code that calls a renderer directly.
 - **Animating a particle `count` no longer makes every particle vanish between
   keyframes.** Interpolation produced a fraction even between two whole
   numbers, and both renderers read a fraction where they expected an integer as
