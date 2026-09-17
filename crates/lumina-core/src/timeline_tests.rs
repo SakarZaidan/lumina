@@ -436,3 +436,30 @@ mod camera_rotation {
         assert_eq!(rotation, 0.0);
     }
 }
+
+/// A shadow with no color is black (it was white until v0.6).
+#[cfg(test)]
+mod shadow_default {
+    use crate::Timeline;
+    use luminafx_schema::Scene;
+    use serde_json::json;
+
+    #[test]
+    fn an_uncoloured_shadow_reaches_the_renderer_as_black() {
+        // Asserted on the state the renderer reads, because that is where the
+        // wrong default won: the schema's value is applied on parse and is always
+        // present by then, so the renderer's own black fallback never ran.
+        let scene: Scene = serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#FFFFFF" },
+            "objects": { "c": { "type": "Circle", "properties": {
+                "cx": 32, "cy": 32, "radius": 10, "shadow": { "blur": 4, "dx": 2, "dy": 2 } } } },
+            "timeline": []
+        }))
+        .expect("scene");
+        let state = Timeline::from_scene(&scene).get_state_at(0.0);
+        assert_eq!(state["c"]["shadow"]["color"], "#000000");
+    }
+}

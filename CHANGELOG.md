@@ -49,6 +49,13 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **A shadow without a `color` is black, not white.** The field had been copied
+  from a stroke color — its doc comment still read "Stroke/text color" — and kept
+  the stroke's white default, so an uncoloured drop shadow rendered as a white
+  glow. The renderer's own fallback was black all along but never ran, because
+  the schema's default is applied on parse. No shipped scene is affected: all 138
+  shadows in the repository set their color explicitly, which is also why it went
+  unnoticed.
 - **`font_id` on `LaTeX` and `MathML` objects was silently ignored.** Both
   renderers read it through the same text path as `Text`, but only `TextProps`
   declared the field, so it was dropped on parse and the lookup always found
