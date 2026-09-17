@@ -1,6 +1,6 @@
 # RFC-0002: Typed properties without a format change
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Author:** —
 - **Created:** 2026-09-17
 - **Related:** TD-07, `AAA-AI-04`, `plan/00-master.md` Wave 6, `plan/01-architecture.md`, RFC process (`GOVERNANCE.md`)
@@ -230,6 +230,10 @@ let radius = state.radius;
 
 ## Decision
 
-Pending. Merging this RFC accepts it; the decision will then be recorded as an
-ADR referencing it, and `plan/00-master.md`'s Wave 6 gate amended as described
-under **Migration**.
+**Accepted as written** by the maintainer, 2026-09-17. Recorded as
+[ADR-0015](../ADR/0015-typed-properties-no-format-change.md).
+
+Both stages proceed with no change to the file format: `version` stays `"1.0"`.
+The LSF v2, migration guide and `migrate` command the master plan assumed are
+not built. `plan/00-master.md`'s Wave 6 gate is amended as proposed under
+**Migration**, in the same change that accepts this RFC.
