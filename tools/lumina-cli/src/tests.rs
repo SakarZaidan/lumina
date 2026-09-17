@@ -182,3 +182,44 @@ fn the_easing_list_names_every_registered_curve() {
         assert!(list.contains(name), "{name} is missing from the list");
     }
 }
+
+const MISSPELLED: &str = r##"{
+  "version": "1.0",
+  "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+  "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0, "background": "#000000" },
+  "objects": { "c": { "type": "Circle", "properties": { "cx": 1, "cy": 1, "radius": 5, "opacty": 1 } } },
+  "timeline": []
+}
+"##;
+
+#[test]
+fn fix_without_write_reports_and_leaves_the_file_alone() {
+    let path = write_temp("fix-dry.lsf", MISSPELLED);
+    let (text, ok) = fix(&path, None, Report::Human).expect("fix");
+    assert!(ok, "{text}");
+    assert!(text.contains("can fix: UNKNOWN_PROPERTY"), "{text}");
+    assert!(text.contains("--write"), "{text}");
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), MISSPELLED);
+}
+
+#[test]
+fn fix_with_write_changes_only_the_misspelled_word() {
+    let path = write_temp("fix-write.lsf", MISSPELLED);
+    let (text, ok) = fix(&path, Some(&path), Report::Human).expect("fix");
+    assert!(ok, "{text}");
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        MISSPELLED.replace("\"opacty\"", "\"opacity\"")
+    );
+}
+
+#[test]
+fn fix_as_json_carries_the_fixes_and_the_scene() {
+    let path = write_temp("fix-json.lsf", MISSPELLED);
+    let (text, _) = fix(&path, None, Report::Json).expect("fix");
+    let report: serde_json::Value = serde_json::from_str(&text).expect("json");
+    assert_eq!(report["applied"][0]["code"], "UNKNOWN_PROPERTY");
+    assert_eq!(report["scene"]["objects"]["c"]["properties"]["opacity"], 1);
+    assert_eq!(report["remaining"]["valid"], true);
+    assert!(report["written"].is_null());
+}

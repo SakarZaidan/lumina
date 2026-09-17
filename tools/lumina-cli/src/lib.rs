@@ -120,6 +120,80 @@ pub fn validate_file(path: &Path) -> anyhow::Result<ValidationResponse> {
     Ok(luminafx_core::validation::validate_scene_json(&raw))
 }
 
+/// Apply every fix validation is certain of to a scene file, and report.
+///
+/// Returns the report and whether the fixed scene validates. Only certain
+/// fixes are made — a misspelled name with exactly one near match — and the
+/// file is changed only in the misspelled words. Nothing is written unless
+/// `destination` is given: the scene file itself for `--write`, another path
+/// for `--output`. Without one this reports what would change.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or written, or is not JSON.
+pub fn fix(
+    path: &Path,
+    destination: Option<&Path>,
+    style: Report,
+) -> anyhow::Result<(String, bool)> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", path.display()))?;
+    let report = luminafx_core::fix::fix_text(&text, luminafx_core::fix::DEFAULT_MAX_ROUNDS)
+        .map_err(|e| anyhow::anyhow!("{} is not valid JSON: {e}", path.display()))?;
+    if let Some(destination) = destination {
+        std::fs::write(destination, &report.text)
+            .map_err(|e| anyhow::anyhow!("cannot write {}: {e}", destination.display()))?;
+    }
+    Ok(format_fix(&report, destination, style))
+}
+
+/// Format what `fix` did. Separated from the file handling so a test can read
+/// the output directly.
+#[must_use]
+pub fn format_fix(
+    report: &luminafx_core::fix::TextFixReport,
+    destination: Option<&Path>,
+    style: Report,
+) -> (String, bool) {
+    let valid = report.remaining.valid;
+    if style == Report::Json {
+        let json = serde_json::json!({
+            "applied": report.applied,
+            "remaining": report.remaining,
+            "scene": serde_json::from_str::<serde_json::Value>(&report.text)
+                .unwrap_or(serde_json::Value::Null),
+            "written": destination.map(|d| d.display().to_string()),
+        });
+        let text =
+            serde_json::to_string_pretty(&json).unwrap_or_else(|e| format!(r#"{{"error":"{e}"}}"#));
+        return (text, valid);
+    }
+
+    let label = if destination.is_some() {
+        "fixed"
+    } else {
+        "can fix"
+    };
+    let mut out = String::new();
+    for fix in &report.applied {
+        out.push_str(&format!(
+            "{label}: {} at {}\n  {}\n",
+            fix.code, fix.path, fix.fix_suggestion
+        ));
+    }
+    if !report.remaining.errors.is_empty() || !report.remaining.warnings.is_empty() {
+        out.push_str(&format_validation(&report.remaining, Report::Human).0);
+    }
+    let n = report.applied.len();
+    out.push_str(&match (n, destination) {
+        (0, _) if valid => "nothing to fix\n".to_string(),
+        (0, _) => "nothing here can be fixed without a decision\n".to_string(),
+        (_, Some(d)) => format!("wrote {n} fix(es) to {}\n", d.display()),
+        (_, None) => format!("{n} fix(es) available: run again with --write to apply them\n"),
+    });
+    (out, valid)
+}
+
 /// The JSON Schema for the scene format.
 #[must_use]
 pub fn schema_json() -> String {

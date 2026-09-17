@@ -128,6 +128,25 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Apply every fix validation is certain of, and report what is left.
+    ///
+    /// Only misspellings with exactly one near match are fixed — property
+    /// names, object, asset and axes ids, object types, easing names — and the
+    /// file changes only in those words. Without --write or --output, nothing
+    /// is changed.
+    Fix {
+        /// The scene file.
+        scene: PathBuf,
+        /// Write the fixes back into the scene file.
+        #[arg(long, conflicts_with = "output")]
+        write: bool,
+        /// Write the fixed scene to this file instead.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Emit the report as JSON, including the fixed scene.
+        #[arg(long)]
+        json: bool,
+    },
     /// Print the JSON Schema for the scene format.
     Schema,
     /// Print every object type with its required and optional properties.
@@ -176,6 +195,26 @@ fn run_command(command: &Command) -> anyhow::Result<i32> {
             print!("{text}");
             // Exit code, not just output: this is what a pre-commit hook or a
             // CI step branches on.
+            Ok(i32::from(!ok))
+        }
+        Command::Fix {
+            scene,
+            write,
+            output,
+            json,
+        } => {
+            let style = if *json {
+                lib::Report::Json
+            } else {
+                lib::Report::Human
+            };
+            let destination = if *write {
+                Some(scene.as_path())
+            } else {
+                output.as_deref()
+            };
+            let (text, ok) = lib::fix(scene, destination, style)?;
+            print!("{text}");
             Ok(i32::from(!ok))
         }
         Command::Inspect { easing, list } => {

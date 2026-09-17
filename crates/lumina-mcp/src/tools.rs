@@ -63,6 +63,22 @@ pub fn descriptors() -> Value {
             }
         },
         {
+            "name": "lumina_fix",
+            "description":
+                "Repair every mistake in a scene that has exactly one sensible fix — a \
+                 misspelled property, object id, object type, asset id or easing name — and \
+                 re-validate until nothing more can be fixed that way. Returns the repaired \
+                 scene, each fix applied, and the errors that still need your judgement. Call \
+                 it after lumina_validate reports errors, before repairing anything by hand.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "scene": { "type": "object", "description": "The LSF scene document." }
+                },
+                "required": ["scene"]
+            }
+        },
+        {
             "name": "lumina_patch",
             "description":
                 "Apply a semantic patch to a scene and re-validate in one step. Use this to \
@@ -193,6 +209,26 @@ pub fn call(name: &str, args: &Value) -> ToolResult {
             Some(raw) => ToolResult::ok(
                 serde_json::to_value(luminafx_core::validation::validate_scene_json(raw))
                     .unwrap_or_else(|_| json!({})),
+            ),
+        },
+        "lumina_fix" => match args.get("scene") {
+            Some(raw) if raw.is_object() => {
+                let report =
+                    luminafx_core::fix::fix_scene(raw, luminafx_core::fix::DEFAULT_MAX_ROUNDS);
+                ToolResult::ok(serde_json::to_value(report).unwrap_or_else(|_| json!({})))
+            }
+            Some(raw) => ToolResult::err(
+                "SCHEMA_MISMATCH",
+                format!(
+                    "`scene` must be an object; got {}",
+                    luminafx_core::property_schema::kind_of(raw)
+                ),
+                Some("Pass the LSF document itself, not a string containing it."),
+            ),
+            None => ToolResult::err(
+                "MISSING_ARGUMENT",
+                "this tool needs a `scene` argument",
+                Some("Pass the LSF document as `scene`."),
             ),
         },
         "lumina_patch" => {

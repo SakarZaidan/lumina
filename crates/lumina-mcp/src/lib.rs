@@ -106,7 +106,8 @@ fn handle(request: &Request, id: Value) -> Response {
                     "Lumina renders declarative JSON scenes to video. Call lumina_objects \
                      first to learn the object types, write a scene, then lumina_validate \
                      before lumina_render — validation is microseconds and rendering is \
-                     seconds. Validation errors carry a fix_suggestion you can apply directly."
+                     seconds. Validation errors carry a fix_suggestion you can apply directly, \
+                     and lumina_fix applies every fix that needs no judgement for you."
             }),
         ),
         "tools/list" => Response::ok(id, json!({ "tools": tools::descriptors() })),

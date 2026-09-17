@@ -34,6 +34,8 @@
 pub mod easing;
 /// Interactive event dispatch and playback state.
 pub mod events;
+/// Apply validation's certain fixes to a scene until none remain.
+pub mod fix;
 /// JSON-value interpolation (numbers, arrays, LAB-space colors).
 pub mod interpolator;
 /// Each object type's properties and their JSON types, read from the structs.
@@ -53,6 +55,8 @@ mod easing_proptests;
 mod easing_tests;
 #[cfg(test)]
 mod events_tests;
+#[cfg(test)]
+mod fix_tests;
 #[cfg(test)]
 mod interp_proptests;
 #[cfg(test)]

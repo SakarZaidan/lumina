@@ -72,8 +72,14 @@ pub fn did_you_mean<'a, I>(name: &str, candidates: I, fallback: &str) -> String
 where
     I: IntoIterator<Item = &'a str>,
 {
-    nearest(name, candidates)
-        .map_or_else(|| fallback.to_string(), |s| format!("Did you mean '{s}'?"))
+    suggestion_text(nearest(name, candidates), fallback)
+}
+
+/// The `fix_suggestion` for an already-found nearest candidate, for callers
+/// that also need the candidate itself — to build a patch, say.
+#[must_use]
+pub fn suggestion_text(nearest: Option<&str>, fallback: &str) -> String {
+    nearest.map_or_else(|| fallback.to_string(), |s| format!("Did you mean '{s}'?"))
 }
 
 #[cfg(test)]

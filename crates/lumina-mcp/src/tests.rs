@@ -98,8 +98,8 @@ fn every_tool_is_listed_with_a_schema() {
     let out = exchange(&[json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" })]);
     let tools = out[0]["result"]["tools"].as_array().expect("tools array");
     assert!(
-        tools.len() >= 5,
-        "expected the five tools, got {}",
+        tools.len() >= 6,
+        "expected the six tools, got {}",
         tools.len()
     );
     for tool in tools {
@@ -279,4 +279,26 @@ fn render_will_not_write_outside_its_root() {
     )]);
     let body = payload(&out[0]);
     assert_eq!(body["code"], "OUTPUT_OUTSIDE_ROOT", "got {body}");
+}
+
+#[test]
+fn fix_repairs_what_needs_no_judgement_and_reports_the_rest() {
+    let mut scene = minimal_scene();
+    scene["objects"] = json!({
+        "c": { "type": "Circle",
+               "properties": { "cx": 1, "cy": 1, "radius": 5, "opacty": 0.5 } }
+    });
+    scene["timeline"] = json!([
+        { "time": 0.5, "object": "c", "state": { "radius": "big" } }
+    ]);
+    let out = exchange(&[call("lumina_fix", &json!({ "scene": scene }))]);
+    let body = payload(&out[0]);
+    assert_eq!(body["applied"][0]["code"], "UNKNOWN_PROPERTY", "got {body}");
+    assert_eq!(body["scene"]["objects"]["c"]["properties"]["opacity"], 0.5);
+    // A string where a number belongs has no single right answer.
+    assert_eq!(body["remaining"]["valid"], false);
+    assert_eq!(
+        body["remaining"]["errors"][0]["code"],
+        "PROPERTY_TYPE_MISMATCH"
+    );
 }
