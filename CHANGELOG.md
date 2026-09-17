@@ -73,6 +73,14 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **Frame 0 shows a keyframe at `time: 0`, not the authored value it replaces.**
+  When both applied, the authored value won on frame 0 alone and the timeline
+  took over from frame 1, so a fade-in from `opacity: 0` on an object authored
+  at `opacity: 1` flashed fully opaque for one frame. In the repository,
+  `circle_bounce` drew its shadow at radius 40 rather than 8 on its first frame,
+  and parity fixture `08_rounded_rect` its card's corners at 16 rather than 4.
+  When two keyframes share a time, the later one in the file wins, as it
+  already did at every other time.
 - **Both backends now reject a group naming a child that does not exist.** The
   CPU backend returned an error; the GPU backend drew the group without the
   child, so the same objects failed or rendered depending on `--backend`.
