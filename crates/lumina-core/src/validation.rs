@@ -111,7 +111,7 @@ pub struct ValidationWarning {
 #[must_use]
 pub fn validate_scene_json(raw: &Value) -> ValidationResponse {
     let mut errors = Vec::new();
-    check_properties(raw, &mut errors);
+    let type_of = check_object_properties(raw, &mut errors);
 
     match serde_json::from_value::<Scene>(raw.clone()) {
         Ok(scene) => {
@@ -123,36 +123,46 @@ pub fn validate_scene_json(raw: &Value) -> ValidationResponse {
             response.errors = errors;
             response
         }
-        Err(e) if errors.is_empty() => ValidationResponse {
-            valid: false,
-            errors: vec![ValidationError {
-                code: "PARSE_ERROR".to_string(),
-                path: "$".to_string(),
-                message: format!("the document is not a valid scene: {e}"),
-                fix_suggestion: "Check the scene against the schema (`lumina-cli schema`)."
-                    .to_string(),
-            }],
-            warnings: Vec::new(),
-        },
-        // Parsing failed, but a property error already explains why, and says
-        // it with a path and a fix.
-        Err(_) => ValidationResponse {
-            valid: false,
-            errors,
-            warnings: Vec::new(),
-        },
+        Err(e) => {
+            // A timeline state is untyped, so it can never be why parsing
+            // failed — and a property error, when there is one, already says
+            // why with a path and a fix. Without either, say what serde said.
+            if errors.is_empty() {
+                errors.push(ValidationError {
+                    code: "PARSE_ERROR".to_string(),
+                    path: "$".to_string(),
+                    message: format!("the document is not a valid scene: {e}"),
+                    fix_suggestion: "Check the scene against the schema (`lumina-cli schema`)."
+                        .to_string(),
+                });
+            }
+            // The typed pass checks the timeline, and there is no typed scene
+            // for it. Check names and kinds from the raw document instead, so
+            // one pass still reports every property problem it can see.
+            check_raw_timeline(raw, &type_of, &mut errors);
+            ValidationResponse {
+                valid: false,
+                errors,
+                warnings: Vec::new(),
+            }
+        }
     }
 }
 
-/// Check every property name and value against the object type's struct.
-fn check_properties(raw: &Value, errors: &mut Vec<ValidationError>) {
+/// Check every authored property's name and kind against its object type's
+/// struct, returning each known object's type name by id.
+///
+/// This needs the raw document: deserialising discards unknown fields before
+/// a typed scene exists to look at.
+fn check_object_properties<'a>(
+    raw: &'a Value,
+    errors: &mut Vec<ValidationError>,
+) -> HashMap<&'a str, &'a str> {
     let schema = crate::property_schema::PropertySchema::get();
-    let Some(objects) = raw.get("objects").and_then(Value::as_object) else {
-        return;
-    };
-
-    // Object id -> type name, for resolving timeline entries below.
     let mut type_of: HashMap<&str, &str> = HashMap::new();
+    let Some(objects) = raw.get("objects").and_then(Value::as_object) else {
+        return type_of;
+    };
 
     for (id, obj) in objects {
         let Some(ty) = obj.get("type").and_then(Value::as_str) else {
@@ -177,18 +187,22 @@ fn check_properties(raw: &Value, errors: &mut Vec<ValidationError>) {
 
         if let Some(fields) = obj.get("properties").and_then(Value::as_object) {
             for (name, value) in fields {
-                check_one(
-                    ty,
-                    props,
-                    name,
-                    value,
-                    &format!("$.objects.{id}.properties.{name}"),
-                    errors,
-                );
+                let path = format!("$.objects.{id}.properties.{name}");
+                check_one(ty, props, name, value, &path, &path, errors);
             }
         }
     }
+    type_of
+}
 
+/// Timeline property names and kinds, from the raw document, for when it did
+/// not parse into a scene [`validate_scene_data`] could check.
+fn check_raw_timeline(
+    raw: &Value,
+    type_of: &HashMap<&str, &str>,
+    errors: &mut Vec<ValidationError>,
+) {
+    let schema = crate::property_schema::PropertySchema::get();
     let Some(timeline) = raw.get("timeline").and_then(Value::as_array) else {
         return;
     };
@@ -208,29 +222,24 @@ fn check_properties(raw: &Value, errors: &mut Vec<ValidationError>) {
         };
         if let Some(state) = entry.get("state").and_then(Value::as_object) {
             for (name, value) in state {
-                check_one(
-                    ty,
-                    props,
-                    name,
-                    value,
-                    &format!("$.timeline[{i}].state.{name}"),
-                    errors,
-                );
+                let path = format!("$.timeline[{i}].state.{name}");
+                check_one(ty, props, name, value, &path, &path, errors);
             }
         }
     }
 }
 
-fn check_one(
+/// Check that `name` is a property of `ty`, returning its kinds if it is.
+fn check_name(
     ty: &str,
     props: &HashMap<String, crate::property_schema::JsonKinds>,
     name: &str,
-    value: &Value,
     path: &str,
     errors: &mut Vec<ValidationError>,
-) {
-    match props.get(name) {
-        None => errors.push(ValidationError {
+) -> Option<crate::property_schema::JsonKinds> {
+    let kinds = props.get(name).copied();
+    if kinds.is_none() {
+        errors.push(ValidationError {
             code: "UNKNOWN_PROPERTY".to_string(),
             path: path.to_string(),
             message: format!("\"{name}\" is not a property of {ty}."),
@@ -239,19 +248,163 @@ fn check_one(
                 props.keys().map(String::as_str),
                 &format!("`lumina-cli objects` lists the properties of {ty}."),
             ),
-        }),
-        Some(kinds) if !kinds.accepts(value) => errors.push(ValidationError {
-            code: "PROPERTY_TYPE_MISMATCH".to_string(),
-            path: path.to_string(),
-            message: format!(
-                "\"{name}\" on {ty} is {}; got {}.",
-                kinds.describe(),
-                crate::property_schema::kind_of(value)
-            ),
-            fix_suggestion: format!("Give \"{name}\" {}.", kinds.describe()),
-        }),
-        Some(_) => {}
+        });
     }
+    kinds
+}
+
+/// Check one property's name and JSON kind. Returns the property's kinds when
+/// both are right, for checks that go further.
+fn check_one(
+    ty: &str,
+    props: &HashMap<String, crate::property_schema::JsonKinds>,
+    name: &str,
+    value: &Value,
+    name_path: &str,
+    value_path: &str,
+    errors: &mut Vec<ValidationError>,
+) -> Option<crate::property_schema::JsonKinds> {
+    let kinds = check_name(ty, props, name, name_path, errors)?;
+    if kinds.accepts(value) {
+        return Some(kinds);
+    }
+    errors.push(ValidationError {
+        code: "PROPERTY_TYPE_MISMATCH".to_string(),
+        path: value_path.to_string(),
+        message: format!(
+            "\"{name}\" on {ty} is {}; got {}.",
+            kinds.describe(),
+            crate::property_schema::kind_of(value)
+        ),
+        fix_suggestion: format!("Give \"{name}\" {}.", kinds.describe()),
+    });
+    None
+}
+
+/// Checks values assigned to properties after authoring — by timeline entries
+/// and by event actions — against the object each one lands on.
+///
+/// Names and kinds are not enough. `"from": [8.0]` on an `Arrow` is an array
+/// where an array belongs and one element short of a point: the engine cannot
+/// build an Arrow from it, so the keyframe was dropped and the object drawn as
+/// authored, with nothing to say why. So each value is also put through the
+/// conversion the engine itself will apply.
+struct AssignmentChecker<'s> {
+    scene: &'s Scene,
+    /// Each object's authored properties as JSON, built on first use. `None`
+    /// when the authored object does not survive that round trip itself, in
+    /// which case nothing assigned to it can be judged against it.
+    authored: HashMap<&'s str, Option<serde_json::Map<String, Value>>>,
+}
+
+impl<'s> AssignmentChecker<'s> {
+    fn new(scene: &'s Scene) -> Self {
+        Self {
+            scene,
+            authored: HashMap::new(),
+        }
+    }
+
+    /// Check `name = value` on object `id`. The object must exist; a missing
+    /// one is reported by the caller, which knows where the reference is.
+    ///
+    /// `value` is `None` when it is only known at dispatch — an event action
+    /// carrying a `$drag.*` placeholder — so only the name can be checked.
+    fn check(
+        &mut self,
+        id: &'s str,
+        name: &str,
+        value: Option<&Value>,
+        (name_path, value_path): (&str, &str),
+        errors: &mut Vec<ValidationError>,
+    ) {
+        let Some(object) = self.scene.objects.get(id) else {
+            return;
+        };
+        let ty = object_type_name(object);
+        let Some(props) = crate::property_schema::PropertySchema::get().properties_of(ty) else {
+            return;
+        };
+        let Some(value) = value else {
+            check_name(ty, props, name, name_path, errors);
+            return;
+        };
+        let Some(kinds) = check_one(ty, props, name, value, name_path, value_path, errors) else {
+            return;
+        };
+        // Any number fits an integer property: the timeline rounds it.
+        if kinds.is_integer() {
+            return;
+        }
+        let authored = self
+            .authored
+            .entry(id)
+            .or_insert_with(|| authored_properties(object));
+        let Some(authored) = authored.as_ref() else {
+            return;
+        };
+        let mut candidate = authored.clone();
+        candidate.insert(name.to_string(), value.clone());
+        if let Err(e) = crate::timeline::deserialize_like(object, Value::Object(candidate)) {
+            // The object's own value is the best example of the shape, when it
+            // has one and it is short enough to read in a message.
+            let example = authored
+                .get(name)
+                .filter(|v| !v.is_null())
+                .map(Value::to_string)
+                .filter(|text| text.len() <= 120);
+            errors.push(ValidationError {
+                code: "PROPERTY_VALUE_INVALID".to_string(),
+                path: value_path.to_string(),
+                message: format!(
+                    "\"{name}\" on {ty} cannot take this value: {}.",
+                    value_error_reason(&e)
+                ),
+                fix_suggestion: match example {
+                    Some(example) => {
+                        format!("Use a value shaped like the object's own \"{name}\": {example}")
+                    }
+                    None => format!("`lumina-cli schema` shows the shape of \"{name}\" on {ty}."),
+                },
+            });
+        }
+    }
+}
+
+/// serde's reason a value did not fit, except where it says nothing an author
+/// can act on.
+fn value_error_reason(e: &serde_json::Error) -> String {
+    let reason = e.to_string();
+    // An untagged enum reports only that no variant matched. `Paint` is the one
+    // in the schema, and what it accepts is short enough to say instead.
+    if reason.contains("untagged enum Paint") {
+        return "a paint is a colour string such as \"#FF0000\", or a gradient object with \
+                a \"type\" and a list of \"stops\""
+            .to_string();
+    }
+    reason
+}
+
+/// Whether `value` holds a `$drag.*` placeholder anywhere inside it.
+fn holds_placeholder(value: &Value) -> bool {
+    match value {
+        Value::String(s) => s.starts_with("$drag."),
+        Value::Array(items) => items.iter().any(holds_placeholder),
+        Value::Object(map) => map.values().any(holds_placeholder),
+        _ => false,
+    }
+}
+
+/// `object`'s properties as JSON, if they deserialise back into it.
+fn authored_properties(object: &Object) -> Option<serde_json::Map<String, Value>> {
+    let Ok(Value::Object(mut tagged)) = serde_json::to_value(object) else {
+        return None;
+    };
+    let Some(Value::Object(props)) = tagged.remove("properties") else {
+        return None;
+    };
+    crate::timeline::deserialize_like(object, Value::Object(props.clone())).ok()?;
+    Some(props)
 }
 
 /// Perform semantic validation of a parsed Scene.
@@ -303,6 +456,90 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 ),
             });
         }
+    }
+
+    // Check 2a: What timeline entries and event actions assign must be a
+    // property of the object it lands on, of the right kind, and a value that
+    // really becomes that property's type.
+    //
+    // Timeline names and kinds used to be checked only from raw JSON, by
+    // `validate_scene_json`, so every caller holding a typed scene — the
+    // server's `/render` among them — accepted what `/validate` rejected. And
+    // event actions were not checked at all: a `set_property` naming a
+    // property, or even an object, that does not exist did nothing when fired.
+    let mut assignments = AssignmentChecker::new(scene);
+    for (i, entry) in scene.timeline.iter().enumerate() {
+        if !scene.objects.contains_key(&entry.object) {
+            continue; // Check 1 reports it.
+        }
+        let Value::Object(state) = &entry.state else {
+            errors.push(ValidationError {
+                code: "TIMELINE_STATE_NOT_AN_OBJECT".to_string(),
+                path: format!("$.timeline[{i}].state"),
+                message: format!(
+                    "Timeline entry {i}'s state is {}, so it sets nothing.",
+                    crate::property_schema::kind_of(&entry.state)
+                ),
+                fix_suggestion: "Make `state` an object of property values, e.g. \
+                                 {\"opacity\": 1}."
+                    .to_string(),
+            });
+            continue;
+        };
+        for (name, value) in state {
+            let path = format!("$.timeline[{i}].state.{name}");
+            assignments.check(
+                &entry.object,
+                name,
+                Some(value),
+                (&path, &path),
+                &mut errors,
+            );
+        }
+    }
+    for (i, event) in scene.events.iter().enumerate() {
+        let (Action::SetProperty {
+            target,
+            property,
+            value,
+        }
+        | Action::TweenTo {
+            target,
+            property,
+            value,
+            ..
+        }) = &event.action
+        else {
+            continue;
+        };
+        if !scene.objects.contains_key(target) {
+            errors.push(ValidationError {
+                code: "UNKNOWN_OBJECT_ID".to_string(),
+                path: format!("$.events[{i}].action.target"),
+                message: format!(
+                    "Event {i}'s action targets object '{target}', which is not declared."
+                ),
+                fix_suggestion: crate::suggest::did_you_mean(
+                    target,
+                    object_ids.iter().copied(),
+                    "Check the 'objects' block for valid IDs.",
+                ),
+            });
+            continue;
+        }
+        // A `$drag.*` placeholder is replaced by the host's payload when the
+        // event fires, so until then only the property's name is knowable.
+        let value = (!holds_placeholder(value)).then_some(value);
+        assignments.check(
+            target,
+            property,
+            value,
+            (
+                &format!("$.events[{i}].action.property"),
+                &format!("$.events[{i}].action.value"),
+            ),
+            &mut errors,
+        );
     }
 
     // Check 2b: Image/SVG objects must reference a declared asset.

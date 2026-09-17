@@ -194,38 +194,7 @@ impl Timeline {
             .flatten()
             .map(|(name, value)| (name.as_str(), value.clone()));
         let props = MapDeserializer::<_, serde_json::Error>::new(keyframed.chain(overridden));
-
-        // Matching on the authored variant, rather than on a type name, makes
-        // this exhaustive: a new object type does not compile until it is
-        // listed here, where a string match would silently never animate it.
-        macro_rules! rebuild {
-            ($($variant:ident),* $(,)?) => {
-                match authored {
-                    $(Object::$variant(_) => {
-                        Deserialize::deserialize(props).ok().map(Object::$variant)
-                    })*
-                }
-            };
-        }
-        rebuild!(
-            Circle,
-            Rectangle,
-            Polygon,
-            Path,
-            Line,
-            Arrow,
-            Text,
-            LaTeX,
-            Group,
-            Image,
-            SVG,
-            NumberLine,
-            Axes,
-            Plot,
-            BezierCurve,
-            MathML,
-            Particles,
-        )
+        deserialize_like(authored, props).ok()
     }
 
     /// Set an interactive override that takes precedence over keyframes
@@ -431,4 +400,43 @@ fn round_to_integer(value: Value) -> Value {
         }
         other => other,
     }
+}
+
+/// Deserialise `props` into the props type of `authored`'s variant.
+///
+/// Shared by [`Timeline::resolve_at`] and validation, so a value is judged by
+/// exactly the conversion the engine will apply to it. Matching on the
+/// authored variant rather than on a type name makes the dispatch exhaustive:
+/// a new object type does not compile until it is listed here, where a string
+/// match would silently never animate it — or never check it.
+pub(crate) fn deserialize_like<'de, D>(authored: &Object, props: D) -> Result<Object, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    macro_rules! like {
+        ($($variant:ident),* $(,)?) => {
+            match authored {
+                $(Object::$variant(_) => Deserialize::deserialize(props).map(Object::$variant),)*
+            }
+        };
+    }
+    like!(
+        Circle,
+        Rectangle,
+        Polygon,
+        Path,
+        Line,
+        Arrow,
+        Text,
+        LaTeX,
+        Group,
+        Image,
+        SVG,
+        NumberLine,
+        Axes,
+        Plot,
+        BezierCurve,
+        MathML,
+        Particles,
+    )
 }

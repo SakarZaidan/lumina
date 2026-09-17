@@ -182,20 +182,20 @@ async fn patch_scene(ApiJson(payload): ApiJson<PatchRequest>) -> Response {
         .into_response();
     }
 
-    let scene: Scene = match serde_json::from_value(scene_value.clone()) {
-        Ok(s) => s,
-        Err(e) => {
-            return ApiError::unprocessable(
-                "PATCHED_SCENE_INVALID",
-                format!("the patch applied cleanly but the result is not a scene: {e}"),
-            )
-            .at("$.scene")
-            .fix("The patch removed or retyped a required field. GET /schema for the shape.")
-            .into_response()
-        }
-    };
+    if let Err(e) = serde_json::from_value::<Scene>(scene_value.clone()) {
+        return ApiError::unprocessable(
+            "PATCHED_SCENE_INVALID",
+            format!("the patch applied cleanly but the result is not a scene: {e}"),
+        )
+        .at("$.scene")
+        .fix("The patch removed or retyped a required field. GET /schema for the shape.")
+        .into_response();
+    }
 
-    let validation = validate_scene_data(&scene);
+    // From the raw document, as `/validate` does: a patch that adds a
+    // misspelled property must be told so, and the typed scene has already
+    // dropped it.
+    let validation = luminafx_core::validation::validate_scene_json(&scene_value);
     Json(PatchResponse {
         scene: scene_value,
         validation,
@@ -274,14 +274,40 @@ enum RenderOutcome {
     Failed(String),
 }
 
-async fn render_scene(ApiJson(payload): ApiJson<RenderRequest>) -> Response {
+async fn render_scene(ApiJson(body): ApiJson<serde_json::Value>) -> Response {
     // Validation is cheap and bounded (see AAA-SEC-01), so it stays on the
     // async path: an invalid scene is rejected without occupying a blocking
     // thread at all.
-    let validation = validate_scene_data(&payload.scene);
+    //
+    // It runs on the raw body, before the request is typed, so `/render`
+    // refuses exactly what `/validate` refuses. Typed, a misspelled property
+    // has already been dropped by the time a handler sees the scene, and the
+    // render went ahead without it.
+    let Some(raw_scene) = body.get("scene").filter(|s| s.is_object()) else {
+        return ApiError::unprocessable(
+            "SCHEMA_MISMATCH",
+            "the body has no `scene` object to render",
+        )
+        .at("$.scene")
+        .fix("Send `{\"scene\": {...}, \"format\": \"mp4\"}`. GET /schema for the scene shape.")
+        .into_response();
+    };
+    let validation = luminafx_core::validation::validate_scene_json(raw_scene);
     if !validation.valid {
         return (StatusCode::UNPROCESSABLE_ENTITY, Json(validation)).into_response();
     }
+    let payload: RenderRequest = match serde_json::from_value(body) {
+        Ok(payload) => payload,
+        // The scene validated, so only the rest of the request can be wrong.
+        Err(e) => {
+            return ApiError::unprocessable(
+                "SCHEMA_MISMATCH",
+                format!("the render request is malformed: {e}"),
+            )
+            .fix("`format` is one of \"mp4\", \"webm\" or \"gif\".")
+            .into_response()
+        }
+    };
 
     let (ext, content_type) = match payload.format.as_str() {
         "webm" => ("webm", "video/webm"),

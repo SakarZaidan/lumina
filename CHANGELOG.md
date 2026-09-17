@@ -31,7 +31,31 @@ programme to reach reference quality in [plan/](plan/).
   The permitted properties and their types are read from the real structs
   through `schemars`, not from a second table that could drift from them.
   `/validate`, `lumina-cli validate`, and the MCP `lumina_validate` tool all use
-  it, and `render` refuses exactly what `validate` refuses.
+  it, and every `render` — CLI, MCP and the server's `/render` — refuses exactly
+  what `validate` refuses.
+
+- **Keyframes and event actions are checked the way the engine will read
+  them.** A timeline value can have the right JSON kind and still not fit:
+  `"from": [8.0]` on an `Arrow` is an array, one element short of a point. The
+  engine cannot build the object from it, so it drew the object as authored and
+  ignored the keyframe. Every value a timeline entry sets is now put through
+  the same conversion the engine applies, and one that does not fit is
+  `PROPERTY_VALUE_INVALID`, with the object's own value as the example of the
+  shape. A fraction for an integer property such as `z_index` is accepted, since
+  the timeline rounds it.
+
+  `set_property` and `tween_to` actions were not checked at all. Their target
+  must now exist (`UNKNOWN_OBJECT_ID`), and their property and value get the
+  same name, kind and shape checks — except a value holding a `$drag.*`
+  placeholder, which only exists once the event fires. A timeline `state` that
+  is not an object sets nothing and is `TIMELINE_STATE_NOT_AN_OBJECT`.
+
+  These checks, and the timeline name and kind checks, moved into
+  `validate_scene_data`, so callers holding a parsed `Scene` get them too. The
+  server's `/render`, `/patch` and `/scene_patch` validated that way and let
+  misspelled keyframes through; `/render` and `/patch` now also validate the
+  raw document, which is the only place a misspelled authored property is still
+  visible.
 
   `/validate` now takes raw JSON, so a body that is JSON but not a scene gets a
   `200` with `valid: false` and the reasons, instead of a `400` — the endpoint
