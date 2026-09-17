@@ -126,6 +126,14 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **A paint that cannot be painted is now reported wherever it is written.**
+  An unrecognised colour was checked in `properties` but not in a keyframe or
+  an event action, so a typo turned a shape white halfway through an animation
+  with nothing said. A gradient's stops were not checked at all: fewer than two
+  and both renderers drop it and fall back to opaque white
+  (`GRADIENT_TOO_FEW_STOPS`), and a stop's colour is now checked where it is
+  written (`…fill.stops[1][1]`). A gradient `type` that is neither `linear` nor
+  `radial` is a warning, since it still draws, as linear.
 - **The MCP `lumina_schema` tool's `objects` returned a broken schema for the
   names it documents.** It matched Rust definition names, so `["Circle"]`
   pruned every definition and left the root referring to types it no longer
