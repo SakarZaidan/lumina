@@ -6,6 +6,11 @@ language = "en"
 src = "src"
 
 [output.html]
+# The picker reads `versions.json` from the site root, which only the deployed
+# site has — locally it is absent and the script does nothing, so `mdbook serve`
+# is unaffected.
+additional-js = ["theme/version-picker.js"]
+additional-css = ["theme/version-picker.css"]
 default-theme = "navy"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/SakarZaidan/lumina"

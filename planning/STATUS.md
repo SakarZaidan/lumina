@@ -24,6 +24,36 @@ For the release-by-release story see [HISTORY.md](./HISTORY.md).
 
 ---
 
+## 2026-09-17 — Versioned documentation; Wave 5 closes but for npm
+
+- `AAA-REL-12`. The published site is now assembled from the tags: the newest
+  release at the root, `main` under `/dev/`, and every release that still
+  builds under `/vX.Y.Z/`. v0.4 docs stop vanishing the moment v0.5 ships.
+- **The site is a pure function of the repository.** Nothing is carried forward
+  from the previously published site and no `gh-pages` branch holds state that
+  can drift from the tags — re-running on the same commit produces the same
+  site, which is the property the renderer already guarantees for pixels.
+- v0.2.0 and v0.1.0 are skipped: their docs no longer build. That is a fact
+  about the past, and failing today's deploy over it would help nobody, so the
+  script warns and continues.
+- **The picker is injected after each build, not configured in `book.toml`.**
+  It could not come from each tag's own config — a release tagged before the
+  picker existed has no reference to it, so those pages would offer no way to
+  navigate away from an old version, which is exactly the version a reader is
+  most likely to be stranded on. Injecting afterwards also means improving the
+  picker improves every published version at once. Verified: all four carry it,
+  including the two tagged years before it was written.
+- The picker reads `versions.json` rather than a hard-coded list, so a release
+  needs no edit to appear, and it does nothing when that file is absent — which
+  is the local `mdbook serve` case. A picker that broke local preview to serve
+  the published site would be a bad trade.
+- An old version says so in a warning bar. Somebody reading v0.3 docs against a
+  v0.5 install will be puzzled by advice that no longer applies and will
+  usually blame the software rather than the page.
+
+**Wave 5 is complete except `AAA-REL-04` (npm), which is deferred pending a
+token.** Eleven of twelve items done; the package itself is built and verified.
+
 ## 2026-09-15 (night, later) — The JS SDK builds, and TD-12 closes
 
 - `AAA-REL-03`. Three sources import `../wasm/luminafx_wasm`, which is
