@@ -74,6 +74,12 @@ pub struct ValidationError {
     pub message: String,
     /// Actionable correction, written for self-fixing authoring loops.
     pub fix_suggestion: String,
+    /// The correction as an RFC 6902 JSON Patch against the scene document,
+    /// when it is certain enough to apply without judgement: a misspelled
+    /// property renamed, or a misspelled id or name replaced by the one it
+    /// nearly matches. `lumina-cli fix` applies these, and so can any agent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fix_patch: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -134,6 +140,7 @@ pub fn validate_scene_json(raw: &Value) -> ValidationResponse {
                     message: format!("the document is not a valid scene: {e}"),
                     fix_suggestion: "Check the scene against the schema (`lumina-cli schema`)."
                         .to_string(),
+                    fix_patch: None,
                 });
             }
             // The typed pass checks the timeline, and there is no typed scene
@@ -180,6 +187,8 @@ fn check_object_properties<'a>(
                     schema.object_types(),
                     "`lumina-cli objects` lists every object type.",
                 ),
+                fix_patch: crate::suggest::nearest(ty, schema.object_types())
+                    .map(|near| replace_patch(&["objects", id, "type"], near)),
             });
             continue;
         };
@@ -188,7 +197,11 @@ fn check_object_properties<'a>(
         if let Some(fields) = obj.get("properties").and_then(Value::as_object) {
             for (name, value) in fields {
                 let path = format!("$.objects.{id}.properties.{name}");
-                check_one(ty, props, name, value, &path, &path, errors);
+                let rename = |to: &str| {
+                    (!fields.contains_key(to))
+                        .then(|| rename_patch(&["objects", id, "properties"], name, to))
+                };
+                check_one(ty, props, name, value, &path, &path, rename, errors);
             }
         }
     }
@@ -223,31 +236,63 @@ fn check_raw_timeline(
         if let Some(state) = entry.get("state").and_then(Value::as_object) {
             for (name, value) in state {
                 let path = format!("$.timeline[{i}].state.{name}");
-                check_one(ty, props, name, value, &path, &path, errors);
+                let rename = |to: &str| {
+                    (!state.contains_key(to))
+                        .then(|| rename_patch(&["timeline", &i.to_string(), "state"], name, to))
+                };
+                check_one(ty, props, name, value, &path, &path, rename, errors);
             }
         }
     }
 }
 
+/// A JSON Pointer (RFC 6901) to the value reached through `segments`.
+fn pointer(segments: &[&str]) -> String {
+    segments
+        .iter()
+        .map(|s| format!("/{}", s.replace('~', "~0").replace('/', "~1")))
+        .collect()
+}
+
+/// A patch replacing the value at `segments` with the string `value`.
+fn replace_patch(segments: &[&str], value: &str) -> Vec<Value> {
+    vec![serde_json::json!({ "op": "replace", "path": pointer(segments), "value": value })]
+}
+
+/// A patch renaming key `from` to `to` in the object at `parent`.
+fn rename_patch(parent: &[&str], from: &str, to: &str) -> Vec<Value> {
+    let base = pointer(parent);
+    vec![serde_json::json!({
+        "op": "move",
+        "from": format!("{base}{}", pointer(&[from])),
+        "path": format!("{base}{}", pointer(&[to])),
+    })]
+}
+
 /// Check that `name` is a property of `ty`, returning its kinds if it is.
+///
+/// `fix` turns the nearest property name, when there is one, into the patch
+/// that applies it: renaming a key, or replacing a string that names it.
 fn check_name(
     ty: &str,
     props: &HashMap<String, crate::property_schema::JsonKinds>,
     name: &str,
     path: &str,
+    fix: impl FnOnce(&str) -> Option<Vec<Value>>,
     errors: &mut Vec<ValidationError>,
 ) -> Option<crate::property_schema::JsonKinds> {
     let kinds = props.get(name).copied();
     if kinds.is_none() {
+        let nearest = crate::suggest::nearest(name, props.keys().map(String::as_str));
         errors.push(ValidationError {
             code: "UNKNOWN_PROPERTY".to_string(),
             path: path.to_string(),
             message: format!("\"{name}\" is not a property of {ty}."),
-            fix_suggestion: crate::suggest::did_you_mean(
-                name,
-                props.keys().map(String::as_str),
+            fix_suggestion: crate::suggest::suggestion_text(
+                nearest,
                 &format!("`lumina-cli objects` lists the properties of {ty}."),
             ),
+            fix_patch: nearest.and_then(fix),
         });
     }
     kinds
@@ -255,6 +300,7 @@ fn check_name(
 
 /// Check one property's name and JSON kind. Returns the property's kinds when
 /// both are right, for checks that go further.
+#[allow(clippy::too_many_arguments)]
 fn check_one(
     ty: &str,
     props: &HashMap<String, crate::property_schema::JsonKinds>,
@@ -262,9 +308,10 @@ fn check_one(
     value: &Value,
     name_path: &str,
     value_path: &str,
+    fix: impl FnOnce(&str) -> Option<Vec<Value>>,
     errors: &mut Vec<ValidationError>,
 ) -> Option<crate::property_schema::JsonKinds> {
-    let kinds = check_name(ty, props, name, name_path, errors)?;
+    let kinds = check_name(ty, props, name, name_path, fix, errors)?;
     if kinds.accepts(value) {
         return Some(kinds);
     }
@@ -277,6 +324,7 @@ fn check_one(
             crate::property_schema::kind_of(value)
         ),
         fix_suggestion: format!("Give \"{name}\" {}.", kinds.describe()),
+        fix_patch: None,
     });
     None
 }
@@ -310,12 +358,14 @@ impl<'s> AssignmentChecker<'s> {
     ///
     /// `value` is `None` when it is only known at dispatch — an event action
     /// carrying a `$drag.*` placeholder — so only the name can be checked.
+    /// `fix` builds the patch for a misspelled name, as for [`check_name`].
     fn check(
         &mut self,
         id: &'s str,
         name: &str,
         value: Option<&Value>,
         (name_path, value_path): (&str, &str),
+        fix: impl FnOnce(&str) -> Option<Vec<Value>>,
         errors: &mut Vec<ValidationError>,
     ) {
         let Some(object) = self.scene.objects.get(id) else {
@@ -326,10 +376,11 @@ impl<'s> AssignmentChecker<'s> {
             return;
         };
         let Some(value) = value else {
-            check_name(ty, props, name, name_path, errors);
+            check_name(ty, props, name, name_path, fix, errors);
             return;
         };
-        let Some(kinds) = check_one(ty, props, name, value, name_path, value_path, errors) else {
+        let Some(kinds) = check_one(ty, props, name, value, name_path, value_path, fix, errors)
+        else {
             return;
         };
         // Any number fits an integer property: the timeline rounds it.
@@ -366,6 +417,7 @@ impl<'s> AssignmentChecker<'s> {
                     }
                     None => format!("`lumina-cli schema` shows the shape of \"{name}\" on {ty}."),
                 },
+                fix_patch: None,
             });
         }
     }
@@ -418,12 +470,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
     // Check 1: Timeline entries must reference declared object IDs
     for (i, entry) in scene.timeline.iter().enumerate() {
         if !object_ids.contains(entry.object.as_str()) {
-            let suggestion = crate::suggest::did_you_mean(
-                &entry.object,
-                object_ids.iter().copied(),
-                "Check the 'objects' block for valid IDs.",
-            );
-
+            let nearest = crate::suggest::nearest(&entry.object, object_ids.iter().copied());
             errors.push(ValidationError {
                 code: "UNKNOWN_OBJECT_ID".to_string(),
                 path: format!("$.timeline[{i}].object"),
@@ -431,7 +478,12 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     "Timeline entry {} references object '{}', which is not in 'objects'.",
                     i, entry.object
                 ),
-                fix_suggestion: suggestion,
+                fix_suggestion: crate::suggest::suggestion_text(
+                    nearest,
+                    "Check the 'objects' block for valid IDs.",
+                ),
+                fix_patch: nearest
+                    .map(|near| replace_patch(&["timeline", &i.to_string(), "object"], near)),
             });
         }
     }
@@ -454,6 +506,8 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                         event.object
                     ),
                 ),
+                fix_patch: crate::suggest::nearest(&event.object, object_ids.iter().copied())
+                    .map(|near| replace_patch(&["events", &i.to_string(), "object"], near)),
             });
         }
     }
@@ -483,16 +537,22 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 fix_suggestion: "Make `state` an object of property values, e.g. \
                                  {\"opacity\": 1}."
                     .to_string(),
+                fix_patch: None,
             });
             continue;
         };
         for (name, value) in state {
             let path = format!("$.timeline[{i}].state.{name}");
+            let rename = |to: &str| {
+                (!state.contains_key(to))
+                    .then(|| rename_patch(&["timeline", &i.to_string(), "state"], name, to))
+            };
             assignments.check(
                 &entry.object,
                 name,
                 Some(value),
                 (&path, &path),
+                rename,
                 &mut errors,
             );
         }
@@ -524,12 +584,21 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     object_ids.iter().copied(),
                     "Check the 'objects' block for valid IDs.",
                 ),
+                fix_patch: crate::suggest::nearest(target, object_ids.iter().copied()).map(
+                    |near| replace_patch(&["events", &i.to_string(), "action", "target"], near),
+                ),
             });
             continue;
         }
         // A `$drag.*` placeholder is replaced by the host's payload when the
         // event fires, so until then only the property's name is knowable.
         let value = (!holds_placeholder(value)).then_some(value);
+        let replace = |to: &str| {
+            Some(replace_patch(
+                &["events", &i.to_string(), "action", "property"],
+                to,
+            ))
+        };
         assignments.check(
             target,
             property,
@@ -538,6 +607,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 &format!("$.events[{i}].action.property"),
                 &format!("$.events[{i}].action.value"),
             ),
+            replace,
             &mut errors,
         );
     }
@@ -571,6 +641,10 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                             asset_ids.iter().copied(),
                             "Declare it under 'assets.images' with an id and a path.",
                         ),
+                        fix_patch: crate::suggest::nearest(asset_id, asset_ids.iter().copied())
+                            .map(|near| {
+                                replace_patch(&["objects", obj_id, "properties", "asset_id"], near)
+                            }),
                     });
                 }
             }
@@ -595,24 +669,31 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     ),
                     fix_suggestion: "A Plot draws inside an Axes; point axes_id at one."
                         .to_string(),
+                    fix_patch: None,
                 }),
-                None => errors.push(ValidationError {
-                    code: "UNKNOWN_AXES_ID".to_string(),
-                    path: format!("$.objects.{obj_id}.properties.axes_id"),
-                    message: format!(
-                        "Plot '{obj_id}' references axes '{}', which is not declared.",
-                        p.axes_id
-                    ),
-                    fix_suggestion: crate::suggest::did_you_mean(
-                        &p.axes_id,
-                        scene
-                            .objects
-                            .iter()
-                            .filter(|(_, o)| matches!(o, Object::Axes(_)))
-                            .map(|(k, _)| k.as_str()),
-                        "Add an Axes object and point axes_id at it.",
-                    ),
-                }),
+                None => {
+                    let axes = scene
+                        .objects
+                        .iter()
+                        .filter(|(_, o)| matches!(o, Object::Axes(_)))
+                        .map(|(k, _)| k.as_str());
+                    let nearest = crate::suggest::nearest(&p.axes_id, axes);
+                    errors.push(ValidationError {
+                        code: "UNKNOWN_AXES_ID".to_string(),
+                        path: format!("$.objects.{obj_id}.properties.axes_id"),
+                        message: format!(
+                            "Plot '{obj_id}' references axes '{}', which is not declared.",
+                            p.axes_id
+                        ),
+                        fix_suggestion: crate::suggest::suggestion_text(
+                            nearest,
+                            "Add an Axes object and point axes_id at it.",
+                        ),
+                        fix_patch: nearest.map(|near| {
+                            replace_patch(&["objects", obj_id, "properties", "axes_id"], near)
+                        }),
+                    });
+                }
             }
         }
     }
@@ -620,11 +701,11 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
     // Check 3: Group children must reference declared object IDs
     for (obj_id, obj) in &scene.objects {
         if let Object::Group(group) = obj {
-            for child_id in &group.children {
+            for (k, child_id) in group.children.iter().enumerate() {
                 if !object_ids.contains(child_id.as_str()) {
                     errors.push(ValidationError {
                         code: "UNKNOWN_CHILD_ID".to_string(),
-                        path: format!("$.objects.{obj_id}.properties.children"),
+                        path: format!("$.objects.{obj_id}.properties.children[{k}]"),
                         message: format!(
                             "Group '{obj_id}' references child '{child_id}', which is not declared."
                         ),
@@ -636,6 +717,13 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                                  group '{obj_id}'."
                             ),
                         ),
+                        fix_patch: crate::suggest::nearest(child_id, object_ids.iter().copied())
+                            .map(|near| {
+                                replace_patch(
+                                    &["objects", obj_id, "properties", "children", &k.to_string()],
+                                    near,
+                                )
+                            }),
                     });
                 }
             }
@@ -657,6 +745,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             ),
             fix_suggestion: "Remove the circular dependency from the group's children list."
                 .to_string(),
+            fix_patch: None,
         }),
         Some(GroupWalk::TooDeep(id)) => errors.push(ValidationError {
             code: "GROUP_NESTING_TOO_DEEP".to_string(),
@@ -668,6 +757,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             fix_suggestion: "Flatten the group hierarchy. Nesting this deep is almost always a \
                              generated-scene bug rather than an authoring choice."
                 .to_string(),
+            fix_patch: None,
         }),
         None => {}
     }
@@ -724,6 +814,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             fix_suggestion:
                 "Set canvas.width and canvas.height to positive integers (e.g. 1280, 720)."
                     .to_string(),
+            fix_patch: None,
         });
     }
 
@@ -742,6 +833,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             fix_suggestion: format!(
                 "Reduce canvas.width and canvas.height to at most {MAX_CANVAS_DIMENSION}."
             ),
+            fix_patch: None,
         });
     }
 
@@ -751,6 +843,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             path: "$.canvas.fps".to_string(),
             message: "Canvas fps is 0, so the scene has no frames.".to_string(),
             fix_suggestion: "Set canvas.fps to a positive integer (e.g. 30 or 60).".to_string(),
+            fix_patch: None,
         });
     } else if scene.canvas.fps > MAX_FPS {
         errors.push(ValidationError {
@@ -761,6 +854,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 scene.canvas.fps
             ),
             fix_suggestion: format!("Set canvas.fps to at most {MAX_FPS} (60 is typical)."),
+            fix_patch: None,
         });
     }
 
@@ -773,6 +867,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 scene.canvas.duration
             ),
             fix_suggestion: "Set canvas.duration to a positive number of seconds.".to_string(),
+            fix_patch: None,
         });
     } else if scene.canvas.duration > MAX_DURATION_SECONDS {
         errors.push(ValidationError {
@@ -786,6 +881,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 "Set canvas.duration to at most {MAX_DURATION_SECONDS} seconds, or render the \
                  scene in sections."
             ),
+            fix_patch: None,
         });
     }
 
@@ -806,6 +902,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     "Reduce canvas.duration or canvas.fps so their product is at most \
                      {MAX_TOTAL_FRAMES} frames."
                 ),
+                fix_patch: None,
             });
         }
     }
@@ -818,6 +915,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             path: "$.canvas.motion_blur_samples".to_string(),
             message: "motion_blur_samples is 0, so no frame would be rendered at all.".to_string(),
             fix_suggestion: "Use 1 for no motion blur, or 2-64 to enable it.".to_string(),
+            fix_patch: None,
         });
     } else if scene.canvas.motion_blur_samples > MAX_MOTION_BLUR_SAMPLES {
         errors.push(ValidationError {
@@ -831,6 +929,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             fix_suggestion: format!(
                 "Use at most {MAX_MOTION_BLUR_SAMPLES}; 4 to 8 is enough for smooth blur."
             ),
+            fix_patch: None,
         });
     }
     if scene.canvas.motion_blur_samples > 1
@@ -847,6 +946,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 scene.canvas.shutter
             ),
             fix_suggestion: "Use 0.5 for a 180-degree shutter, the film convention.".to_string(),
+            fix_patch: None,
         });
     }
 
@@ -916,6 +1016,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
             &entry.easing,
             entry.easing_params.as_ref(),
             format!("$.timeline[{i}].easing"),
+            &["timeline", &i.to_string(), "easing"],
             &mut errors,
             &mut warnings,
         );
@@ -926,6 +1027,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 easing,
                 None,
                 format!("$.events[{i}].action.easing"),
+                &["events", &i.to_string(), "action", "easing"],
                 &mut errors,
                 &mut warnings,
             );
@@ -943,8 +1045,11 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                     "audio gain is {}; it must be a finite, non-negative multiplier.",
                     audio.gain
                 ),
-                fix_suggestion: "Use 1.0 for the track as recorded, 0.5 to halve its                                  amplitude, or 0.0 to mute it."
-                    .to_string(),
+                fix_suggestion:
+                    "Use 1.0 for the track as recorded, 0.5 to halve its amplitude, or 0.0 to \
+                                 mute it."
+                        .to_string(),
+                fix_patch: None,
             });
         }
         if !audio.start.is_finite() {
@@ -952,8 +1057,11 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 code: "INVALID_AUDIO_START".to_string(),
                 path: format!("$.assets.audio[{i}].start"),
                 message: "audio start is not a finite number of seconds.".to_string(),
-                fix_suggestion: "Use 0 to start with the video, a positive value to delay                                  the track, or a negative one to begin part-way into it."
-                    .to_string(),
+                fix_suggestion:
+                    "Use 0 to start with the video, a positive value to delay the track, or a \
+                                 negative one to begin part-way into it."
+                        .to_string(),
+                fix_patch: None,
             });
         }
     }
@@ -964,6 +1072,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 &entry.easing,
                 entry.easing_params.as_ref(),
                 format!("$.camera.timeline[{i}].easing"),
+                &["camera", "timeline", &i.to_string(), "easing"],
                 &mut errors,
                 &mut warnings,
             );
@@ -991,6 +1100,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                             "Give `{name}` a value within 32-bit float range (about \
                              ±3.4e38)."
                         ),
+                        fix_patch: None,
                     });
                 }
             }
@@ -1034,19 +1144,21 @@ fn check_easing(
     name: &str,
     params: Option<&serde_json::Value>,
     path: String,
+    at: &[&str],
     errors: &mut Vec<ValidationError>,
     warnings: &mut Vec<ValidationWarning>,
 ) {
     if !is_valid_easing(name) {
-        let fix_suggestion = match suggest_easing(name) {
-            Some(candidate) => format!("Did you mean '{candidate}'?"),
-            None => "See luminafx_core::easing::EASING_NAMES for the accepted names.".to_string(),
-        };
+        let nearest = suggest_easing(name);
         errors.push(ValidationError {
             code: "UNKNOWN_EASING".to_string(),
             path,
             message: format!("Unknown easing '{name}'."),
-            fix_suggestion,
+            fix_suggestion: crate::suggest::suggestion_text(
+                nearest,
+                "See luminafx_core::easing::EASING_NAMES for the accepted names.",
+            ),
+            fix_patch: nearest.map(|near| replace_patch(at, near)),
         });
         return;
     }
@@ -1109,6 +1221,7 @@ fn check_easing(
                                 "Clamp {label} into [0, 1]. y values may fall outside it — that \
                                  is what produces overshoot."
                             ),
+                            fix_patch: None,
                         });
                     }
                 }
@@ -1123,6 +1236,7 @@ fn check_easing(
                                 ),
                                 fix_suggestion: "Use finite numbers for all four control points."
                                     .to_string(),
+                                fix_patch: None,
                             });
                         }
                     }
@@ -1154,6 +1268,7 @@ fn check_easing(
                         fix_suggestion: "Sort keypoints by their first element and remove \
                                          duplicate times."
                             .to_string(),
+                        fix_patch: None,
                     });
                 }
                 if xs.iter().any(|x| !x.is_finite()) {
@@ -1162,6 +1277,7 @@ fn check_easing(
                         path,
                         message: "spline keypoint times must be finite.".to_string(),
                         fix_suggestion: "Replace any NaN or infinite keypoint time.".to_string(),
+                        fix_patch: None,
                     });
                 }
             }
@@ -1193,6 +1309,7 @@ fn validate_object_bounds(id: &str, obj: &Object, errors: &mut Vec<ValidationErr
                         "Reduce sample_count to at most {MAX_PLOT_SAMPLES}; a few hundred is \
                          usually indistinguishable from more."
                     ),
+                    fix_patch: None,
                 });
             }
             if p.function_str.len() > MAX_EXPRESSION_BYTES {
@@ -1207,6 +1324,7 @@ fn validate_object_bounds(id: &str, obj: &Object, errors: &mut Vec<ValidationErr
                     fix_suggestion: "Simplify the expression, or precompute the curve and use a \
                                      Path object instead."
                         .to_string(),
+                    fix_patch: None,
                 });
             }
         }
@@ -1221,6 +1339,7 @@ fn validate_object_bounds(id: &str, obj: &Object, errors: &mut Vec<ValidationErr
                         p.count
                     ),
                     fix_suggestion: format!("Reduce count to at most {MAX_PARTICLE_COUNT}."),
+                    fix_patch: None,
                 });
             }
         }
@@ -1277,6 +1396,7 @@ fn check_tick_count(
                  non-positive step describes a loop that never ends."
             ),
             fix_suggestion: "Set the step to a positive number (e.g. 1.0).".to_string(),
+            fix_patch: None,
         });
         return;
     }
@@ -1286,6 +1406,7 @@ fn check_tick_count(
             path,
             message: format!("Range [{min}, {max}] must be finite."),
             fix_suggestion: "Set both range bounds to finite numbers.".to_string(),
+            fix_patch: None,
         });
         return;
     }
@@ -1302,6 +1423,7 @@ fn check_tick_count(
                 "Increase the step, or narrow the range, so fewer than {MAX_TICK_COUNT:.0} ticks \
                  are produced."
             ),
+            fix_patch: None,
         });
     }
 }
@@ -1346,6 +1468,7 @@ fn check_representable(value: &Value, path: &str, errors: &mut Vec<ValidationErr
                      generated-scene bug.",
                     f32::MAX
                 ),
+                fix_patch: None,
             });
         }
         Value::Array(items) => {
@@ -1382,6 +1505,7 @@ fn check_colour(value: &str, path: &str, errors: &mut Vec<ValidationError>) {
         } else {
             "Use #RGB, #RRGGBB, or #RRGGBBAA.".to_string()
         },
+        fix_patch: None,
     });
 }
 

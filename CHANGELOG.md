@@ -61,7 +61,22 @@ programme to reach reference quality in [plan/](plan/).
   `200` with `valid: false` and the reasons, instead of a `400` — the endpoint
   exists to explain what is wrong, and now it does.
 
+### Added
+- **`lumina-cli fix`, and the `lumina_fix` MCP tool, repair what needs no
+  judgement.** A misspelled property name, object id, object type, asset id,
+  axes id, group child or easing name with exactly one near match is corrected,
+  the scene re-validated, and the process repeated until nothing more can be
+  fixed that way, because one repair can expose the next. What is left needs a
+  decision and is reported as usual. `lumina-cli fix scene.lsf` shows what would
+  change; `--write` changes the file, and only in the misspelled words: key
+  order, layout and everything else stay byte for byte as they were.
+- **Validation errors carry their repair as a JSON Patch** when it is certain:
+  `fix_patch`, an RFC 6902 patch against the scene. An agent can apply it
+  itself, or send it to `POST /patch`. Errors that need judgement have none.
+
 ### Breaking (Rust API)
+- **`ValidationError` gains a `fix_patch` field.** Code constructing one with
+  a struct literal must add `fix_patch: None`.
 - **`Renderer::render_frame` takes resolved objects, and no `states` map**
   (RFC-0002, Stage 2). Pass what `Timeline::resolve_at` returns where you passed
   a scene's objects and `get_state_at`:
@@ -97,6 +112,15 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **The AI integration guide's Python example ran against a module that no
+  longer exists.** It imported `lumina`; the package has been `luminafx` since
+  0.5. It also read the reply's first content block as text, which fails when a
+  model returns a thinking block first. It now uses `luminafx`, reads the text
+  blocks, and checks why the model stopped before parsing.
+- **Two validation messages for audio tracks carried a run of thirty spaces**
+  in the middle of a sentence, left by a lost line continuation.
+- **`UNKNOWN_CHILD_ID` points at the offending child**
+  (`$.objects.g.properties.children[1]`) instead of the whole list.
 - **A `Plot` whose `axes_id` names something other than an `Axes` draws nothing
   on the GPU backend, as on the CPU backend.** The GPU backend read the other
   object's missing ranges as -10 to 10 and drew the curve anyway. Validation
