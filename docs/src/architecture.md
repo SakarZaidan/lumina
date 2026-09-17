@@ -72,13 +72,15 @@ fixture scene on both backends in CI:
 | Text / LaTeX / MathML / Image / SVG / Particles | ✅ | ✅ (shared rasterizer) |
 | Linear & radial gradients (fill and stroke) | ✅ | ✅ (shared geometry) |
 | Rounded rectangles (`rx`/`ry`) | ✅ | ✅ (shared geometry) |
-| `draw_fraction` stroke reveal | ✅ | ✅ (shared dash pattern) |
+| `draw_fraction` reveal | ✅ | ✅ (shared: a dash on lines, an arc-length trim on paths and curves) |
 | Drop shadows / glow | ✅ | ✅ (shared blur pipeline) |
-| Explicit `dash` arrays on Line | ❌ | ❌ (schema field not yet implemented, TD-19) |
+| Explicit `dash` arrays on Line | ✅ | ✅ (shared normaliser) |
 
 Every feature row is exercised by the parity suite; scenes render the same
-on either backend within the suite's tolerances (text carries a slightly
-wider budget until its two layout paths are unified, TD-18).
+on either backend within the suite's tolerances. Text runs at the default
+tolerance since both backends lay out glyphs through one path (TD-18); only the
+combined showcase fixture, where text sits over gradients and curves, keeps a
+slightly wider pixel budget.
 
 ## Key design choices
 

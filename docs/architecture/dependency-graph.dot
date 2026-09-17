@@ -3,40 +3,45 @@ digraph crates {
   rankdir=BT; bgcolor="transparent";
   node [shape=box, style="rounded,filled", fillcolor="#1E3A5F", fontcolor=white,        color="#4A90D9", fontname="Helvetica", fontsize=12];
   edge [color="#4A90D9"];
-  "lumina-core";
-  "lumina-schema";
-  "lumina-renderer";
-  "lumina-text";
-  "lumina-export";
-  "lumina-server";
-  "lumina-wasm";
-  "lumina-bench";
-  "lumina-cli";
-  "lumina-core" -> "lumina-schema";
-  "lumina-renderer" -> "lumina-core";
-  "lumina-renderer" -> "lumina-schema";
-  "lumina-renderer" -> "lumina-text";
-  "lumina-text" -> "lumina-schema";
-  "lumina-export" -> "lumina-core";
-  "lumina-export" -> "lumina-renderer";
-  "lumina-export" -> "lumina-schema";
-  "lumina-server" -> "lumina-core";
-  "lumina-server" -> "lumina-export";
-  "lumina-server" -> "lumina-renderer";
-  "lumina-server" -> "lumina-schema";
-  "lumina-wasm" -> "lumina-core";
-  "lumina-wasm" -> "lumina-renderer";
-  "lumina-wasm" -> "lumina-schema";
-  "lumina-bench" -> "lumina-core";
-  "lumina-bench" -> "lumina-renderer";
-  "lumina-bench" -> "lumina-schema";
-  "lumina-cli" -> "lumina-core";
-  "lumina-cli" -> "lumina-export";
-  "lumina-cli" -> "lumina-renderer";
-  "lumina-cli" -> "lumina-schema";
-  { rank=same; "lumina-schema"; }
-  { rank=same; "lumina-core"; "lumina-text"; }
-  { rank=same; "lumina-renderer"; }
-  { rank=same; "lumina-export"; }
-  { rank=same; "lumina-server"; "lumina-wasm"; "lumina-cli"; "lumina-bench"; }
+  "luminafx-core";
+  "luminafx-schema";
+  "luminafx-renderer";
+  "luminafx-text";
+  "luminafx-export";
+  "luminafx-server";
+  "luminafx-mcp";
+  "luminafx-wasm";
+  "luminafx-bench";
+  "luminafx-cli";
+  "luminafx-core" -> "luminafx-schema";
+  "luminafx-renderer" -> "luminafx-core";
+  "luminafx-renderer" -> "luminafx-schema";
+  "luminafx-renderer" -> "luminafx-text";
+  "luminafx-text" -> "luminafx-schema";
+  "luminafx-export" -> "luminafx-core";
+  "luminafx-export" -> "luminafx-renderer";
+  "luminafx-export" -> "luminafx-schema";
+  "luminafx-server" -> "luminafx-core";
+  "luminafx-server" -> "luminafx-export";
+  "luminafx-server" -> "luminafx-renderer";
+  "luminafx-server" -> "luminafx-schema";
+  "luminafx-mcp" -> "luminafx-core";
+  "luminafx-mcp" -> "luminafx-export";
+  "luminafx-mcp" -> "luminafx-renderer";
+  "luminafx-mcp" -> "luminafx-schema";
+  "luminafx-wasm" -> "luminafx-core";
+  "luminafx-wasm" -> "luminafx-renderer";
+  "luminafx-wasm" -> "luminafx-schema";
+  "luminafx-bench" -> "luminafx-core";
+  "luminafx-bench" -> "luminafx-renderer";
+  "luminafx-bench" -> "luminafx-schema";
+  "luminafx-cli" -> "luminafx-core";
+  "luminafx-cli" -> "luminafx-export";
+  "luminafx-cli" -> "luminafx-renderer";
+  "luminafx-cli" -> "luminafx-schema";
+  { rank=same; "luminafx-schema"; }
+  { rank=same; "luminafx-core"; "luminafx-text"; }
+  { rank=same; "luminafx-renderer"; }
+  { rank=same; "luminafx-export"; }
+  { rank=same; "luminafx-server"; "luminafx-mcp"; "luminafx-wasm"; "luminafx-cli"; "luminafx-bench"; }
 }
