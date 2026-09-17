@@ -1,5 +1,5 @@
 use crate::interpolator::interpolate_value;
-use luminafx_schema::Scene;
+use luminafx_schema::{Object, Scene};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -14,6 +14,13 @@ pub struct Timeline {
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
     /// `object_id` → `property_name` → value (interactive overrides take precedence)
     pub overrides: HashMap<String, HashMap<String, Value>>,
+    /// `object_id` → (type name, the object as authored).
+    ///
+    /// Kept for [`Timeline::resolve_at`]: the type name rebuilds each typed
+    /// object from its interpolated properties, and the authored object is the
+    /// fallback when an animated value will not deserialise. Private, so adding
+    /// it does not grow the struct's constructible surface (TD-27).
+    seeds: HashMap<String, (String, Object)>,
 }
 
 #[derive(Clone, Debug)]
@@ -35,12 +42,17 @@ impl Timeline {
     pub fn from_scene(scene: &Scene) -> Self {
         let mut tracks: HashMap<String, HashMap<String, Vec<Keyframe>>> = HashMap::new();
 
+        let mut seeds = HashMap::with_capacity(scene.objects.len());
+
         // Initialize with initial property values from objects
         for (id, obj) in &scene.objects {
             let initial_state = match serde_json::to_value(obj) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
+            if let Some(ty) = initial_state["type"].as_str() {
+                seeds.insert(id.clone(), (ty.to_string(), obj.clone()));
+            }
             if let Value::Object(props) = &initial_state["properties"] {
                 for (prop_name, prop_value) in props {
                     let track = tracks
@@ -89,7 +101,44 @@ impl Timeline {
             fps: scene.canvas.fps,
             tracks,
             overrides: HashMap::new(),
+            seeds,
         }
+    }
+
+    /// Every object resolved to its typed value at `time`.
+    ///
+    /// RFC-0002 Stage 2, first step. [`Timeline::get_state_at`] hands the
+    /// renderer an untyped property map that it reads back by string at 216
+    /// sites, each with its own fallback default; this hands it the real
+    /// `Object`, so the renderer can read `p.radius` — where a misspelling does
+    /// not compile and the default is the one serde already applied.
+    ///
+    /// # Fallback
+    ///
+    /// An object whose interpolated properties will not deserialise — a
+    /// wrong-typed interactive override on a scene nobody validated, say —
+    /// resolves to **the object as authored**, never to nothing. Dropping it
+    /// would make it vanish from the frame, which is precisely the silent
+    /// failure this work exists to remove.
+    #[must_use]
+    pub fn resolve_at(&self, time: f32) -> HashMap<String, Object> {
+        let state = self.get_state_at(time);
+        let mut resolved = HashMap::with_capacity(self.seeds.len());
+        for (id, (ty, authored)) in &self.seeds {
+            let object = state
+                .get(id)
+                .and_then(|props| {
+                    // `Object` is tagged as {"type": .., "properties": ..}; the
+                    // interpolated map is the `properties` half.
+                    let mut tagged = serde_json::Map::with_capacity(2);
+                    tagged.insert("type".to_string(), Value::String(ty.clone()));
+                    tagged.insert("properties".to_string(), props.clone());
+                    serde_json::from_value::<Object>(Value::Object(tagged)).ok()
+                })
+                .unwrap_or_else(|| authored.clone());
+            resolved.insert(id.clone(), object);
+        }
+        resolved
     }
 
     /// Set an interactive override that takes precedence over keyframes

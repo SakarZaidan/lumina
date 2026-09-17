@@ -463,3 +463,85 @@ mod shadow_default {
         assert_eq!(state["c"]["shadow"]["color"], "#000000");
     }
 }
+
+/// `Timeline::resolve_at` — typed objects at a time (RFC-0002 Stage 2).
+#[cfg(test)]
+mod resolve_at {
+    use crate::Timeline;
+    use luminafx_schema::{Object, Scene};
+    use serde_json::json;
+
+    fn scene() -> Scene {
+        serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": {
+                "c": { "type": "Circle",
+                       "properties": { "cx": 32, "cy": 32, "radius": 10, "fill": "#FF0000" } },
+                "still": { "type": "Rectangle",
+                           "properties": { "x": 0, "y": 0, "width": 4, "height": 4 } }
+            },
+            "timeline": [
+                { "time": 0.0, "object": "c", "state": { "radius": 10 } },
+                { "time": 2.0, "object": "c", "state": { "radius": 20 } }
+            ]
+        }))
+        .expect("scene")
+    }
+
+    #[test]
+    fn an_animated_property_arrives_typed_and_interpolated() {
+        let resolved = Timeline::from_scene(&scene()).resolve_at(1.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("circle did not resolve to a Circle");
+        };
+        assert!(
+            (c.radius - 15.0).abs() < 1e-4,
+            "radius at t=1 is {}",
+            c.radius
+        );
+    }
+
+    #[test]
+    fn every_object_resolves_including_static_ones() {
+        let resolved = Timeline::from_scene(&scene()).resolve_at(1.0);
+        assert_eq!(
+            resolved.len(),
+            2,
+            "an object went missing: {:?}",
+            resolved.keys()
+        );
+        assert!(matches!(resolved.get("still"), Some(Object::Rectangle(_))));
+    }
+
+    #[test]
+    fn defaults_are_the_schemas_not_the_renderers() {
+        // The renderer reads `stroke_width` with `unwrap_or(1.0)`; the schema
+        // says 0.0. Typed state has exactly one answer, and it is the schema's.
+        let resolved = Timeline::from_scene(&scene()).resolve_at(0.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("not a circle");
+        };
+        assert_eq!(c.stroke_width, 0.0);
+    }
+
+    #[test]
+    fn an_unresolvable_override_falls_back_to_the_authored_object() {
+        // A wrong-typed interactive override on a scene nobody validated. The
+        // object must come back as authored, never be dropped: dropping it
+        // would make it vanish from the frame, which is the silent failure
+        // RFC-0002 exists to remove.
+        let mut timeline = Timeline::from_scene(&scene());
+        timeline.override_property("c", "radius", json!("big"));
+        let resolved = timeline.resolve_at(1.0);
+        let Some(Object::Circle(c)) = resolved.get("c") else {
+            panic!("the circle vanished instead of falling back");
+        };
+        assert_eq!(
+            c.radius, 10.0,
+            "fell back to something other than the authored value"
+        );
+    }
+}
