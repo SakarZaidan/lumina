@@ -112,6 +112,12 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **The Python SDK validates like every other entry point, and `render` checks
+  first.** `luminafx.validate` parsed the dict into a scene before validating,
+  so a misspelled property was dropped unseen and the scene reported valid;
+  `luminafx.render` rendered anything that parsed. Both now work from the dict,
+  and `render` raises `ValueError` naming each error instead of rendering. The
+  SDK also gains `luminafx.fix`, and its first tests, which run in CI.
 - **The AI integration guide's Python example ran against a module that no
   longer exists.** It imported `lumina`; the package has been `luminafx` since
   0.5. It also read the reply's first content block as text, which fails when a
