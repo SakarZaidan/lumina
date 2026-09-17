@@ -269,8 +269,17 @@ pub struct GradientSpec {
 /// paid when present.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Shadow {
-    /// Stroke/text color as a hex string.
-    #[serde(default = "default_stroke")]
+    /// Shadow color as a hex string. Defaults to black.
+    ///
+    /// Defaulted to **white** until v0.6. The field — doc comment and all — had
+    /// been copied from a stroke color and kept `default_stroke`, so a shadow
+    /// written without a color rendered as a white glow. The renderer's own
+    /// fallback was black all along, but it never ran: the schema's default is
+    /// applied on parse and is always present by the time the renderer looks.
+    /// Two defaults for one field, disagreeing, with the wrong one winning —
+    /// the problem RFC-0002 Stage 2 removes. No shipped scene was affected:
+    /// all 138 shadows in the repository set their color explicitly.
+    #[serde(default = "default_shadow_color")]
     pub color: String,
     /// Blur radius in pixels (0 = hard shadow).
     #[serde(default)]
@@ -952,6 +961,9 @@ fn default_fill() -> String {
 }
 fn default_stroke() -> String {
     "#FFFFFF".to_string()
+}
+fn default_shadow_color() -> String {
+    "#000000".to_string()
 }
 fn default_stroke_width() -> f32 {
     1.0
