@@ -1224,3 +1224,104 @@ mod assignments {
         the_one(&errors, "UNKNOWN_PROPERTY");
     }
 }
+
+/// Paints that cannot be painted: an unrecognised colour, or a gradient the
+/// renderer would drop. Both used to come out opaque white with nothing said.
+#[cfg(test)]
+mod paints {
+    use crate::validation::{validate_scene_json, ValidationResponse};
+    use serde_json::{json, Value};
+
+    fn scene(fill: Value, timeline: Value) -> ValidationResponse {
+        let mut document = json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 1.0,
+                        "background": "#000000" },
+            "objects": { "c": { "type": "Circle",
+                                "properties": { "cx": 1, "cy": 1, "radius": 5 } } }
+        });
+        document["objects"]["c"]["properties"]["fill"] = fill;
+        document["timeline"] = timeline;
+        validate_scene_json(&document)
+    }
+
+    fn gradient(kind: &str, stops: Value) -> Value {
+        let mut gradient = json!({ "type": kind });
+        gradient["stops"] = stops;
+        gradient
+    }
+
+    fn codes(response: &ValidationResponse) -> Vec<&str> {
+        response.errors.iter().map(|e| e.code.as_str()).collect()
+    }
+
+    #[test]
+    fn a_gradient_needs_two_stops() {
+        let one = scene(gradient("linear", json!([[0.0, "#FF0000"]])), json!([]));
+        assert_eq!(codes(&one), ["GRADIENT_TOO_FEW_STOPS"]);
+        let two = scene(
+            gradient("linear", json!([[0.0, "#FF0000"], [1.0, "#0000FF"]])),
+            json!([]),
+        );
+        assert!(two.valid, "{:?}", two.errors);
+    }
+
+    #[test]
+    fn a_stop_whose_colour_is_not_a_colour_is_named_precisely() {
+        let response = scene(
+            gradient("radial", json!([[0.0, "#FF0000"], [1.0, "nope"]])),
+            json!([]),
+        );
+        let error = response
+            .errors
+            .iter()
+            .find(|e| e.code == "INVALID_COLOR")
+            .expect("reported");
+        assert_eq!(error.path, "$.objects.c.properties.fill.stops[1][1]");
+    }
+
+    #[test]
+    fn an_unknown_gradient_type_is_a_warning_because_it_still_draws() {
+        let response = scene(
+            gradient("conic", json!([[0.0, "#FF0000"], [1.0, "#0000FF"]])),
+            json!([]),
+        );
+        assert!(response.valid, "{:?}", response.errors);
+        assert_eq!(response.warnings[0].code, "UNKNOWN_GRADIENT_TYPE");
+    }
+
+    #[test]
+    fn a_colour_a_keyframe_sets_is_checked_too() {
+        // Authored colours were checked; animated ones were not, so a typo in
+        // a keyframe turned the shape white halfway through.
+        let response = scene(
+            json!("#FF0000"),
+            json!([{ "time": 1.0, "object": "c", "state": { "fill": "#GGGGGG" } }]),
+        );
+        let error = response
+            .errors
+            .iter()
+            .find(|e| e.code == "INVALID_COLOR")
+            .expect("reported");
+        assert_eq!(error.path, "$.timeline[0].state.fill");
+    }
+
+    #[test]
+    fn none_is_still_not_a_colour_wherever_it_appears() {
+        let response = scene(
+            json!("#FF0000"),
+            json!([{ "time": 1.0, "object": "c", "state": { "fill": "none" } }]),
+        );
+        let error = response
+            .errors
+            .iter()
+            .find(|e| e.code == "INVALID_COLOR")
+            .expect("reported");
+        assert!(
+            error.fix_suggestion.contains("alpha"),
+            "{}",
+            error.fix_suggestion
+        );
+    }
+}

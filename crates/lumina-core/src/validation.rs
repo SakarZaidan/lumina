@@ -547,6 +547,7 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 (!state.contains_key(to))
                     .then(|| rename_patch(&["timeline", &i.to_string(), "state"], name, to))
             };
+            let before = errors.len();
             assignments.check(
                 &entry.object,
                 name,
@@ -555,6 +556,11 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 rename,
                 &mut errors,
             );
+            // Only once the name and the kind are right: a paint complaint
+            // about a value already reported as the wrong thing is noise.
+            if errors.len() == before && is_paint(name) {
+                check_paint(value, &path, &mut errors, &mut warnings);
+            }
         }
     }
     for (i, event) in scene.events.iter().enumerate() {
@@ -599,17 +605,21 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
                 to,
             ))
         };
+        let value_path = format!("$.events[{i}].action.value");
+        let before = errors.len();
         assignments.check(
             target,
             property,
             value,
-            (
-                &format!("$.events[{i}].action.property"),
-                &format!("$.events[{i}].action.value"),
-            ),
+            (&format!("$.events[{i}].action.property"), &value_path),
             replace,
             &mut errors,
         );
+        if errors.len() == before && is_paint(property) {
+            if let Some(value) = value {
+                check_paint(value, &value_path, &mut errors, &mut warnings);
+            }
+        }
     }
 
     // Check 2b: Image/SVG objects must reference a declared asset.
@@ -968,25 +978,23 @@ pub fn validate_scene_data(scene: &Scene) -> ValidationResponse {
         }
     }
 
-    // Check 7e: Colours must parse. An unrecognised colour string silently
-    // becomes opaque white in the renderer, so a typo — or an SVG habit like
-    // `"none"` — renders as a white shape with nothing to say why.
+    // Check 7e: Paints must be paintable. An unrecognised colour string
+    // silently becomes opaque white in the renderer, so a typo — or an SVG
+    // habit like `"none"` — renders as a white shape with nothing to say why.
+    // A gradient does the same when it has fewer than two stops.
     check_colour(&scene.canvas.background, "$.canvas.background", &mut errors);
     for (id, obj) in &scene.objects {
         if let Ok(serde_json::Value::Object(props)) =
             serde_json::to_value(obj).map(|v| v["properties"].clone())
         {
             for (name, value) in &props {
-                if matches!(name.as_str(), "fill" | "stroke" | "color") {
-                    // Gradients are objects, not strings; only literals are
-                    // checked here.
-                    if let Some(text) = value.as_str() {
-                        check_colour(
-                            text,
-                            &format!("$.objects.{id}.properties.{name}"),
-                            &mut errors,
-                        );
-                    }
+                if is_paint(name) {
+                    check_paint(
+                        value,
+                        &format!("$.objects.{id}.properties.{name}"),
+                        &mut errors,
+                        &mut warnings,
+                    );
                 }
             }
         }
@@ -1485,6 +1493,59 @@ fn check_representable(value: &Value, path: &str, errors: &mut Vec<ValidationErr
 /// `parse_rgba8` falls back to opaque white for anything it does not
 /// recognise, so `"#GGG"`, `"red"`, or SVG's `"none"` all render as a white
 /// shape and nothing reports it.
+/// Whether a property of this name carries a colour or a gradient.
+fn is_paint(name: &str) -> bool {
+    matches!(name, "fill" | "stroke" | "color" | "background")
+}
+
+/// Check a paint: a colour string, or a gradient's stops.
+///
+/// A gradient with fewer than two stops is not a gradient — both backends drop
+/// it and fall back to opaque white, which is the same silent failure an
+/// unparseable colour used to be.
+fn check_paint(
+    value: &Value,
+    path: &str,
+    errors: &mut Vec<ValidationError>,
+    warnings: &mut Vec<ValidationWarning>,
+) {
+    match value {
+        Value::String(text) => check_colour(text, path, errors),
+        Value::Object(gradient) => {
+            let stops = gradient.get("stops").and_then(Value::as_array);
+            if stops.is_none_or(|stops| stops.len() < 2) {
+                errors.push(ValidationError {
+                    code: "GRADIENT_TOO_FEW_STOPS".to_string(),
+                    path: format!("{path}.stops"),
+                    message: format!(
+                        "A gradient needs at least two stops; this one has {}. The renderer \
+                         would draw the shape opaque white instead.",
+                        stops.map_or(0, Vec::len)
+                    ),
+                    fix_suggestion: "Give it a start and an end, e.g. \
+                                     [[0, \"#FF0000\"], [1, \"#0000FF\"]]."
+                        .to_string(),
+                    fix_patch: None,
+                });
+            }
+            for (i, stop) in stops.into_iter().flatten().enumerate() {
+                if let Some(colour) = stop.get(1).and_then(Value::as_str) {
+                    check_colour(colour, &format!("{path}.stops[{i}][1]"), errors);
+                }
+            }
+            match gradient.get("type").and_then(Value::as_str) {
+                None | Some("linear" | "radial") => {}
+                Some(other) => warnings.push(ValidationWarning {
+                    code: "UNKNOWN_GRADIENT_TYPE".to_string(),
+                    path: format!("{path}.type"),
+                    message: format!("\"{other}\" is not a gradient type; it draws as linear."),
+                }),
+            }
+        }
+        _ => {}
+    }
+}
+
 fn check_colour(value: &str, path: &str, errors: &mut Vec<ValidationError>) {
     let hex = value.strip_prefix('#').unwrap_or("");
     let ok = matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
