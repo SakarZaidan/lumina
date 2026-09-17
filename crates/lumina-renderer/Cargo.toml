@@ -22,7 +22,7 @@ resvg = { workspace = true }
 image = { workspace = true }
 thiserror = { workspace = true }
 evalexpr = { workspace = true }
-pollster = "0.3"
+pollster = "1.0"
 
 [dev-dependencies]
 # The renderer reads typed objects; JSON appears only in tests, which build
