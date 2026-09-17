@@ -83,7 +83,11 @@ wider budget until its two layout paths are unified, TD-18).
 ## Key design choices
 
 - **Declarative first** — scenes are data; nothing for an LLM to mis-sequence.
-- **State, not types, drives rendering** — the timeline serializes each object's
-  properties to JSON and rebuilds a per-frame `state` map; new `#[serde(default)]`
-  fields flow to the renderer with no core changes.
+- **JSON to animate, types to render** — the timeline interpolates properties as
+  JSON, so every field of every object animates with no per-property code, then
+  resolves each object back to its typed props (`Timeline::resolve_at`) before a
+  renderer sees it. A new `#[serde(default)]` field animates immediately. (The
+  draw code is moving from string lookups onto those typed fields one object
+  type at a time — RFC-0002 Stage 2 — which deletes the second copy of every
+  default that the lookups carry.)
 - **Deterministic** — identical inputs yield identical pixels (including particles).
