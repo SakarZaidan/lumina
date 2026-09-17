@@ -97,6 +97,11 @@ programme to reach reference quality in [plan/](plan/).
   deliberately, before 1.0.
 
 ### Fixed
+- **A gradient without a `type` is linear, as documented.** The schema called
+  `"linear"` the default, but the field was required, so a gradient that left
+  it out failed to parse. `radius` was also documented as pixels; it has always
+  been a fraction of half the shape's larger side, which is how every scene in
+  the repository writes it, and the documentation now says so.
 - **Frame 0 shows a keyframe at `time: 0`, not the authored value it replaces.**
   When both applied, the authored value won on frame 0 alone and the timeline
   took over from frame 1, so a fade-in from `opacity: 0` on an object authored
