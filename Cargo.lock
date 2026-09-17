@@ -1746,7 +1746,6 @@ dependencies = [
  "luminafx-export",
  "luminafx-renderer",
  "luminafx-schema",
- "schemars",
  "serde",
  "serde_json",
 ]

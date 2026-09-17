@@ -29,7 +29,6 @@ axum = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
 json-patch = "1"
 tower-http = { version = "0.5", features = ["cors"] }
 log = { workspace = true }
@@ -42,6 +41,9 @@ tempfile = "3.10"
 # task. A test that needs a free port is a test that fails on a busy machine.
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# The schema itself comes from `luminafx-core`; tests compare against the
+# types' own output.
+schemars = { workspace = true }
 
 [lints]
 workspace = true

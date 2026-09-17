@@ -24,7 +24,6 @@ luminafx-schema = { path = "../lumina-schema", version = "0.6.0" }
 luminafx-export = { path = "../lumina-export", version = "0.6.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 

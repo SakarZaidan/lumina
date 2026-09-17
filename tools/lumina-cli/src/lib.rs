@@ -201,6 +201,24 @@ pub fn schema_json() -> String {
         .unwrap_or_else(|e| format!(r#"{{"error":"{e}"}}"#))
 }
 
+/// The JSON Schema, restricted to `objects` and without descriptions when
+/// `compact` (`AAA-AI-05`).
+///
+/// # Errors
+///
+/// Returns an error naming a requested object type that does not exist.
+pub fn scoped_schema_json(objects: Option<&str>, compact: bool) -> anyhow::Result<String> {
+    let names: Option<Vec<&str>> = objects.map(|list| {
+        list.split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect()
+    });
+    let schema = luminafx_core::scene_schema::scene_schema(names.as_deref(), compact)
+        .map_err(|unknown| anyhow::anyhow!("{unknown}"))?;
+    Ok(serde_json::to_string_pretty(&schema)?)
+}
+
 /// The object-type registry: every type with its required and optional
 /// properties.
 #[must_use]

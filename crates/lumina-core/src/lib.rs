@@ -43,6 +43,8 @@ pub mod property_schema;
 /// Scene graph: object map with root/child resolution.
 pub mod scene;
 pub mod scene_patch;
+/// The scene format's JSON Schema, whole or scoped to a few object types.
+pub mod scene_schema;
 /// "Did you mean …?" for unknown identifiers, shared by every reference check.
 pub mod suggest;
 /// Keyframe tracks and scene-state evaluation at any time.
