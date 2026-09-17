@@ -267,7 +267,10 @@ impl SkiaRenderer {
             | Object::BezierCurve(_)
             | Object::Text(_)
             | Object::LaTeX(_)
-            | Object::MathML(_) => &Value::Null,
+            | Object::MathML(_)
+            | Object::Image(_)
+            | Object::SVG(_)
+            | Object::Particles(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -736,63 +739,58 @@ impl SkiaRenderer {
                     pixmap.stroke_path(&path, &paint, &stroke, transform, None);
                 }
             }
-            Object::Image(_) => {
-                let asset_id = state["asset_id"].as_str().unwrap_or("");
-                if asset_id.is_empty() {
+            Object::Image(props) => {
+                if props.asset_id.is_empty() {
                     return Ok(());
                 }
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let rotation = state["rotation"].as_f64().unwrap_or(0.0) as f32;
-                let want_w = state["width"].as_f64().map(|v| v as f32);
-                let want_h = state["height"].as_f64().map(|v| v as f32);
-                if let Some(src) = self.select_pixmap(asset_id) {
+                if let Some(src) = self.select_pixmap(&props.asset_id) {
                     composite_image(
-                        pixmap, src, x, y, want_w, want_h, rotation, opacity, transform,
+                        pixmap,
+                        src,
+                        props.x,
+                        props.y,
+                        props.width,
+                        props.height,
+                        props.rotation,
+                        props.opacity,
+                        transform,
                     );
                 }
             }
-            Object::SVG(_) => {
-                let asset_id = state["asset_id"].as_str().unwrap_or("");
-                if asset_id.is_empty() {
+            Object::SVG(props) => {
+                if props.asset_id.is_empty() {
                     return Ok(());
                 }
-                let x = state["x"].as_f64().unwrap_or(0.0) as f32;
-                let y = state["y"].as_f64().unwrap_or(0.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let rotation = state["rotation"].as_f64().unwrap_or(0.0) as f32;
-                let want_w = state["width"].as_f64().map(|v| v as f32);
-                let want_h = state["height"].as_f64().map(|v| v as f32);
                 // SVG is rasterized at the requested size, so it is composited 1:1.
-                if let Some(src) = self.rasterize_svg(asset_id, want_w, want_h) {
-                    composite_image(pixmap, &src, x, y, None, None, rotation, opacity, transform);
+                if let Some(src) = self.rasterize_svg(&props.asset_id, props.width, props.height) {
+                    composite_image(
+                        pixmap,
+                        &src,
+                        props.x,
+                        props.y,
+                        None,
+                        None,
+                        props.rotation,
+                        props.opacity,
+                        transform,
+                    );
                 }
             }
-            Object::Particles(_) => {
-                let count = state["count"].as_u64().unwrap_or(0) as u32;
-                if count == 0 {
+            Object::Particles(props) => {
+                if props.count == 0 {
                     return Ok(());
                 }
-                let ex = state["emitter_x"].as_f64().unwrap_or(0.0) as f32;
-                let ey = state["emitter_y"].as_f64().unwrap_or(0.0) as f32;
-                let lifetime = state["lifetime"].as_f64().unwrap_or(2.0) as f32;
-                let speed = state["speed"].as_f64().unwrap_or(120.0) as f32;
-                let spread = state["spread"].as_f64().unwrap_or(360.0) as f32;
-                let size = state["size"].as_f64().unwrap_or(3.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_hex = state["color"].as_str().unwrap_or("#FFFFFF");
                 draw_particles(
                     pixmap,
-                    count,
-                    ex,
-                    ey,
-                    lifetime,
-                    speed,
-                    spread,
-                    size,
-                    color_hex,
-                    opacity,
+                    props.count,
+                    props.emitter_x,
+                    props.emitter_y,
+                    props.lifetime,
+                    props.speed,
+                    props.spread,
+                    props.size,
+                    &props.color,
+                    props.opacity,
                     self.current_time,
                     transform,
                 );
