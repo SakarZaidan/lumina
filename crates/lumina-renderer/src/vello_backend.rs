@@ -290,7 +290,10 @@ impl VelloRenderer {
             | Object::BezierCurve(_)
             | Object::Text(_)
             | Object::LaTeX(_)
-            | Object::MathML(_) => &Value::Null,
+            | Object::MathML(_)
+            | Object::Image(_)
+            | Object::SVG(_)
+            | Object::Particles(_) => &Value::Null,
             _ => {
                 untyped = crate::common::untyped::state_of(obj);
                 &untyped
@@ -826,16 +829,22 @@ impl VelloRenderer {
                 }
             }
             Object::Image(_) | Object::SVG(_) => {
-                let asset_id = state["asset_id"].as_str().unwrap_or("");
+                let Some(AssetPlacement {
+                    asset_id,
+                    x,
+                    y,
+                    width: want_w,
+                    height: want_h,
+                    rotation,
+                    opacity,
+                }) = asset_placement(obj)
+                else {
+                    return Ok(());
+                };
                 if asset_id.is_empty() {
                     return Ok(());
                 }
-                let x = state["x"].as_f64().unwrap_or(0.0);
-                let y = state["y"].as_f64().unwrap_or(0.0);
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let rotation = state["rotation"].as_f64().unwrap_or(0.0) as f32;
-                let want_w = state["width"].as_f64().map(|v| v as f32);
-                let want_h = state["height"].as_f64().map(|v| v as f32);
+                let (x, y) = (f64::from(x), f64::from(y));
                 // SVGs rasterize directly to the requested size (1:1 composite);
                 // raster images scale from their natural size.
                 let is_svg = matches!(self.images.get(asset_id), Some(VelloAsset::Svg(_)));
@@ -877,29 +886,20 @@ impl VelloRenderer {
                     }
                 }
             }
-            Object::Particles(_) => {
-                let count = state["count"].as_u64().unwrap_or(0) as u32;
-                if count == 0 {
+            Object::Particles(props) => {
+                if props.count == 0 {
                     return Ok(());
                 }
-                let ex = state["emitter_x"].as_f64().unwrap_or(0.0) as f32;
-                let ey = state["emitter_y"].as_f64().unwrap_or(0.0) as f32;
-                let lifetime = state["lifetime"].as_f64().unwrap_or(2.0) as f32;
-                let speed = state["speed"].as_f64().unwrap_or(120.0) as f32;
-                let spread = state["spread"].as_f64().unwrap_or(360.0) as f32;
-                let size = state["size"].as_f64().unwrap_or(3.0) as f32;
-                let opacity = state["opacity"].as_f64().unwrap_or(1.0) as f32;
-                let color_hex = state["color"].as_str().unwrap_or("#FFFFFF");
-                let base = parse_vello_color(color_hex, 1.0);
+                let base = parse_vello_color(&props.color, 1.0);
                 for dot in raster::simulate_particles(
-                    count,
-                    ex,
-                    ey,
-                    lifetime,
-                    speed,
-                    spread,
-                    size,
-                    opacity,
+                    props.count,
+                    props.emitter_x,
+                    props.emitter_y,
+                    props.lifetime,
+                    props.speed,
+                    props.spread,
+                    props.size,
+                    props.opacity,
                     self.current_time,
                 ) {
                     let c = Color::rgba8(base.r, base.g, base.b, (dot.alpha * 255.0) as u8);
@@ -1195,4 +1195,37 @@ fn looks_like_svg(data: &[u8]) -> bool {
 
 fn parse_vello_color(hex: &str, opacity: f32) -> Color {
     crate::common::color::to_peniko(crate::common::color::parse_rgba8(hex, opacity))
+}
+
+/// Where an `Image` or `SVG` object places its asset. The two props types
+/// have the same fields, and this backend draws both through one path.
+struct AssetPlacement<'a> {
+    asset_id: &'a str,
+    x: f32,
+    y: f32,
+    width: Option<f32>,
+    height: Option<f32>,
+    rotation: f32,
+    opacity: f32,
+}
+
+fn asset_placement(object: &Object) -> Option<AssetPlacement<'_>> {
+    macro_rules! placement {
+        ($props:expr) => {
+            AssetPlacement {
+                asset_id: &$props.asset_id,
+                x: $props.x,
+                y: $props.y,
+                width: $props.width,
+                height: $props.height,
+                rotation: $props.rotation,
+                opacity: $props.opacity,
+            }
+        };
+    }
+    match object {
+        Object::Image(props) => Some(placement!(props)),
+        Object::SVG(props) => Some(placement!(props)),
+        _ => None,
+    }
 }
