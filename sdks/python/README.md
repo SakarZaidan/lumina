@@ -9,7 +9,7 @@ sequence — all in-process, no subprocess shell-out.
 ```bash
 pip install maturin
 cd sdks/python
-maturin develop --release      # builds the `lumina` extension into your venv
+maturin develop --release      # builds the `luminafx` extension into your venv
 ```
 
 (`ffmpeg` must be on `PATH` for MP4 export.)
@@ -33,6 +33,10 @@ scene = {
 }
 
 report = luminafx.validate(scene)      # {"valid": True, "errors": [], "warnings": [...]}
+if not report["valid"]:
+    # Repair misspelled names with one near match; what is left needs a decision.
+    fixed = luminafx.fix(scene)        # {"scene": ..., "applied": [...], "remaining": {...}}
+    scene, report = fixed["scene"], fixed["remaining"]
 assert report["valid"], report["errors"]
 
 luminafx.render(scene, "hello.mp4", format="mp4")   # or format="png" → frame dir
@@ -46,6 +50,14 @@ LLM → validate → render round-trip.
 
 | Function | Description |
 |---|---|
-| `luminafx.validate(scene: dict) -> dict` | Semantic validation; returns `{valid, errors, warnings}` with `fix_suggestion` strings. |
-| `luminafx.render(scene: dict, output_path: str, format="mp4")` | Render to MP4 or a PNG sequence directory. |
+| `luminafx.validate(scene: dict) -> dict` | Validation; returns `{valid, errors, warnings}`. Each error has a `fix_suggestion`, and a `fix_patch` (RFC 6902) when the repair is certain. |
+| `luminafx.fix(scene: dict) -> dict` | Applies every certain repair and re-validates until none remain; returns `{scene, applied, remaining}`. The input dict is not modified. |
+| `luminafx.render(scene: dict, output_path: str, format="mp4")` | Render to MP4 or a PNG sequence directory. Raises `ValueError` without rendering if the scene does not validate. |
 | `luminafx.schema() -> dict` | The LSF JSON Schema, for IDE/agent autocompletion and pre-validation. |
+
+## Tests
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install pytest . && pytest tests
+```

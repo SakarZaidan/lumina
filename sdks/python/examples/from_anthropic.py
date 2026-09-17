@@ -7,7 +7,7 @@ errors), and renders deterministically.
 
 Prerequisites:
     pip install anthropic
-    maturin develop            # from sdks/python/, builds the `lumina` module
+    maturin develop            # from sdks/python/, builds the `luminafx` module
     export ANTHROPIC_API_KEY=...
 """
 
@@ -34,13 +34,21 @@ Return ONLY valid JSON, no markdown fences."""
 
 def generate_scene(prompt: str) -> dict:
     client = anthropic.Anthropic()
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
+    msg = client.beta.messages.create(
+        model="claude-opus-5",
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
+        # A declined request is re-run server-side on the recommended fallback
+        # model instead of coming back as a refusal.
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
         messages=[{"role": "user", "content": prompt}],
     )
-    return json.loads(msg.content[0].text)
+    if msg.stop_reason in ("refusal", "max_tokens"):
+        raise RuntimeError(f"no scene: stop_reason={msg.stop_reason}")
+    # The reply can open with a thinking block, so read the text blocks rather
+    # than assuming the first block is text.
+    return json.loads("".join(b.text for b in msg.content if b.type == "text"))
 
 
 def main() -> None:
@@ -72,6 +80,13 @@ def main() -> None:
         }
 
     report = luminafx.validate(scene)
+    if not report["valid"]:
+        # Misspelled names with a single near match are repaired without asking
+        # the model again; only what is left needs another round trip.
+        fixed = luminafx.fix(scene)
+        for applied in fixed["applied"]:
+            print(f"  fixed [{applied['code']}] {applied['path']}: {applied['fix_suggestion']}")
+        scene, report = fixed["scene"], fixed["remaining"]
     if not report["valid"]:
         print("Scene invalid:")
         for err in report["errors"]:
