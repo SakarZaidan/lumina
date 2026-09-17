@@ -100,6 +100,61 @@ fn bench_timeline_evaluation(c: &mut Criterion) {
     group.finish();
 }
 
+/// The typed path beside the untyped one, at the same sizes.
+///
+/// RFC-0002 Stage 2 replaces `get_state_at`'s string-keyed JSON with typed
+/// objects, and promised that would not cost performance. `resolve_at` does
+/// everything `get_state_at` does and then deserialises each object, so this
+/// group measures the price of that step directly — before 216 renderer read
+/// sites are rewritten to depend on it. Compare `resolve_eval/N` with
+/// `timeline_eval/N` from the same run; numbers from different machines say
+/// nothing.
+fn bench_typed_resolution(c: &mut Criterion) {
+    let mut group = c.benchmark_group("resolve_eval");
+    for n in [100usize, 500, 1000, 2000] {
+        let scene = make_scene(n);
+        let timeline = Timeline::from_scene(&scene);
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
+            b.iter(|| {
+                let resolved = timeline.resolve_at(black_box(1.0));
+                black_box(resolved);
+            })
+        });
+    }
+    group.finish();
+}
+
+/// The whole per-frame cost a user pays: evaluate the timeline, then render.
+///
+/// `timeline_eval` and `skia_render` each measure half, and `skia_render` is
+/// handed states computed once outside the loop. Neither can say whether
+/// RFC-0002 Stage 2 is a net win, because Stage 2 moves cost *between* the
+/// halves: typed resolution adds deserialisation to the timeline side, and the
+/// renderer migration removes 216 string-keyed lookups from the render side.
+///
+/// Added before that migration, on today's untyped path, so it has a baseline
+/// on `main`. When the renderer switches to typed state, this group keeps its
+/// name and the CI gate compares like with like.
+fn bench_frame_total(c: &mut Criterion) {
+    let mut group = c.benchmark_group("frame_total");
+    for n in [10usize, 100, 500] {
+        let scene = make_scene(n);
+        let scene_graph = SceneGraph::from_scene(&scene);
+        let timeline = Timeline::from_scene(&scene);
+        let mut renderer = SkiaRenderer::new();
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
+            b.iter(|| {
+                let states = timeline.get_state_at(black_box(1.0));
+                let pixels = renderer
+                    .render_frame(&scene_graph.objects, &states, 1920, 1080, "#0F0F1A", None)
+                    .unwrap();
+                black_box(pixels);
+            })
+        });
+    }
+    group.finish();
+}
+
 fn bench_skia_frame_render(c: &mut Criterion) {
     let mut group = c.benchmark_group("skia_render");
     for n in [10usize, 100, 500] {
@@ -441,6 +496,8 @@ fn bench_easing_dispatch(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_timeline_evaluation,
+    bench_typed_resolution,
+    bench_frame_total,
     bench_skia_frame_render,
     bench_easing_dispatch,
     bench_text_render,

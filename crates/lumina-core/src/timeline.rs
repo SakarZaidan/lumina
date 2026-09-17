@@ -1,7 +1,9 @@
 use crate::interpolator::interpolate_value;
-use luminafx_schema::Scene;
+use luminafx_schema::{Object, Scene};
+use serde::de::value::MapDeserializer;
+use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Per-object, per-property keyframe tracks; evaluation is deterministic
 /// and scrub-safe (any time can be queried in any order).
@@ -14,6 +16,23 @@ pub struct Timeline {
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
     /// `object_id` → `property_name` → value (interactive overrides take precedence)
     pub overrides: HashMap<String, HashMap<String, Value>>,
+    /// `object_id` → the object as authored.
+    ///
+    /// Kept for [`Timeline::resolve_at`]: its variant says which props type to
+    /// rebuild from the interpolated properties, it is the whole answer for an
+    /// object nothing animates, and it is the fallback when an animated value
+    /// will not deserialise. Private, like `animated`, so neither grows the
+    /// struct's constructible surface (TD-27).
+    seeds: HashMap<String, Object>,
+    /// Ids of the objects at least one timeline entry animates.
+    animated: HashSet<String>,
+    /// `object_id` → its animated properties whose type is an integer.
+    ///
+    /// Interpolation produces a float even between two integers, and a float
+    /// will not deserialise into `z_index: i32` — so without rounding, one
+    /// animated `z_index` would fail its whole object in
+    /// [`Timeline::resolve_at`] and freeze every other animation on it.
+    integers: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -35,12 +54,17 @@ impl Timeline {
     pub fn from_scene(scene: &Scene) -> Self {
         let mut tracks: HashMap<String, HashMap<String, Vec<Keyframe>>> = HashMap::new();
 
+        let mut seeds = HashMap::with_capacity(scene.objects.len());
+        let mut animated = HashSet::new();
+        let mut integers: HashMap<String, HashSet<String>> = HashMap::new();
+
         // Initialize with initial property values from objects
         for (id, obj) in &scene.objects {
             let initial_state = match serde_json::to_value(obj) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
+            seeds.insert(id.clone(), obj.clone());
             if let Value::Object(props) = &initial_state["properties"] {
                 for (prop_name, prop_value) in props {
                     let track = tracks
@@ -61,7 +85,19 @@ impl Timeline {
         // Add keyframes from timeline entries
         for entry in &scene.timeline {
             if let Value::Object(state) = &entry.state {
+                if !state.is_empty() {
+                    animated.insert(entry.object.clone());
+                }
                 for (prop_name, prop_value) in state {
+                    if seeds
+                        .get(&entry.object)
+                        .is_some_and(|object| is_integer_property(object, prop_name))
+                    {
+                        integers
+                            .entry(entry.object.clone())
+                            .or_default()
+                            .insert(prop_name.clone());
+                    }
                     let track = tracks
                         .entry(entry.object.clone())
                         .or_default()
@@ -89,12 +125,119 @@ impl Timeline {
             fps: scene.canvas.fps,
             tracks,
             overrides: HashMap::new(),
+            seeds,
+            animated,
+            integers,
         }
+    }
+
+    /// Every object resolved to its typed value at `time`.
+    ///
+    /// RFC-0002 Stage 2, first step. [`Timeline::get_state_at`] hands the
+    /// renderer an untyped property map that it reads back by string at 216
+    /// sites, each with its own fallback default; this hands it the real
+    /// `Object`, so the renderer can read `p.radius` — where a misspelling does
+    /// not compile and the default is the one serde already applied.
+    ///
+    /// # Fallback
+    ///
+    /// An object whose interpolated properties will not deserialise — a
+    /// wrong-typed interactive override on a scene nobody validated, say —
+    /// resolves to **the object as authored**, never to nothing. Dropping it
+    /// would make it vanish from the frame, which is precisely the silent
+    /// failure this work exists to remove.
+    #[must_use]
+    pub fn resolve_at(&self, time: f32) -> HashMap<String, Object> {
+        let mut resolved = HashMap::with_capacity(self.seeds.len());
+        for (id, authored) in &self.seeds {
+            let overrides = self.overrides.get(id);
+            // Nothing animates or overrides it, so at every time it is exactly
+            // what was authored. Evaluating its tracks would only rebuild it.
+            let object = if overrides.is_none() && !self.animated.contains(id) {
+                authored.clone()
+            } else {
+                self.rebuild(id, authored, overrides, time)
+                    .unwrap_or_else(|| authored.clone())
+            };
+            resolved.insert(id.clone(), object);
+        }
+        resolved
+    }
+
+    /// One object's properties at `time`, deserialised into its props type.
+    ///
+    /// The values go to serde one at a time, straight from the tracks. Putting
+    /// them in a `serde_json::Map` first and calling `from_value` allocates a
+    /// key and a tree node for every property, and deserialising frees them
+    /// again at once. That version measured 1.24–1.30× `get_state_at` on CI;
+    /// the one before it, which also deep-cloned the map, measured 2.1–2.4×.
+    fn rebuild(
+        &self,
+        id: &str,
+        authored: &Object,
+        overrides: Option<&HashMap<String, Value>>,
+        time: f32,
+    ) -> Option<Object> {
+        // An override replaces its property's track instead of joining it:
+        // serde refuses a struct that names the same field twice, which would
+        // throw away every other animated value on the object.
+        let integers = self.integers.get(id);
+        let keyframed = self
+            .tracks
+            .get(id)
+            .into_iter()
+            .flatten()
+            .filter(move |(name, _)| overrides.is_none_or(|o| !o.contains_key(*name)))
+            .map(move |(name, track)| (name.as_str(), self.value_at(integers, name, track, time)));
+        let overridden = overrides
+            .into_iter()
+            .flatten()
+            .map(|(name, value)| (name.as_str(), value.clone()));
+        let props = MapDeserializer::<_, serde_json::Error>::new(keyframed.chain(overridden));
+
+        // Matching on the authored variant, rather than on a type name, makes
+        // this exhaustive: a new object type does not compile until it is
+        // listed here, where a string match would silently never animate it.
+        macro_rules! rebuild {
+            ($($variant:ident),* $(,)?) => {
+                match authored {
+                    $(Object::$variant(_) => {
+                        Deserialize::deserialize(props).ok().map(Object::$variant)
+                    })*
+                }
+            };
+        }
+        rebuild!(
+            Circle,
+            Rectangle,
+            Polygon,
+            Path,
+            Line,
+            Arrow,
+            Text,
+            LaTeX,
+            Group,
+            Image,
+            SVG,
+            NumberLine,
+            Axes,
+            Plot,
+            BezierCurve,
+            MathML,
+            Particles,
+        )
     }
 
     /// Set an interactive override that takes precedence over keyframes
     /// (used by `tween_to`/`set_property` event actions).
+    ///
+    /// A fractional value for an integer property is rounded, as it would be
+    /// if the timeline had animated it there.
     pub fn override_property(&mut self, object_id: &str, property: &str, value: Value) {
+        let value = match self.seeds.get(object_id) {
+            Some(object) if is_integer_property(object, property) => round_to_integer(value),
+            _ => value,
+        };
         self.overrides
             .entry(object_id.to_string())
             .or_default()
@@ -111,9 +254,19 @@ impl Timeline {
             HashMap::with_capacity(self.tracks.len() + self.overrides.len());
 
         for (obj_id, object_tracks) in &self.tracks {
+            // Almost no scene animates an integer, so skip the lookup entirely
+            // rather than hash every object id on every frame to find that out.
+            let integers = if self.integers.is_empty() {
+                None
+            } else {
+                self.integers.get(obj_id)
+            };
             let mut props = serde_json::Map::with_capacity(object_tracks.len());
             for (prop_name, track) in object_tracks {
-                props.insert(prop_name.clone(), self.evaluate_track(track, time));
+                props.insert(
+                    prop_name.clone(),
+                    self.value_at(integers, prop_name, track, time),
+                );
             }
             state.insert(obj_id.clone(), Value::Object(props));
         }
@@ -194,6 +347,22 @@ impl Timeline {
         }
     }
 
+    /// A property's value at `time`, rounded if its type is an integer.
+    fn value_at(
+        &self,
+        integers: Option<&HashSet<String>>,
+        name: &str,
+        track: &[Keyframe],
+        time: f32,
+    ) -> Value {
+        let value = self.evaluate_track(track, time);
+        if integers.is_some_and(|i| i.contains(name)) {
+            round_to_integer(value)
+        } else {
+            value
+        }
+    }
+
     fn evaluate_track(&self, track: &[Keyframe], time: f32) -> Value {
         if track.is_empty() {
             return Value::Null;
@@ -233,5 +402,26 @@ impl Timeline {
             &upper.easing,
             upper.easing_params.as_ref(),
         )
+    }
+}
+
+/// Whether `property` on `object` is integer-typed, according to the schema.
+fn is_integer_property(object: &Object, property: &str) -> bool {
+    crate::property_schema::PropertySchema::get()
+        .properties_of(crate::validation::object_type_name(object))
+        .and_then(|props| props.get(property))
+        .is_some_and(|kinds| kinds.is_integer())
+}
+
+/// Round a number to an integer the way CSS rounds an animated integer: to the
+/// nearest, with a half going toward positive infinity. Anything that is not a
+/// fractional number passes through untouched.
+fn round_to_integer(value: Value) -> Value {
+    match value {
+        Value::Number(ref n) if n.is_f64() => {
+            let rounded = (n.as_f64().unwrap_or(0.0) + 0.5).floor();
+            Value::from(rounded as i64)
+        }
+        other => other,
     }
 }
