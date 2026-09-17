@@ -545,3 +545,78 @@ mod resolve_at {
         );
     }
 }
+
+/// A quick ratio check for `resolve_at`, run by hand: `cargo test --release
+/// -p luminafx-core resolve_cost -- --ignored --nocapture`.
+///
+/// Ignored because timing in a unit test is noise on a shared CI runner; the
+/// criterion `resolve_eval` group is the measurement of record. This exists to
+/// compare the two paths *in one process* while iterating on the
+/// implementation — a ratio from one run survives a change of machine where an
+/// absolute number does not.
+#[cfg(test)]
+mod resolve_cost {
+    use crate::Timeline;
+    use luminafx_schema::Scene;
+    use serde_json::json;
+
+    fn animated_scene(n: usize) -> Scene {
+        let mut objects = serde_json::Map::new();
+        let mut timeline = Vec::new();
+        for i in 0..n {
+            let id = format!("c{i}");
+            objects.insert(
+                id.clone(),
+                json!({ "type": "Circle", "properties": {
+                    "cx": (i % 100) as f64 * 10.0, "cy": (i / 100) as f64 * 10.0,
+                    "radius": 5.0, "z_index": i, "fill": "#FF6B6B" } }),
+            );
+            timeline.push(
+                json!({ "time": 0.0, "object": id, "state": { "cx": 0.0, "opacity": 0.0 },
+                                  "easing": "ease_out_cubic" }),
+            );
+            timeline.push(
+                json!({ "time": 2.0, "object": id, "state": { "cx": 200.0, "opacity": 1.0 },
+                                  "easing": "ease_out_cubic" }),
+            );
+        }
+        serde_json::from_value(json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 1920, "height": 1080, "fps": 30, "duration": 4.0,
+                        "background": "#000000" },
+            "objects": objects, "timeline": timeline
+        }))
+        .expect("scene")
+    }
+
+    #[test]
+    #[ignore = "timing; run by hand with --release"]
+    fn resolve_cost_ratio() {
+        for n in [100usize, 1000] {
+            let timeline = Timeline::from_scene(&animated_scene(n));
+            let iters = 20_000 / n.max(1) * 10;
+            // Warm both paths so neither pays first-touch costs in the sample.
+            for _ in 0..50 {
+                std::hint::black_box(timeline.get_state_at(1.0));
+                std::hint::black_box(timeline.resolve_at(1.0));
+            }
+            let t = std::time::Instant::now();
+            for _ in 0..iters {
+                std::hint::black_box(timeline.get_state_at(1.0));
+            }
+            let untyped = t.elapsed();
+            let t = std::time::Instant::now();
+            for _ in 0..iters {
+                std::hint::black_box(timeline.resolve_at(1.0));
+            }
+            let typed = t.elapsed();
+            println!(
+                "n={n:5}  get_state_at {:>8.1?}/iter   resolve_at {:>8.1?}/iter   ratio {:.2}x",
+                untyped / iters as u32,
+                typed / iters as u32,
+                typed.as_secs_f64() / untyped.as_secs_f64()
+            );
+        }
+    }
+}

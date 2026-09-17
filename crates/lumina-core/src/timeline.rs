@@ -14,13 +14,13 @@ pub struct Timeline {
     pub tracks: HashMap<String, HashMap<String, Vec<Keyframe>>>,
     /// `object_id` → `property_name` → value (interactive overrides take precedence)
     pub overrides: HashMap<String, HashMap<String, Value>>,
-    /// `object_id` → (type name, the object as authored).
+    /// `object_id` → the object as authored.
     ///
-    /// Kept for [`Timeline::resolve_at`]: the type name rebuilds each typed
-    /// object from its interpolated properties, and the authored object is the
-    /// fallback when an animated value will not deserialise. Private, so adding
-    /// it does not grow the struct's constructible surface (TD-27).
-    seeds: HashMap<String, (String, Object)>,
+    /// Kept for [`Timeline::resolve_at`]: its variant says which props type to
+    /// rebuild from the interpolated properties, and it is the fallback when an
+    /// animated value will not deserialise. Private, so adding it does not grow
+    /// the struct's constructible surface (TD-27).
+    seeds: HashMap<String, Object>,
 }
 
 #[derive(Clone, Debug)]
@@ -50,9 +50,7 @@ impl Timeline {
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            if let Some(ty) = initial_state["type"].as_str() {
-                seeds.insert(id.clone(), (ty.to_string(), obj.clone()));
-            }
+            seeds.insert(id.clone(), obj.clone());
             if let Value::Object(props) = &initial_state["properties"] {
                 for (prop_name, prop_value) in props {
                     let track = tracks
@@ -122,19 +120,16 @@ impl Timeline {
     /// failure this work exists to remove.
     #[must_use]
     pub fn resolve_at(&self, time: f32) -> HashMap<String, Object> {
-        let state = self.get_state_at(time);
+        // Owned, so each object's properties can be moved into the
+        // deserialiser rather than deep-cloned first. The first version cloned
+        // them, and together with a per-object tagged wrapper that measured at
+        // 2.1–2.4x `get_state_at` on CI — more than typing is worth.
+        let mut state = self.get_state_at(time);
         let mut resolved = HashMap::with_capacity(self.seeds.len());
-        for (id, (ty, authored)) in &self.seeds {
+        for (id, authored) in &self.seeds {
             let object = state
-                .get(id)
-                .and_then(|props| {
-                    // `Object` is tagged as {"type": .., "properties": ..}; the
-                    // interpolated map is the `properties` half.
-                    let mut tagged = serde_json::Map::with_capacity(2);
-                    tagged.insert("type".to_string(), Value::String(ty.clone()));
-                    tagged.insert("properties".to_string(), props.clone());
-                    serde_json::from_value::<Object>(Value::Object(tagged)).ok()
-                })
+                .remove(id)
+                .and_then(|props| rebuild(authored, props))
                 .unwrap_or_else(|| authored.clone());
             resolved.insert(id.clone(), object);
         }
@@ -283,4 +278,42 @@ impl Timeline {
             upper.easing_params.as_ref(),
         )
     }
+}
+
+/// Rebuild `authored`'s variant from interpolated properties.
+///
+/// Dispatches on the authored `Object` rather than on a type-name string, for
+/// two reasons. It deserialises straight into the concrete props struct, so no
+/// tagged `{"type": .., "properties": ..}` wrapper has to be allocated for every
+/// object on every frame just to tell serde which struct to build. And the
+/// match is **exhaustive**: a new `Object` variant is a compile error here until
+/// it is handled, where a string match with a catch-all would have quietly
+/// resolved every such object to its authored value and never animated it.
+fn rebuild(authored: &Object, props: Value) -> Option<Object> {
+    macro_rules! rebuild {
+        ($($variant:ident),* $(,)?) => {
+            match authored {
+                $(Object::$variant(_) => serde_json::from_value(props).ok().map(Object::$variant),)*
+            }
+        };
+    }
+    rebuild!(
+        Circle,
+        Rectangle,
+        Polygon,
+        Path,
+        Line,
+        Arrow,
+        Text,
+        LaTeX,
+        Group,
+        Image,
+        SVG,
+        NumberLine,
+        Axes,
+        Plot,
+        BezierCurve,
+        MathML,
+        Particles,
+    )
 }
