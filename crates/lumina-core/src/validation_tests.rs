@@ -457,24 +457,30 @@ mod representable_numbers {
     use crate::validation::validate_scene_data;
     use luminafx_schema::{Scene, TimelineEntry};
 
-    fn scene_with_state(state: serde_json::Value) -> Scene {
+    /// A circle `dot` and a polygon `shape`, with one keyframe per entry in
+    /// `states`, each an `(object, state)` pair.
+    fn scene_with_states(states: &[(&str, serde_json::Value)]) -> Scene {
         let json = serde_json::json!({
             "version": "1.0",
             "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
             "canvas": { "width": 100, "height": 100, "fps": 30, "duration": 2.0, "background": "#000000" },
             "objects": {
-                "dot": { "type": "Circle", "properties": { "cx": 10, "cy": 10, "radius": 5 } }
+                "dot": { "type": "Circle", "properties": { "cx": 10, "cy": 10, "radius": 5 } },
+                "shape": { "type": "Polygon",
+                           "properties": { "points": [[0, 0], [10, 0], [0, 10]] } }
             },
             "timeline": []
         });
         let mut scene: Scene = serde_json::from_value(json).expect("fixture");
-        scene.timeline.push(TimelineEntry {
-            time: 1.0,
-            object: "dot".to_string(),
-            state,
-            easing: "linear".to_string(),
-            easing_params: None,
-        });
+        for (object, state) in states {
+            scene.timeline.push(TimelineEntry {
+                time: 1.0,
+                object: (*object).to_string(),
+                state: state.clone(),
+                easing: "linear".to_string(),
+                easing_params: None,
+            });
+        }
         scene
     }
 
@@ -489,7 +495,7 @@ mod representable_numbers {
     #[test]
     fn a_keyframe_value_that_overflows_f32_is_rejected() {
         // 1e39 parses as f64 without complaint and becomes inf as f32.
-        let s = scene_with_state(serde_json::json!({ "cx": 1e39 }));
+        let s = scene_with_states(&[("dot", serde_json::json!({ "cx": 1e39 }))]);
         assert!(
             codes(&s).iter().any(|c| c == "NUMBER_NOT_REPRESENTABLE"),
             "got {:?}",
@@ -500,7 +506,10 @@ mod representable_numbers {
     #[test]
     fn overflow_inside_an_array_is_rejected() {
         // Point lists and gradient stops are arrays, so the check recurses.
-        let s = scene_with_state(serde_json::json!({ "points": [[0.0, 0.0], [1e40, 3.0]] }));
+        let s = scene_with_states(&[(
+            "shape",
+            serde_json::json!({ "points": [[0.0, 0.0], [1e40, 3.0]] }),
+        )]);
         assert!(
             codes(&s).iter().any(|c| c == "NUMBER_NOT_REPRESENTABLE"),
             "got {:?}",
@@ -511,9 +520,13 @@ mod representable_numbers {
     #[test]
     fn ordinary_magnitudes_are_accepted() {
         // Including values that are large but perfectly representable.
-        let s = scene_with_state(serde_json::json!({
-            "cx": 1920.0, "radius": 1e30, "opacity": 0.5, "points": [[-1e20, 1e20]]
-        }));
+        let s = scene_with_states(&[
+            (
+                "dot",
+                serde_json::json!({ "cx": 1920.0, "radius": 1e30, "opacity": 0.5 }),
+            ),
+            ("shape", serde_json::json!({ "points": [[-1e20, 1e20]] })),
+        ]);
         assert!(
             validate_scene_data(&s).valid,
             "got {:?}",
@@ -968,7 +981,12 @@ mod typed_properties {
                     .filter(|e| {
                         matches!(
                             e.code.as_str(),
-                            "UNKNOWN_PROPERTY" | "PROPERTY_TYPE_MISMATCH" | "UNKNOWN_OBJECT_TYPE"
+                            "UNKNOWN_PROPERTY"
+                                | "PROPERTY_TYPE_MISMATCH"
+                                | "UNKNOWN_OBJECT_TYPE"
+                                | "PROPERTY_VALUE_INVALID"
+                                | "TIMELINE_STATE_NOT_AN_OBJECT"
+                                | "UNKNOWN_OBJECT_ID"
                         )
                     })
                     .map(|e| format!("{} {} — {}", e.code, e.path, e.message))
@@ -1041,5 +1059,168 @@ mod font_id_reaches_state {
     fn text_still_keeps_its_font() {
         // The path that always worked, as the control.
         assert_eq!(state_font("Text", "content").as_deref(), Some("bold"));
+    }
+}
+
+/// What timeline entries and event actions assign: checked by name, kind and
+/// shape, from every entry point.
+#[cfg(test)]
+mod assignments {
+    use crate::validation::{validate_scene_data, validate_scene_json, ValidationError};
+    use luminafx_schema::Scene;
+    use serde_json::{json, Value};
+
+    fn document(timeline: &Value, events: &Value) -> Value {
+        let mut scene = json!({
+            "version": "1.0",
+            "meta": { "title": "t", "author": "a", "created_at": "2026-01-01T00:00:00Z" },
+            "canvas": { "width": 64, "height": 64, "fps": 30, "duration": 2.0,
+                        "background": "#000000" },
+            "objects": {
+                "a": { "type": "Arrow", "properties": { "from": [8, 8], "to": [56, 56] } },
+                "c": { "type": "Circle", "properties": { "cx": 32, "cy": 32, "radius": 10 } }
+            }
+        });
+        scene["timeline"] = timeline.clone();
+        scene["events"] = events.clone();
+        scene
+    }
+
+    /// Errors from the typed entry point, which every caller holding a parsed
+    /// `Scene` uses — the server's `/render` among them.
+    fn typed(timeline: &Value, events: &Value) -> Vec<ValidationError> {
+        let scene: Scene = serde_json::from_value(document(timeline, events)).expect("scene");
+        validate_scene_data(&scene).errors
+    }
+
+    fn the_one<'e>(errors: &'e [ValidationError], code: &str) -> &'e ValidationError {
+        let matching: Vec<_> = errors.iter().filter(|e| e.code == code).collect();
+        assert_eq!(matching.len(), 1, "expected one {code}, got {errors:?}");
+        matching[0]
+    }
+
+    #[test]
+    fn a_keyframe_of_the_right_kind_and_the_wrong_shape_is_an_error() {
+        // An array where an array belongs, one element short of a point. The
+        // engine cannot build the Arrow, so it used to draw it as authored and
+        // ignore the keyframe without a word.
+        let errors = typed(
+            &json!([{ "time": 1.0, "object": "a", "state": { "from": [8.0] } }]),
+            &json!([]),
+        );
+        let e = the_one(&errors, "PROPERTY_VALUE_INVALID");
+        assert_eq!(e.path, "$.timeline[0].state.from");
+        assert!(e.message.contains("length"), "{}", e.message);
+        assert!(
+            e.fix_suggestion.contains("[8.0,8.0]"),
+            "the suggestion should show the object's own value: {}",
+            e.fix_suggestion
+        );
+    }
+
+    #[test]
+    fn a_fraction_for_an_integer_property_is_not_an_error() {
+        // The timeline rounds it, so the value is fine as written.
+        let errors = typed(
+            &json!([{ "time": 1.0, "object": "c", "state": { "z_index": 2.5 } }]),
+            &json!([]),
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn a_state_that_is_not_an_object_is_an_error() {
+        let errors = typed(
+            &json!([{ "time": 1.0, "object": "c", "state": [1, 2] }]),
+            &json!([]),
+        );
+        assert_eq!(
+            the_one(&errors, "TIMELINE_STATE_NOT_AN_OBJECT").path,
+            "$.timeline[0].state"
+        );
+    }
+
+    #[test]
+    fn the_typed_entry_point_catches_a_misspelled_keyframe() {
+        // Before, only `validate_scene_json` looked at timeline names, so a
+        // caller holding a parsed scene accepted what `/validate` rejected.
+        let errors = typed(
+            &json!([{ "time": 1.0, "object": "c", "state": { "raduis": 20 } }]),
+            &json!([]),
+        );
+        assert!(the_one(&errors, "UNKNOWN_PROPERTY")
+            .fix_suggestion
+            .contains("radius"));
+    }
+
+    #[test]
+    fn a_misspelled_keyframe_is_reported_once_from_raw_json() {
+        let raw = document(
+            &json!([{ "time": 1.0, "object": "c", "state": { "raduis": 20 } }]),
+            &json!([]),
+        );
+        the_one(&validate_scene_json(&raw).errors, "UNKNOWN_PROPERTY");
+    }
+
+    #[test]
+    fn a_keyframe_problem_is_still_reported_when_the_scene_does_not_parse() {
+        // `radius` as a string stops the objects parsing, so there is no typed
+        // scene to check the timeline with. The raw pass still reports the
+        // keyframe, so one round reports both.
+        let mut raw = document(
+            &json!([{ "time": 1.0, "object": "c", "state": { "raduis": 20 } }]),
+            &json!([]),
+        );
+        raw["objects"]["c"]["properties"]["radius"] = json!("big");
+        let errors = validate_scene_json(&raw).errors;
+        the_one(&errors, "PROPERTY_TYPE_MISMATCH");
+        the_one(&errors, "UNKNOWN_PROPERTY");
+    }
+
+    fn set_property(target: &str, property: &str, value: &Value) -> Value {
+        json!([{ "object": "c", "trigger": "click",
+                 "action": { "type": "set_property", "target": target,
+                             "property": property, "value": value } }])
+    }
+
+    #[test]
+    fn an_action_targeting_a_missing_object_is_an_error() {
+        let errors = typed(&json!([]), &set_property("circel", "radius", &json!(5)));
+        let e = the_one(&errors, "UNKNOWN_OBJECT_ID");
+        assert_eq!(e.path, "$.events[0].action.target");
+    }
+
+    #[test]
+    fn an_action_setting_a_misspelled_property_is_an_error() {
+        let errors = typed(&json!([]), &set_property("c", "opacty", &json!(0.5)));
+        let e = the_one(&errors, "UNKNOWN_PROPERTY");
+        assert_eq!(e.path, "$.events[0].action.property");
+        assert!(e.fix_suggestion.contains("opacity"), "{}", e.fix_suggestion);
+    }
+
+    #[test]
+    fn an_action_value_of_the_wrong_kind_or_shape_is_an_error() {
+        let errors = typed(&json!([]), &set_property("c", "radius", &json!("big")));
+        assert_eq!(
+            the_one(&errors, "PROPERTY_TYPE_MISMATCH").path,
+            "$.events[0].action.value"
+        );
+
+        let errors = typed(&json!([]), &set_property("a", "to", &json!([1, 2, 3])));
+        assert_eq!(
+            the_one(&errors, "PROPERTY_VALUE_INVALID").path,
+            "$.events[0].action.value"
+        );
+    }
+
+    #[test]
+    fn a_placeholder_value_is_only_judged_by_its_property_name() {
+        // `$drag.to` becomes the host's payload when the event fires, so a
+        // string standing in for an array is not a mistake.
+        let errors = typed(&json!([]), &set_property("a", "to", &json!("$drag.to")));
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let errors = typed(&json!([]), &set_property("a", "too", &json!("$drag.to")));
+        the_one(&errors, "UNKNOWN_PROPERTY");
     }
 }
